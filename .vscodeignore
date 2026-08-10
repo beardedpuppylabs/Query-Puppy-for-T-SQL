@@ -1,0 +1,13 @@
+.build/**
+.git/**
+.gitignore
+.prettierignore
+.vscode/**
+AGENTS.md
+docs/**
+src/**
+tests/**
+scripts/**
+*.vsix
+eslint.config.mjs
+tsconfig.json

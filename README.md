@@ -1,93 +1,57 @@
-# Improved SQL Intellisense
+# Improved SQL IntelliSense
 
+A replacement SQL Server completion provider optimized for very large databases. It uses Microsoft mssql's active editor connection to build its own in-memory catalog and keeps completion in VS Code's normal suggestion UI. It never asks for or stores credentials and never consumes Microsoft's completion list.
 
+The core difference is contiguous, case-insensitive **contains** search. Typing `addr` can find `CustomerAddress`, `BillingAddress`, and `ShippingAddress`; starts-with and substring position receive no ranking bonus.
 
-## Getting started
+## Requirements and setup
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+- VS Code 1.105 or compatible editor
+- [Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql)
+- An active mssql connection on the SQL editor
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+Disable Microsoft's overlapping completion provider with the command **Disable Microsoft SQL Suggestions Globally**, or set the global setting:
 
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.wooliverse.duckdns.org/error404/improved-sql-intellisense.git
-git branch -M main
-git push -uf origin main
+```json
+"mssql.intelliSense.enableSuggestions": false
 ```
 
-## Integrate with your tools
+The extension only changes this setting after that explicit command/action. Leave `mssql.intelliSense.enableQuickInfo` and `mssql.intelliSense.enableErrorChecking` enabled.
 
-* [Set up project integrations](https://gitlab.wooliverse.duckdns.org/error404/improved-sql-intellisense/-/settings/integrations)
+Metadata is loaded once per mssql connection identity/database and retained in memory. Every catalog batch explicitly selects the active editor database. Use **Refresh IntelliSense Metadata** after schema changes. **Show Improved SQL IntelliSense Status** distinguishes disconnected, not loaded, loading, loaded, unexpectedly empty, and failed states. Detailed database-context and row/object counts are written to the **Improved SQL IntelliSense** output channel without connection secrets.
 
-## Collaborate with your team
+## Development
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+```bash
+npm install
+npm run format:check
+npm run lint
+npm run compile
+npm test
+npm run test:integration # requires MSSQL_TEST_SERVER/DATABASE/USER/PASSWORD
+npm run build
+```
 
-## Test and Deploy
+Open the repository in VS Code and press F5 to build and launch an Extension Development Host. The checked-in launch configuration runs the build task first.
 
-Use the built-in continuous integration in GitLab.
+Package and install:
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+```bash
+npm run package
+code --install-extension improved-sql-intellisense-0.1.1.vsix
+```
 
-***
+## Architecture
 
-# Editing this README
+The mssql adapter is the only connection boundary. A catalog loader queries SQL Server `sys.*` views in one round trip, then a per-connection/database cache serves completion without keystroke queries. Pure metadata, parser, matching, sorting, and candidate layers are independent of VS Code; only the provider/presenter use editor types. Explicit replacement ranges and fragment-prefixed `filterText` prevent VS Code's secondary prefix filtering from removing contains matches.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Prototype limitations
 
-## Suggestions for a good README
+- The lightweight tokenizer is intentionally not a complete T-SQL parser. It handles ordinary/bracketed identifiers, comments, strings, common aliases, CTE names, variables and temp-table names, but deeply nested queries and unusual grammar can reduce context quality.
+- CTE/table-variable/temp-table column inference is not yet implemented; their names are available as row sources.
+- Stored procedure first-result-set discovery is not performed in this version because SQL Server can reject it for permissions, dynamic SQL, or control flow. No result schema is fabricated.
+- Explicitly schema-qualified aliases resolve that schema. An unqualified source resolves only when its name is unique; ambiguous names intentionally produce no member completion.
+- Metadata reload is explicit after DDL. Switching databases creates a different cache key and cannot serve the prior database's index.
+- mssql 1.45 still publishes connection sharing but marks it for future retirement. The adapter is deliberately small so a replacement public contract can be adopted cleanly.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+The next milestone should add incremental document parsing and reliable local/CTE column inference, followed by permission-tolerant procedure result-set discovery.

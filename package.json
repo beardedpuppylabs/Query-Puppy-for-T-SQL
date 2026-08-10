@@ -1,0 +1,78 @@
+{
+  "name": "improved-sql-intellisense",
+  "displayName": "Improved SQL IntelliSense",
+  "description": "Contains-based SQL Server completions using the active Microsoft mssql connection.",
+  "version": "0.1.1",
+  "publisher": "error404",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.wooliverse.duckdns.org/error404/improved-sql-intellisense.git"
+  },
+  "engines": {
+    "vscode": "^1.105.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:sql"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "improvedSqlIntellisense.refreshMetadata",
+        "title": "Refresh IntelliSense Metadata"
+      },
+      {
+        "command": "improvedSqlIntellisense.showStatus",
+        "title": "Show Improved SQL IntelliSense Status"
+      },
+      {
+        "command": "improvedSqlIntellisense.disableMicrosoftSuggestions",
+        "title": "Disable Microsoft SQL Suggestions Globally"
+      }
+    ],
+    "configuration": {
+      "title": "Improved SQL IntelliSense",
+      "properties": {
+        "improvedSqlIntellisense.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable contains-based SQL completion."
+        },
+        "improvedSqlIntellisense.debugLogging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Write detailed diagnostics to the Improved SQL IntelliSense output channel."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc -p tsconfig.json && esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
+    "compile": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:integration": "node --import tsx --test tests/integration/*.test.ts",
+    "lint": "eslint src tests",
+    "format": "prettier --write . --ignore-unknown",
+    "format:check": "prettier --check . --ignore-unknown",
+    "package": "npm run build && vsce package --no-dependencies --out improved-sql-intellisense-0.1.1.vsix"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.1",
+    "@types/mssql": "^9.1.8",
+    "@types/vscode": "^1.105.0",
+    "@vscode/vsce": "^3.6.2",
+    "esbuild": "^0.27.0",
+    "eslint": "^9.39.1",
+    "mssql": "^12.0.0",
+    "prettier": "^3.7.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.0"
+  }
+}
