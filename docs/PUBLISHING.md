@@ -26,7 +26,7 @@ The manifest is prepared for publisher ID `Bismarck`. That external Marketplace 
 
    ```bash
    npx vsce ls --no-dependencies
-   unzip -l improved-sql-intellisense-0.4.1.vsix
+   unzip -l improved-sql-intellisense-0.4.2.vsix
    ```
 
 7. Publish only after the preceding review. Either upload the VSIX on the publisher management page or explicitly run:

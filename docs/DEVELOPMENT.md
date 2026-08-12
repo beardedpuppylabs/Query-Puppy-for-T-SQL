@@ -29,6 +29,8 @@ It uses `MSSQL_TEST_SERVER`, `MSSQL_TEST_DATABASE`, `MSSQL_TEST_USER`, and `MSSQ
 
 The mssql adapter is the only connection boundary. One catalog batch populates a cache keyed by connection ID and database, so completion never queries on each keystroke. Metadata, parsing, matching, sorting, and candidates remain independent of VS Code; provider and presentation layers own editor types.
 
+The current public mssql connection-sharing API is marked for future retirement. Its use is isolated in `MssqlApi` and `ConnectionService` so a future public replacement can be adopted without changing the completion engine.
+
 Build and package independently with:
 
 ```bash

@@ -1,19 +1,21 @@
 # Changelog
 
-All notable changes are recorded here. This project has not had a public Marketplace release yet.
+## 0.4.2
 
-## 0.4.1 — Preview release candidate
+- Improved setup handling for overlapping Microsoft mssql suggestions.
+- Added effective workspace and workspace-folder override handling.
+- Added clearer diagnostics when Microsoft suggestions remain enabled.
+- Improved Marketplace documentation and first-run guidance.
 
-- Changed the extension developer and intended Marketplace publisher identity to Bismarck.
+## 0.4.1
 
-## 0.4.0 — Preview release candidate
+First public preview release.
 
-- Added contiguous, case-insensitive Contains completion with deterministic semantic and alphabetical sorting.
-- Added metadata-rich completion for schemas, tables, views, table-valued and scalar functions, stored procedures, synonyms, columns, CTEs, table variables, and temporary tables.
-- Added alias-member, schema-qualified, same-server cross-database, double-dot, and database-wide shortcut completion.
-- Added curated `sys` and common `INFORMATION_SCHEMA` completion targets.
-- Added connection/database-scoped metadata caching, explicit refresh, status diagnostics, and optional debug logging.
-- Reused the active Microsoft mssql connection without separate credentials or per-keystroke catalog queries.
-- Added a consent-based, one-time prompt for disabling overlapping Microsoft SQL suggestions.
-- Added Marketplace metadata, extension dependency, icon, release documentation, and a minimal bundled package.
-- Released the project as free and open source software under the MIT License.
+- Added true case-insensitive Contains completion for SQL Server objects.
+- Added context-aware completion for schemas, tables, views, functions, procedures, aliases, columns, and local row sources.
+- Added datatype, nullability, function-signature, and procedure-signature information.
+- Added schema-qualified and same-server cross-database completion.
+- Added database-wide object search across schemas.
+- Added useful `sys` and `INFORMATION_SCHEMA` completion.
+- Added per-database metadata caching, refresh, and diagnostics.
+- Reused the active Microsoft mssql connection without separate credentials.

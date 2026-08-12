@@ -2,11 +2,11 @@
   "name": "improved-sql-intellisense",
   "displayName": "Improved SQL IntelliSense",
   "description": "SQL Server IntelliSense with Contains search, context-aware completion, cross-database resolution, and rich metadata.",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "publisher": "Bismarck",
   "author": "Bismarck",
   "license": "MIT",
-  "icon": "images/icon.png",
+  "icon": "images/logo.png",
   "galleryBanner": {
     "color": "#0B1F33",
     "theme": "dark"
@@ -50,7 +50,7 @@
       },
       {
         "command": "improvedSqlIntellisense.disableMicrosoftSuggestions",
-        "title": "Disable Microsoft SQL Suggestions Globally"
+        "title": "Improved SQL IntelliSense: Disable Microsoft SQL Suggestions"
       }
     ],
     "configuration": {
@@ -80,7 +80,7 @@
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
     "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run build",
-    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.4.1.vsix",
+    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.4.2.vsix",
     "publish:marketplace": "vsce publish"
   },
   "devDependencies": {

@@ -113,3 +113,15 @@ Final 0.4.0 verification: formatting, ESLint, strict compilation, 40 unit tests,
 - [x] Run release verification and inspect the 0.4.1 VSIX.
 
 Final 0.4.1 verification: formatting, ESLint, strict compilation, 40 unit tests, production bundling, VSIX packaging, identity inspection, and archive security checks pass. Both opt-in SQL Server integration tests were discovered and skipped because their environment was not configured. The resulting extension identifier is `Bismarck.improved-sql-intellisense`.
+
+## 0.4.2 public-release UX cleanup
+
+- [x] Restrict the one-time Microsoft suggestion prompt to SQL use with mssql available and require explicit consent.
+- [x] Resolve effective global, workspace, and workspace-folder suggestion settings.
+- [x] Make the permanent disable command target the effective enabling scope safely.
+- [x] Add Microsoft suggestion-provider state to status and non-spammy output diagnostics.
+- [x] Rewrite the Marketplace README and collapse the changelog to user-relevant public releases.
+- [x] Add configuration-resolution tests and preserve all completion behavior.
+- [x] Run both real database integration suites and the complete release verification flow.
+
+Final 0.4.2 verification: formatting, ESLint, strict compilation, 45 unit tests, both live SQL Server integration tests, production bundling, VSIX packaging, and archive inspection pass. The package contains the public README, changelog, MIT License, support guide, extension manifest, bundle, and icon; no runtime dependency tree or credentials are included.
