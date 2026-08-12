@@ -10,6 +10,7 @@ export interface CompletionCandidate {
   readonly name: string;
   readonly normalizedName: string;
   readonly kind: SqlObjectKind;
+  readonly database?: string;
   readonly schema?: string;
   readonly sqlType?: SqlType;
   readonly nullable?: boolean;
@@ -18,4 +19,7 @@ export interface CompletionCandidate {
   readonly sourceObject?: DatabaseObject;
   readonly column?: ColumnMetadata;
   readonly baseObjectName?: string;
+  readonly insertText?: string;
+  /** Semantic group priority used only for mixed shortcut domains. */
+  readonly priority?: number;
 }

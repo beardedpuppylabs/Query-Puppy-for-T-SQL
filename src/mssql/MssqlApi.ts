@@ -18,6 +18,7 @@ export interface ConnectionSharingApi {
     connectionUri: string,
     queryString: string,
   ): Promise<unknown>;
+  listDatabases(connectionUri: string): Promise<string[]>;
 }
 export interface MssqlExtensionApi {
   readonly connectionSharing: ConnectionSharingApi;
@@ -33,6 +34,7 @@ function isConnectionSharing(value: unknown): value is ConnectionSharingApi {
     "disconnect",
     "isConnected",
     "executeSimpleQuery",
+    "listDatabases",
   ].every((name) => typeof api[name] === "function");
 }
 

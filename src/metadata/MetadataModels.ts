@@ -1,4 +1,5 @@
 export type SqlObjectKind =
+  | "database"
   | "schema"
   | "table"
   | "view"
@@ -46,6 +47,7 @@ export interface DatabaseObject {
   readonly normalizedName: string;
   readonly kind: Exclude<
     SqlObjectKind,
+    | "database"
     | "schema"
     | "column"
     | "cte"
@@ -73,6 +75,7 @@ export const normalizeName = (name: string): string =>
 
 export const friendlyKind = (kind: SqlObjectKind): string =>
   ({
+    database: "database",
     schema: "schema",
     table: "table",
     view: "view",

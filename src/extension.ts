@@ -38,26 +38,30 @@ export function activate(context: vscode.ExtensionContext): void {
         try {
           const installed = await connections.available();
           const active = await connections.active();
-          const key = active
-            ? MetadataCache.key(active.connectionId, active.database)
-            : undefined;
           if (!installed) {
             await vscode.window.showInformationMessage(
               "Improved SQL IntelliSense — mssql API unavailable; disconnected; metadata not loaded.",
             );
             return;
           }
-          if (!active || !key) {
+          if (!active) {
             await vscode.window.showInformationMessage(
               "Improved SQL IntelliSense — mssql API available; disconnected; metadata not loaded.",
             );
             return;
           }
-          const index = cache.peek(key);
-          const state = cache.status(key);
-          const error = cache.error(key);
+          const cached = cache.snapshots(active.connectionId);
+          const summary =
+            cached.length === 0
+              ? "none"
+              : cached
+                  .map(
+                    (entry) =>
+                      `${entry.database}: ${entry.state}${entry.objectCount === undefined ? "" : ` (${String(entry.objectCount)} objects)`}${entry.error ? ` — ${entry.error}` : ""}`,
+                  )
+                  .join("; ");
           await vscode.window.showInformationMessage(
-            `Improved SQL IntelliSense — mssql API available; connection: ${active.database}; metadata: ${state}${index ? ` (${String(index.count)} objects)` : ""}${error ? `; error: ${error}` : ""}.`,
+            `Improved SQL IntelliSense — mssql API available; connected; active database: ${active.database}; cached databases: ${summary}.`,
           );
         } catch (error) {
           await vscode.window.showInformationMessage(

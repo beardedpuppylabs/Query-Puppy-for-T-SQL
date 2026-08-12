@@ -13,6 +13,38 @@ import type {
 } from "./ConnectionService.js";
 import type { DbCellValue } from "./SimpleExecuteResult.js";
 
+/** Deliberately narrow developer-facing sys views; never index all shipped objects. */
+export const DEVELOPER_SYS_VIEWS = [
+  "all_columns",
+  "all_objects",
+  "columns",
+  "computed_columns",
+  "databases",
+  "foreign_key_columns",
+  "foreign_keys",
+  "identity_columns",
+  "indexes",
+  "index_columns",
+  "key_constraints",
+  "objects",
+  "parameters",
+  "procedures",
+  "schemas",
+  "sequences",
+  "synonyms",
+  "system_columns",
+  "system_objects",
+  "tables",
+  "table_types",
+  "types",
+  "views",
+] as const;
+
+const systemViewNamesSql = DEVELOPER_SYS_VIEWS.map((name) => `N'${name}'`).join(
+  ",",
+);
+const developerSystemViewPredicate = `(o.type = 'V' AND ((SCHEMA_NAME(o.schema_id) = N'INFORMATION_SCHEMA') OR (SCHEMA_NAME(o.schema_id) = N'sys' AND o.name IN (${systemViewNamesSql}))))`;
+
 export const METADATA_QUERY = String.raw`
 SET NOCOUNT ON;
 SELECT record_kind, object_id, schema_name, object_name, object_kind, member_name,
@@ -34,7 +66,9 @@ FROM (
           WHEN 'FN' THEN 'scalarFunction' WHEN 'FS' THEN 'scalarFunction'
           WHEN 'IF' THEN 'tableValuedFunction' WHEN 'TF' THEN 'tableValuedFunction' WHEN 'FT' THEN 'tableValuedFunction' END,
         NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
- FROM sys.objects o WHERE o.is_ms_shipped = 0 AND o.type IN ('U','V','P','FN','FS','IF','TF','FT')
+ FROM sys.all_objects o
+ WHERE (o.is_ms_shipped = 0 AND o.type IN ('U','V','P','FN','FS','IF','TF','FT'))
+    OR ${developerSystemViewPredicate}
  UNION ALL
  SELECT 'O', sy.object_id, SCHEMA_NAME(sy.schema_id), sy.name, 'synonym', NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,sy.base_object_name
  FROM sys.synonyms sy
@@ -49,8 +83,9 @@ FROM (
  UNION ALL
  SELECT 'C', c.object_id, SCHEMA_NAME(o.schema_id), o.name, NULL, c.name,
         SCHEMA_NAME(t.schema_id), t.name, c.max_length, c.precision, c.scale, c.is_nullable,NULL,c.column_id,NULL
- FROM sys.columns c JOIN sys.objects o ON c.object_id=o.object_id JOIN sys.types t ON c.user_type_id=t.user_type_id
- WHERE o.is_ms_shipped=0 AND o.type IN ('U','V','IF','TF','FT')
+ FROM sys.all_columns c JOIN sys.all_objects o ON c.object_id=o.object_id JOIN sys.types t ON c.user_type_id=t.user_type_id
+ WHERE (o.is_ms_shipped=0 AND o.type IN ('U','V','IF','TF','FT'))
+    OR ${developerSystemViewPredicate}
  UNION ALL
  SELECT 'P', p.object_id, SCHEMA_NAME(o.schema_id), o.name, NULL, p.name,
         SCHEMA_NAME(t.schema_id), t.name, p.max_length, p.precision, p.scale, NULL,p.is_output,p.parameter_id,NULL

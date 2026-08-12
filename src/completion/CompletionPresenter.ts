@@ -11,6 +11,7 @@ import type { CompletionCandidate } from "./CompletionCandidate.js";
 import { presentationModel } from "./PresentationModel.js";
 
 const kinds: Record<SqlObjectKind, vscode.CompletionItemKind> = {
+  database: vscode.CompletionItemKind.Module,
   schema: vscode.CompletionItemKind.Module,
   table: vscode.CompletionItemKind.Class,
   view: vscode.CompletionItemKind.Interface,
@@ -42,7 +43,7 @@ export function presentCandidate(
   };
   const item = new vscode.CompletionItem(label, kinds[candidate.kind]);
   item.range = replacement;
-  item.insertText = quoteIdentifier(candidate.name);
+  item.insertText = candidate.insertText ?? quoteIdentifier(candidate.name);
   // VS Code filters the replacement prefix against filterText. Prefixing with the user's
   // fragment preserves every contains match without changing insertion or ranking.
   item.filterText = search ? `${search} ${candidate.name}` : candidate.name;
@@ -58,8 +59,10 @@ export function documentation(
   md.supportHtml = false;
   if (candidate.sourceObject)
     md.appendMarkdown(
-      `**${candidate.sourceObject.schema}.${candidate.sourceObject.name}**\n\n`,
+      `**${candidate.database ? `${candidate.database}.` : ""}${candidate.sourceObject.schema}.${candidate.sourceObject.name}**\n\n`,
     );
+  else if (candidate.database)
+    md.appendMarkdown(`Database: **${candidate.database}**\n\n`);
   md.appendMarkdown(`${friendlyKind(candidate.kind)}\n\n`);
   if (candidate.sqlType)
     md.appendMarkdown(

@@ -3,9 +3,11 @@ import { normalizeName } from "../metadata/MetadataModels.js";
 import type { SqlToken } from "./SqlTokenizer.js";
 
 export interface SourceReference {
+  readonly database?: string;
   readonly schema?: string;
   readonly name: string;
   readonly alias: string;
+  readonly unsupported?: boolean;
 }
 export interface LocalSymbol {
   readonly name: string;
@@ -80,13 +82,24 @@ export function resolveDocumentSymbols(
     let cursor = i + 1;
     const first = tokens[cursor];
     if (!isIdentifier(first)) continue;
-    let schema: string | undefined;
-    let name = first.text;
-    if (tokens[cursor + 1]?.text === "." && isIdentifier(tokens[cursor + 2])) {
-      schema = name;
-      name = tokens[cursor + 2]?.text ?? name;
-      cursor += 2;
+    const parts = [first.text];
+    while (tokens[cursor + 1]?.text === "." && parts.length < 4) {
+      cursor++;
+      const part = tokens[cursor + 1];
+      if (isIdentifier(part)) {
+        parts.push(part.text);
+        cursor++;
+      } else parts.push("");
     }
+    const unsupported = parts.length > 3;
+    const database = parts.length === 3 ? parts[0] : undefined;
+    const schema =
+      parts.length === 2
+        ? parts[0]
+        : parts.length === 3
+          ? parts[1] || "dbo"
+          : undefined;
+    const name = parts.at(-1) ?? first.text;
     if (tokens[cursor + 1]?.text === "(") {
       let depth = 0;
       do {
@@ -115,9 +128,11 @@ export function resolveDocumentSymbols(
       ].includes(aliasToken.normalized)
     ) {
       aliases.set(aliasToken.normalized, {
+        ...(database ? { database } : {}),
         ...(schema ? { schema } : {}),
         name,
         alias: aliasToken.text,
+        ...(unsupported ? { unsupported: true } : {}),
       });
     }
   }

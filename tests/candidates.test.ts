@@ -141,3 +141,423 @@ test("an ambiguous unqualified alias source returns no columns", () => {
     [],
   );
 });
+
+const reportingIndex = new DatabaseIndex({
+  database: "ReportingDb",
+  schemas: ["dbo", "reporting", "sales"],
+  loadedAt: 0,
+  objects: [
+    {
+      id: 20,
+      schema: "reporting",
+      name: "CustomerAddressReport",
+      normalizedName: "customeraddressreport",
+      kind: "view",
+      parameters: [],
+      columns: [
+        {
+          name: "ReportAddressId",
+          normalizedName: "reportaddressid",
+          type,
+          nullable: false,
+          ordinal: 1,
+        },
+        {
+          name: "EmailAddress",
+          normalizedName: "emailaddress",
+          type,
+          nullable: true,
+          ordinal: 2,
+        },
+      ],
+    },
+    {
+      id: 21,
+      schema: "dbo",
+      name: "CustomerArchive",
+      normalizedName: "customerarchive",
+      kind: "table",
+      parameters: [],
+      columns: [],
+    },
+    {
+      id: 22,
+      schema: "sales",
+      name: "CustomerAddress",
+      normalizedName: "customeraddress",
+      kind: "table",
+      parameters: [],
+      columns: [],
+    },
+  ],
+});
+const crossDatabaseScope = {
+  activeDatabase: "Db",
+  databaseNames: ["Db", "IntelliSenseLab", "IntelliSenseLabReporting"],
+  indexes: new Map([
+    ["db", index],
+    ["reportingdb", reportingIndex],
+  ]),
+};
+
+test("database names use Contains matching in row-source context", () => {
+  const result = createCandidates(
+    resolveSqlContext("SELECT * FROM Intelli"),
+    crossDatabaseScope,
+  );
+  assert.deepEqual(
+    result.map((candidate) => [candidate.name, candidate.kind]),
+    [
+      ["IntelliSenseLab", "database"],
+      ["IntelliSenseLabReporting", "database"],
+    ],
+  );
+});
+
+test("unqualified row sources remain scoped to the active database", () => {
+  const result = createCandidates(
+    resolveSqlContext("SELECT * FROM addr"),
+    crossDatabaseScope,
+  );
+  assert.deepEqual(
+    result.map((candidate) => `${candidate.database}.${candidate.name}`),
+    ["Db.Addresses", "Db.AddressLog", "Db.GetAddresses"],
+  );
+});
+
+test("three-part and double-dot completion use only the explicit database and schema", () => {
+  const explicit = createCandidates(
+    resolveSqlContext("SELECT * FROM ReportingDb.reporting.addr"),
+    crossDatabaseScope,
+  );
+  assert.deepEqual(
+    explicit.map((candidate) => candidate.name),
+    ["CustomerAddressReport"],
+  );
+  const doubleDot = createCandidates(
+    resolveSqlContext("SELECT * FROM ReportingDb..cust"),
+    crossDatabaseScope,
+  );
+  assert.deepEqual(
+    doubleDot.map((candidate) => candidate.name),
+    ["CustomerArchive"],
+  );
+});
+
+test("FROM row sources include and group tables, views, and TVFs", () => {
+  const result = createCandidates(
+    resolveSqlContext("SELECT * FROM ReportingDb.reporting.customer"),
+    crossDatabaseScope,
+  );
+  assert.deepEqual(
+    result.map((candidate) => [candidate.name, candidate.kind]),
+    [["CustomerAddressReport", "view"]],
+  );
+  const mixedIndex = new DatabaseIndex({
+    database: "ReportingDb",
+    schemas: ["reporting"],
+    loadedAt: 0,
+    objects: [
+      {
+        id: 1,
+        schema: "reporting",
+        name: "CustomerAddressReport",
+        normalizedName: "customeraddressreport",
+        kind: "table",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 2,
+        schema: "reporting",
+        name: "ActiveCustomerAddresses",
+        normalizedName: "activecustomeraddresses",
+        kind: "view",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 3,
+        schema: "reporting",
+        name: "GetCustomerAddresses",
+        normalizedName: "getcustomeraddresses",
+        kind: "tableValuedFunction",
+        parameters: [],
+        columns: [],
+      },
+    ],
+  });
+  const mixed = createCandidates(
+    resolveSqlContext("SELECT * FROM ReportingDb.reporting.addr"),
+    {
+      activeDatabase: "Db",
+      indexes: new Map([
+        ["db", index],
+        ["reportingdb", mixedIndex],
+      ]),
+    },
+  );
+  assert.deepEqual(
+    mixed.map((candidate) => candidate.kind),
+    ["table", "view", "tableValuedFunction"],
+  );
+});
+
+test("database-dot completion contains-matches schemas", () => {
+  const result = createCandidates(
+    resolveSqlContext("SELECT * FROM ReportingDb.rep"),
+    crossDatabaseScope,
+  );
+  assert.deepEqual(
+    result.map((candidate) => candidate.name),
+    ["reporting", "reporting.CustomerAddressReport"],
+  );
+  assert.equal(result[0]?.kind, "schema");
+});
+
+test("empty database qualifier returns schemas only", () => {
+  const result = createCandidates(
+    resolveSqlContext("SELECT * FROM ReportingDb."),
+    crossDatabaseScope,
+  );
+  assert.deepEqual(
+    result.map((candidate) => [candidate.name, candidate.kind]),
+    [
+      ["dbo", "schema"],
+      ["reporting", "schema"],
+      ["sales", "schema"],
+    ],
+  );
+});
+
+test("database shortcut searches all schemas, keeps schema priority, and inserts valid SQL", () => {
+  const shortcutIndex = new DatabaseIndex({
+    database: "ReportingDb",
+    schemas: ["billing", "crm", "dbo", "reporting"],
+    loadedAt: 0,
+    objects: [
+      {
+        id: 30,
+        schema: "dbo",
+        name: "CustomerAddresses",
+        normalizedName: "customeraddresses",
+        kind: "table",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 31,
+        schema: "crm",
+        name: "CustomerAddress_0001",
+        normalizedName: "customeraddress_0001",
+        kind: "table",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 32,
+        schema: "reporting",
+        name: "CustomerAddressOverview",
+        normalizedName: "customeraddressoverview",
+        kind: "view",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 33,
+        schema: "reporting",
+        name: "GetCustomerAddresses",
+        normalizedName: "getcustomeraddresses",
+        kind: "tableValuedFunction",
+        parameters: [],
+        columns: [],
+      },
+    ],
+  });
+  const scope = {
+    activeDatabase: "Db",
+    indexes: new Map([
+      ["db", index],
+      ["reportingdb", shortcutIndex],
+    ]),
+  };
+  const result = createCandidates(
+    resolveSqlContext("SELECT * FROM ReportingDb.addr"),
+    scope,
+  );
+  assert.deepEqual(
+    result.map((candidate) => [candidate.name, candidate.kind]),
+    [
+      ["crm.CustomerAddress_0001", "table"],
+      ["dbo.CustomerAddresses", "table"],
+      ["reporting.CustomerAddressOverview", "view"],
+      ["reporting.GetCustomerAddresses", "tableValuedFunction"],
+    ],
+  );
+  const schemaFirst = createCandidates(
+    resolveSqlContext("SELECT * FROM ReportingDb.cr"),
+    scope,
+  );
+  assert.equal(schemaFirst[0]?.name, "crm");
+  assert.equal(schemaFirst[0].kind, "schema");
+  const sql = "SELECT * FROM ReportingDb.addr";
+  const context = resolveSqlContext(sql);
+  const selected = result.find(
+    (candidate) => candidate.name === "crm.CustomerAddress_0001",
+  );
+  assert.ok(selected?.insertText);
+  assert.equal(
+    `${sql.slice(0, context.replacementStart)}${selected.insertText}`,
+    "SELECT * FROM ReportingDb.crm.CustomerAddress_0001",
+  );
+});
+
+test("explicit database schema remains strict and shortcut never leaks databases", () => {
+  const strict = createCandidates(
+    resolveSqlContext("SELECT * FROM ReportingDb.reporting.addr"),
+    crossDatabaseScope,
+  );
+  assert.ok(strict.every((candidate) => candidate.schema === "reporting"));
+  const shortcut = createCandidates(
+    resolveSqlContext("SELECT * FROM ReportingDb.addr"),
+    crossDatabaseScope,
+  );
+  assert.ok(
+    shortcut.every((candidate) => candidate.database === "ReportingDb"),
+  );
+});
+
+test("active schema semantics win over a same-named database shortcut", () => {
+  const reportingDatabase = new DatabaseIndex({
+    database: "sales",
+    schemas: ["dbo"],
+    loadedAt: 0,
+    objects: [
+      {
+        id: 50,
+        schema: "dbo",
+        name: "WrongCustomer",
+        normalizedName: "wrongcustomer",
+        kind: "table",
+        parameters: [],
+        columns: [],
+      },
+    ],
+  });
+  const result = createCandidates(
+    resolveSqlContext("SELECT * FROM sales.addr"),
+    {
+      activeDatabase: "Db",
+      databaseNames: ["sales"],
+      indexes: new Map([
+        ["db", index],
+        ["sales", reportingDatabase],
+      ]),
+    },
+  );
+  assert.deepEqual(
+    result.map((candidate) => candidate.name),
+    ["AddressLog"],
+  );
+  assert.ok(result.every((candidate) => candidate.database === "Db"));
+});
+
+test("sys and INFORMATION_SCHEMA behave as strict developer metadata schemas", () => {
+  const systemIndex = new DatabaseIndex({
+    database: "SystemDb",
+    schemas: ["INFORMATION_SCHEMA", "sys"],
+    loadedAt: 0,
+    objects: [
+      ...[
+        "tables",
+        "columns",
+        "all_columns",
+        "computed_columns",
+        "identity_columns",
+        "objects",
+        "schemas",
+      ].map((name, id) => ({
+        id: 100 + id,
+        schema: "sys",
+        name,
+        normalizedName: name,
+        kind: "view" as const,
+        parameters: [],
+        columns: [],
+      })),
+      {
+        id: 120,
+        schema: "INFORMATION_SCHEMA",
+        name: "TABLES",
+        normalizedName: "tables",
+        kind: "view",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 121,
+        schema: "INFORMATION_SCHEMA",
+        name: "COLUMNS",
+        normalizedName: "columns",
+        kind: "view",
+        parameters: [],
+        columns: [],
+      },
+    ],
+  });
+  const scope = {
+    activeDatabase: "SystemDb",
+    indexes: new Map([["systemdb", systemIndex]]),
+  };
+  const sys = createCandidates(
+    resolveSqlContext("SELECT * FROM sys.col"),
+    scope,
+  );
+  assert.deepEqual(
+    sys.map((candidate) => candidate.name),
+    ["all_columns", "columns", "computed_columns", "identity_columns"],
+  );
+  const information = createCandidates(
+    resolveSqlContext("SELECT * FROM INFORMATION_SCHEMA.COL"),
+    scope,
+  );
+  assert.deepEqual(
+    information.map((candidate) => candidate.name),
+    ["COLUMNS"],
+  );
+});
+
+test("cross-database aliases return columns from their own database only", () => {
+  const sql = `SELECT c.addr, r.addr
+FROM dbo.Customers c
+JOIN ReportingDb.reporting.CustomerAddressReport r ON r.ReportAddressId = c.AddressId`;
+  const active = createCandidates(
+    resolveSqlContext(sql, "SELECT c.addr".length),
+    crossDatabaseScope,
+  );
+  assert.deepEqual(
+    active.map((candidate) => candidate.name),
+    ["AddressId", "BillingAddressId", "EmailAddress", "ShippingAddressId"],
+  );
+  assert.ok(active.every((candidate) => candidate.database === "Db"));
+  const externalCursor = "SELECT c.addr, r.addr".length;
+  const external = createCandidates(
+    resolveSqlContext(sql, externalCursor),
+    crossDatabaseScope,
+  );
+  assert.deepEqual(
+    external.map((candidate) => candidate.name),
+    ["EmailAddress", "ReportAddressId"],
+  );
+  assert.ok(
+    external.every((candidate) => candidate.database === "ReportingDb"),
+  );
+});
+
+test("four-part identifiers produce no candidates", () => {
+  const context = resolveSqlContext(
+    "SELECT * FROM Server.ReportingDb.dbo.Customers",
+  );
+  assert.doesNotThrow(() => createCandidates(context, crossDatabaseScope));
+  assert.deepEqual(createCandidates(context, crossDatabaseScope), []);
+});

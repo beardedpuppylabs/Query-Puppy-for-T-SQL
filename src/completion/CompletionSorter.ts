@@ -6,6 +6,7 @@ export const TYPE_ORDER: Readonly<
   Record<SqlContextKind, readonly SqlObjectKind[]>
 > = {
   rowSource: [
+    "database",
     "cte",
     "tempTable",
     "tableVariable",
@@ -17,6 +18,9 @@ export const TYPE_ORDER: Readonly<
   execute: ["procedure", "variable"],
   expression: ["column", "variable", "scalarFunction", "sequence", "keyword"],
   member: ["column"],
+  qualified: ["table", "view", "tableValuedFunction", "synonym"],
+  schema: ["schema"],
+  unsupported: [],
 };
 
 export function sortCandidates(
@@ -27,6 +31,8 @@ export function sortCandidates(
   const order = TYPE_ORDER[context];
   const normalized = search.toLowerCase();
   return [...candidates].sort((left, right) => {
+    const priority = (left.priority ?? 0) - (right.priority ?? 0);
+    if (priority) return priority;
     const exact =
       Number(right.normalizedName === normalized) -
       Number(left.normalizedName === normalized);

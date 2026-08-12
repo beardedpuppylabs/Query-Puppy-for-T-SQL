@@ -59,3 +59,17 @@ test("presentation covers columns, scalar/TVF functions, procedures, and mixed d
     "(@Id int OUTPUT)",
   );
 });
+
+test("database candidates use the database semantic description only in mixed results", () => {
+  const database = {
+    name: "IntelliSenseLabReporting",
+    normalizedName: "intellisenselabreporting",
+    kind: "database" as const,
+    database: "IntelliSenseLabReporting",
+  };
+  assert.deepEqual(presentationModel(database, false), { detail: "" });
+  assert.deepEqual(presentationModel(database, true), {
+    detail: "",
+    description: "database",
+  });
+});

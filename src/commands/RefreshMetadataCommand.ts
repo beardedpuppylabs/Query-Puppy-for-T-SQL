@@ -16,14 +16,16 @@ export async function refreshMetadata(
       );
       return;
     }
-    const key = MetadataCache.key(active.connectionId, active.database);
-    cache.invalidate(key);
+    cache.invalidate(active.connectionId, active.database);
     const index = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
         title: `Loading SQL metadata for ${active.database}`,
       },
-      () => cache.load(key, () => loader.load(active)),
+      () =>
+        cache.ensureLoaded(active.connectionId, active.database, () =>
+          loader.load(active),
+        ),
     );
     await vscode.window.showInformationMessage(
       `Loaded ${String(index.count)} objects from ${active.database}.`,

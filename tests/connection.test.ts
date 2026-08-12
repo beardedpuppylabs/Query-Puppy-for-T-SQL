@@ -23,6 +23,7 @@ test("connection abstraction reuses mssql identity/database and disconnects shar
       calls.push(`query:${uri}:${sql}`);
       return { rowCount: 0, rows: [] };
     },
+    listDatabases: async () => ["ERP"],
   };
   const service = new ConnectionService("publisher.extension", async () => ({
     connectionSharing: api,
