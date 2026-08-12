@@ -96,20 +96,22 @@ export function activate(context: vscode.ExtensionContext): void {
 async function warnAboutMicrosoftSuggestions(
   context: vscode.ExtensionContext,
 ): Promise<void> {
-  if (context.workspaceState.get<boolean>("mssqlSuggestionsNoticeShown"))
-    return;
+  const noticeKey = "mssqlSuggestionsNoticeShown";
+  if (context.globalState.get<boolean>(noticeKey)) return;
   if (!(
     vscode.workspace
       .getConfiguration("mssql.intelliSense")
       .get<boolean>("enableSuggestions") ?? true
   ))
     return;
-  await context.workspaceState.update("mssqlSuggestionsNoticeShown", true);
-  const disable = "Disable Globally";
+  const disable = "Disable globally";
+  const notNow = "Not now";
   const choice = await vscode.window.showInformationMessage(
-    "Improved SQL IntelliSense works best when Microsoft mssql suggestions are disabled. Quick Info and error checking are unaffected.",
+    "Improved SQL IntelliSense replaces Microsoft mssql SQL suggestions. Disable Microsoft's suggestions globally to avoid duplicate completion results? Quick Info and Error Checking remain available.",
     disable,
+    notNow,
   );
+  await context.globalState.update(noticeKey, true);
   if (choice === disable)
     await vscode.commands.executeCommand(
       "improvedSqlIntellisense.disableMicrosoftSuggestions",

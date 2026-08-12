@@ -1,6 +1,8 @@
 .build/**
 .git/**
 .gitignore
+.env
+.env.*
 .prettierignore
 .vscode/**
 AGENTS.md
@@ -10,4 +12,6 @@ tests/**
 scripts/**
 *.vsix
 eslint.config.mjs
+package-lock.json
 tsconfig.json
+coverage/**

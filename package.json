@@ -1,19 +1,38 @@
 {
   "name": "improved-sql-intellisense",
   "displayName": "Improved SQL IntelliSense",
-  "description": "Contains-based SQL Server completions using the active Microsoft mssql connection.",
-  "version": "0.3.1",
+  "description": "SQL Server IntelliSense with Contains search, context-aware completion, cross-database resolution, and rich metadata.",
+  "version": "0.4.0",
   "publisher": "error404",
+  "author": "error404",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://gitlab.wooliverse.duckdns.org/error404/improved-sql-intellisense.git"
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#0B1F33",
+    "theme": "dark"
   },
+  "pricing": "Free",
+  "preview": true,
   "engines": {
     "vscode": "^1.105.0"
   },
   "categories": [
     "Programming Languages"
+  ],
+  "keywords": [
+    "sql",
+    "mssql",
+    "sql-server",
+    "tsql",
+    "t-sql",
+    "intellisense",
+    "autocomplete",
+    "completion",
+    "database",
+    "contains-search"
+  ],
+  "extensionDependencies": [
+    "ms-mssql.mssql"
   ],
   "activationEvents": [
     "onLanguage:sql"
@@ -51,6 +70,7 @@
     }
   },
   "scripts": {
+    "vscode:prepublish": "npm run build",
     "clean": "node scripts/clean.mjs",
     "build": "npm run clean && tsc -p tsconfig.json && esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
     "compile": "tsc -p tsconfig.json --noEmit",
@@ -59,7 +79,9 @@
     "lint": "eslint src tests",
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
-    "package": "npm run build && vsce package --no-dependencies --out improved-sql-intellisense-0.3.1.vsix"
+    "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run build",
+    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.4.0.vsix",
+    "publish:marketplace": "vsce publish"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

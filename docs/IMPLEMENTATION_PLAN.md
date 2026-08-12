@@ -76,3 +76,31 @@ Final 0.3.0 verification: 39 unit tests and both live integration suites pass. I
 - [x] Complete final format, lint, strict compilation, unit, build, and package verification.
 
 Final verification: formatting, ESLint, strict compilation, 40 unit tests, bundling, and VSIX packaging pass. Live integration tests were not run because their SQL Server environment is opt-in.
+
+## 0.3.1 Marketplace release readiness
+
+- [x] Add professional Marketplace metadata, Preview status, official icon, and mssql dependency.
+- [x] Replace automatic-setting behavior with a one-time, consent-based global prompt.
+- [x] Produce user-facing README, changelog, support, development, and publishing documentation.
+- [x] Restrict the bundled VSIX to runtime and Marketplace presentation files.
+- [x] Complete final format, lint, strict compilation, tests, build, security review, and VSIX inspection.
+
+Final release-readiness verification: formatting, ESLint, strict compilation, 40 unit tests, production bundling, package-content inspection, VSIX generation, and archive-level metadata/security review pass. The two live SQL Server integration tests were discovered and skipped because their opt-in environment was not configured. The final 0.3.1 VSIX contains nine files and no runtime `node_modules`; publisher ownership remains the developer's required external pre-publication check.
+
+## 0.3.1 open-source licensing audit
+
+- [x] Confirm the canonical MIT License and `Copyright (c) 2026 error404`.
+- [x] Use the `MIT` SPDX identifier consistently in the manifest and lockfile.
+- [x] Document the license in the README, changelog, and publishing checklist.
+- [x] Audit the production bundle and VSIX for third-party runtime code and notice obligations.
+- [x] Rebuild, repackage, and inspect the final licensed VSIX.
+
+The bundle metafile contains only project-owned `src` inputs; `vscode` is external. No npm runtime dependency or mssql source/binary is bundled, so no third-party notices file is required. The nine-file VSIX contains the byte-identical canonical root MIT License and no development dependency tree.
+
+## 0.4.0 release
+
+- [x] Advance the extension and lockfile version to 0.4.0.
+- [x] Update package filenames, publishing instructions, and changelog release heading.
+- [x] Run the full verification flow and inspect the 0.4.0 VSIX.
+
+Final 0.4.0 verification: formatting, ESLint, strict compilation, 40 unit tests, production bundling, VSIX packaging, manifest inspection, and archive security checks pass. Both opt-in live SQL Server tests were discovered and skipped because their environment was not configured. The final package contains nine files and no runtime dependency tree.
