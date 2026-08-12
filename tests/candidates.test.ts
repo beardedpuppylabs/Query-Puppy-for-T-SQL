@@ -462,6 +462,120 @@ test("active schema semantics win over a same-named database shortcut", () => {
   assert.ok(result.every((candidate) => candidate.database === "Db"));
 });
 
+test("active-database schemas participate in unqualified row-source completion", () => {
+  const active = new DatabaseIndex({
+    database: "IntelliSenseLab",
+    schemas: ["dbo", "crm", "INFORMATION_SCHEMA", "sys"],
+    loadedAt: 0,
+    objects: [
+      {
+        id: 60,
+        schema: "dbo",
+        name: "CrmCustomers",
+        normalizedName: "crmcustomers",
+        kind: "table",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 61,
+        schema: "crm",
+        name: "CustomerCrmOverview",
+        normalizedName: "customercrmoverview",
+        kind: "view",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 62,
+        schema: "crm",
+        name: "GetCrmCustomers",
+        normalizedName: "getcrmcustomers",
+        kind: "tableValuedFunction",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 63,
+        schema: "INFORMATION_SCHEMA",
+        name: "TABLES",
+        normalizedName: "tables",
+        kind: "view",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 64,
+        schema: "INFORMATION_SCHEMA",
+        name: "COLUMNS",
+        normalizedName: "columns",
+        kind: "view",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 65,
+        schema: "sys",
+        name: "tables",
+        normalizedName: "tables",
+        kind: "view",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 66,
+        schema: "sys",
+        name: "columns",
+        normalizedName: "columns",
+        kind: "view",
+        parameters: [],
+        columns: [],
+      },
+    ],
+  });
+
+  for (const fragment of ["inf", "schem"])
+    assert.ok(
+      createCandidates(
+        resolveSqlContext(`SELECT * FROM ${fragment}`),
+        active,
+      ).some(
+        (candidate) =>
+          candidate.name === "INFORMATION_SCHEMA" &&
+          candidate.kind === "schema",
+      ),
+    );
+  assert.ok(
+    createCandidates(resolveSqlContext("SELECT * FROM sy"), active).some(
+      (candidate) => candidate.name === "sys" && candidate.kind === "schema",
+    ),
+  );
+
+  const crm = createCandidates(resolveSqlContext("SELECT * FROM cr"), active);
+  assert.equal(crm[0]?.name, "crm");
+  assert.equal(crm[0].kind, "schema");
+  assert.deepEqual(
+    crm.slice(1).map((candidate) => candidate.kind),
+    ["table", "view", "tableValuedFunction"],
+  );
+  assert.equal(crm[0].insertText, "crm.");
+  assert.equal(crm[0].triggerSuggest, true);
+
+  assert.deepEqual(
+    createCandidates(
+      resolveSqlContext("SELECT * FROM INFORMATION_SCHEMA."),
+      active,
+    ).map((candidate) => candidate.name),
+    ["COLUMNS", "TABLES"],
+  );
+  assert.deepEqual(
+    createCandidates(resolveSqlContext("SELECT * FROM sys."), active).map(
+      (candidate) => candidate.name,
+    ),
+    ["columns", "tables"],
+  );
+});
+
 test("sys and INFORMATION_SCHEMA behave as strict developer metadata schemas", () => {
   const systemIndex = new DatabaseIndex({
     database: "SystemDb",

@@ -65,3 +65,14 @@ Final 0.2.1 verification: 33 unit tests and both live database integration tests
 The system metadata policy deliberately leaves `is_ms_shipped = 0` filtering in place for normal objects. Only `INFORMATION_SCHEMA` views and names in `DEVELOPER_SYS_VIEWS` cross that boundary.
 
 Final 0.3.0 verification: 39 unit tests and both live integration suites pass. IntelliSenseLab proves empty schema navigation, database-wide multi-schema Contains search, strict crm search, views/TVFs, curated sys views, common INFORMATION_SCHEMA views, and internal-noise exclusion. IntelliSenseLabReporting proves database isolation and existing cross-database alias behavior.
+
+## 0.3.1 active-database schema completion
+
+- [x] Include active-database schemas in ordinary unqualified `FROM`/`JOIN` completion.
+- [x] Apply contiguous case-insensitive Contains matching to schema names.
+- [x] Sort schemas before matching row-source object types.
+- [x] Insert a trailing dot and retrigger completion after schema selection.
+- [x] Cover `INFORMATION_SCHEMA`, `sys`, schema priority, and retained table/view/TVF results in unit tests.
+- [x] Complete final format, lint, strict compilation, unit, build, and package verification.
+
+Final verification: formatting, ESLint, strict compilation, 40 unit tests, bundling, and VSIX packaging pass. Live integration tests were not run because their SQL Server environment is opt-in.

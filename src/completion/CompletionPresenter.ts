@@ -49,6 +49,11 @@ export function presentCandidate(
   item.filterText = search ? `${search} ${candidate.name}` : candidate.name;
   item.sortText = rank.toString().padStart(8, "0");
   item.documentation = documentation(candidate);
+  if (candidate.triggerSuggest)
+    item.command = {
+      command: "editor.action.triggerSuggest",
+      title: "Suggest schema objects",
+    };
   return item;
 }
 

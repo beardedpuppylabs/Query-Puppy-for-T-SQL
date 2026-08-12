@@ -35,6 +35,8 @@ The active editor database remains the default object scope. In `FROM`/`JOIN`, l
 
 Row-source completion includes CTEs, temp tables, table variables, tables, views, inline and multi-statement table-valued functions, and synonyms. Mixed results are grouped by semantic type and sorted alphabetically within each type.
 
+The active database's schemas also participate directly in unqualified `FROM`/`JOIN` completion with the same Contains matching. For example, `FROM schem` can find `INFORMATION_SCHEMA`, and schema results sort before matching row-source objects. Accepting a schema inserts its trailing dot and immediately opens object completion, so `FROM inf` can continue naturally to `INFORMATION_SCHEMA.TABLES`; `sys.tables` works the same way without an active-database prefix.
+
 ### Database-wide editing shortcut
 
 Normal SQL remains `Object`, `Schema.Object`, or `Database.Schema.Object`. Version 0.3 adds a completion-only shortcut for finding an object when its schema is unknown:
@@ -71,7 +73,7 @@ Package and install:
 
 ```bash
 npm run package
-code --install-extension improved-sql-intellisense-0.3.0.vsix
+code --install-extension improved-sql-intellisense-0.3.1.vsix
 ```
 
 ## Architecture

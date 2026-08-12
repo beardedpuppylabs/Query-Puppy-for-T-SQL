@@ -6,6 +6,7 @@ export const TYPE_ORDER: Readonly<
   Record<SqlContextKind, readonly SqlObjectKind[]>
 > = {
   rowSource: [
+    "schema",
     "database",
     "cte",
     "tempTable",

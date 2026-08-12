@@ -47,6 +47,19 @@ const columnCandidates = (
     column,
   }));
 
+const schemaCandidate = (
+  schema: string,
+  database: string,
+): CompletionCandidate => ({
+  name: schema,
+  normalizedName: normalizeName(schema),
+  kind: "schema",
+  database,
+  insertText: `${quoteIdentifier(schema)}.`,
+  triggerSuggest: true,
+  priority: 0,
+});
+
 export function createCandidates(
   context: SqlCompletionContext,
   scopeOrIndex?: CompletionScope | DatabaseIndex,
@@ -79,13 +92,9 @@ export function createCandidates(
       } else {
         const databaseIndex = scope.indexes.get(normalizedDatabase(qualifier));
         if (databaseIndex) {
-          candidates = databaseIndex.metadata.schemas.map((schema) => ({
-            name: schema,
-            normalizedName: normalizeName(schema),
-            kind: "schema",
-            database: databaseIndex.metadata.database,
-            priority: 0,
-          }));
+          candidates = databaseIndex.metadata.schemas.map((schema) =>
+            schemaCandidate(schema, databaseIndex.metadata.database),
+          );
           if (context.search)
             candidates.push(
               ...objectsAcrossSchemas(databaseIndex).map((candidate) => ({
@@ -119,12 +128,19 @@ export function createCandidates(
             );
         }
       }
+      if (context.kind === "rowSource")
+        candidates.push(
+          ...activeIndex.metadata.schemas.map((schema) =>
+            schemaCandidate(schema, activeIndex.metadata.database),
+          ),
+        );
       candidates.push(
         ...activeIndex.objects
           .filter((object) => allowed.has(object.kind))
-          .map((object) =>
-            objectCandidate(object, activeIndex.metadata.database),
-          ),
+          .map((object) => ({
+            ...objectCandidate(object, activeIndex.metadata.database),
+            ...(context.kind === "rowSource" ? { priority: 1 } : {}),
+          })),
       );
     }
     candidates.push(
@@ -134,6 +150,7 @@ export function createCandidates(
           name: local.name,
           normalizedName: normalizeName(local.name),
           kind: local.kind,
+          ...(context.kind === "rowSource" ? { priority: 1 } : {}),
         })),
     );
     if (context.kind === "rowSource" && scope?.databaseNames)

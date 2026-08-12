@@ -20,6 +20,8 @@ export interface CompletionCandidate {
   readonly column?: ColumnMetadata;
   readonly baseObjectName?: string;
   readonly insertText?: string;
-  /** Semantic group priority used only for mixed shortcut domains. */
+  /** Continue schema qualification after this candidate is accepted. */
+  readonly triggerSuggest?: boolean;
+  /** Semantic group priority for mixed qualification and row-source domains. */
   readonly priority?: number;
 }
