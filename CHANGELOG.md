@@ -2,6 +2,10 @@
 
 All notable changes are recorded here. This project has not had a public Marketplace release yet.
 
+## 0.4.1 — Preview release candidate
+
+- Changed the extension developer and intended Marketplace publisher identity to Bismarck.
+
 ## 0.4.0 — Preview release candidate
 
 - Added contiguous, case-insensitive Contains completion with deterministic semantic and alphabetical sorting.

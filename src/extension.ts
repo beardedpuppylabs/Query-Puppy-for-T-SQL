@@ -6,7 +6,7 @@ import { ConnectionService } from "./mssql/ConnectionService.js";
 import { getMssqlApi } from "./mssql/MssqlApi.js";
 import { MetadataLoader } from "./mssql/MetadataLoader.js";
 
-const EXTENSION_ID = "error404.improved-sql-intellisense";
+const EXTENSION_ID = "Bismarck.improved-sql-intellisense";
 
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel("Improved SQL IntelliSense");

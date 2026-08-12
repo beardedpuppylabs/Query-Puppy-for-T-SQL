@@ -89,7 +89,7 @@ Final release-readiness verification: formatting, ESLint, strict compilation, 40
 
 ## 0.3.1 open-source licensing audit
 
-- [x] Confirm the canonical MIT License and `Copyright (c) 2026 error404`.
+- [x] Confirm the canonical MIT License and current developer copyright identity.
 - [x] Use the `MIT` SPDX identifier consistently in the manifest and lockfile.
 - [x] Document the license in the README, changelog, and publishing checklist.
 - [x] Audit the production bundle and VSIX for third-party runtime code and notice obligations.
@@ -104,3 +104,12 @@ The bundle metafile contains only project-owned `src` inputs; `vscode` is extern
 - [x] Run the full verification flow and inspect the 0.4.0 VSIX.
 
 Final 0.4.0 verification: formatting, ESLint, strict compilation, 40 unit tests, production bundling, VSIX packaging, manifest inspection, and archive security checks pass. Both opt-in live SQL Server tests were discovered and skipped because their environment was not configured. The final package contains nine files and no runtime dependency tree.
+
+## 0.4.1 publisher identity update
+
+- [x] Change the developer, author, copyright, and intended Marketplace publisher to Bismarck.
+- [x] Update the runtime extension identifier and publishing documentation.
+- [x] Advance the manifest and lockfile version to 0.4.1.
+- [x] Run release verification and inspect the 0.4.1 VSIX.
+
+Final 0.4.1 verification: formatting, ESLint, strict compilation, 40 unit tests, production bundling, VSIX packaging, identity inspection, and archive security checks pass. Both opt-in SQL Server integration tests were discovered and skipped because their environment was not configured. The resulting extension identifier is `Bismarck.improved-sql-intellisense`.
