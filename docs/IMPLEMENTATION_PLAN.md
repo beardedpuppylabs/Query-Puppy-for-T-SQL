@@ -219,3 +219,14 @@ The corrected fallback waits 200 ms for a successful native result and invokes `
 - [x] Resolve fallback candidates exclusively from cached scalar-function and TVF metadata.
 
 Native `(` and comma registration remains primary. A single pending trigger now follows the edit to its exact post-edit selection; a 75 ms backup uses the same URI, version, cursor, generation, configuration, and cached-resolution checks and is cancelled once handled.
+
+## 0.6.6 editing productivity
+
+- [x] Add semantic projection-only wildcard detection for `*` and strict `alias.*`.
+- [x] Bind expansion exclusively to Tab through a narrow context key and retain a Command Palette action.
+- [x] Expand ordered cached columns in one edit without catalog queries on Tab.
+- [x] Add deterministic editable `AS` alias snippets with visible-scope collision handling.
+- [x] Retrigger alias completion after row-source acceptance and narrowly after manual trailing whitespace.
+- [x] Cover invalid stars, multiple sources, collisions, naming, and a 200-column source.
+
+Wildcard expansion and alias generation reuse cached catalog/document semantics. This milestone deliberately adds no snippet manager, query UI/history, nested scope work, MERGE, OPENJSON, or PIVOT support.

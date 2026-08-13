@@ -12,6 +12,8 @@ import {
   SQL_DOCUMENT_SELECTOR,
 } from "./completion/ProviderRegistration.js";
 import { PendingSignatureTriggerState } from "./completion/AutomaticSignatureHelp.js";
+import { SelectStarExpansionController } from "./commands/ExpandSelectStarCommand.js";
+import { isPotentialSmartAliasTrigger } from "./parser/SmartAlias.js";
 import {
   microsoftSuggestionStatusLines,
   resolveMicrosoftSuggestionState,
@@ -91,6 +93,7 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   context.subscriptions.push(
     output,
+    new SelectStarExpansionController(connections, cache),
     vscode.languages.registerCompletionItemProvider(
       SQL_DOCUMENT_SELECTOR,
       provider,
@@ -118,6 +121,21 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       const change = event.contentChanges[0];
       if (!change) return;
+      if (
+        (vscode.workspace
+          .getConfiguration(
+            "improvedSqlIntellisense.smartAliases",
+            event.document.uri,
+          )
+          .get<boolean>("enabled") ??
+          true) &&
+        /^\s+$/.test(change.text) &&
+        isPotentialSmartAliasTrigger(
+          event.document.getText(),
+          change.rangeOffset + change.text.length,
+        )
+      )
+        void vscode.commands.executeCommand("editor.action.triggerSuggest");
       const pending = automaticSignatureHelp.replace(
         event.document.uri.toString(),
         event.document.version,
@@ -143,6 +161,10 @@ export function activate(context: vscode.ExtensionContext): void {
       void fulfillAutomaticTrigger();
     }),
     vscode.window.onDidChangeActiveTextEditor(() => clearAutomaticTrigger()),
+    vscode.commands.registerCommand(
+      "improvedSqlIntellisense.triggerAliasSuggest",
+      () => vscode.commands.executeCommand("editor.action.triggerSuggest"),
+    ),
     vscode.commands.registerCommand(
       "improvedSqlIntellisense.refreshMetadata",
       () => refreshMetadata(connections, loader, cache),

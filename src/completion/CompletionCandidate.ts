@@ -23,6 +23,8 @@ export interface CompletionCandidate {
   readonly insertText?: string;
   /** Continue schema qualification after this candidate is accepted. */
   readonly triggerSuggest?: boolean;
+  /** Request alias completion after a row-source object is accepted. */
+  readonly triggerAliasSuggest?: boolean;
   /** Semantic group priority for mixed qualification and row-source domains. */
   readonly priority?: number;
 }

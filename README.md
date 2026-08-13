@@ -35,6 +35,8 @@ Matching is contiguous and case-insensitive: `addr` can occur anywhere in a name
 - INSERT/UPDATE writable-column and EXEC named-parameter completion
 - Automatic function Signature Help while typing, with active-parameter tracking; use `Ctrl+Shift+Space` to reopen it manually
 - DML OUTPUT completion through `inserted` and `deleted`
+- Tab-only expansion of `SELECT *` and `alias.*` into ordered, qualified columns
+- Smart editable `AS` alias suggestions after row sources
 - Alias member completion such as `c.addr`
 - `Schema.Object`, `Database.Schema.Object`, and `Database..Object` navigation
 - Same-server cross-database completion and database-wide cross-schema search
@@ -44,6 +46,16 @@ Matching is contiguous and case-insensitive: `addr` can occur anywhere in a name
 - **Show Improved SQL IntelliSense Status** plus an optional diagnostic output channel
 
 ## Usage
+
+### Expand SELECT wildcards
+
+Place the cursor directly after `*` in a SELECT projection and press Tab. The extension replaces only that wildcard with columns already available from catalog or document-local metadata. Enter always retains its normal editor behavior, and Tab behaves normally outside a resolvable projection wildcard.
+
+For `alias.*`, only that alias is expanded. A plain `*` includes visible row sources in source order and qualifies generated columns.
+
+### Smart aliases
+
+After completing or manually typing a resolvable row source in FROM, JOIN, or APPLY, accept the top `AS` snippet to insert a short editable alias such as `AS co` for `CustomerOrders`. Disable this with `improvedSqlIntellisense.smartAliases.enabled` if desired.
 
 ### Contains
 

@@ -2,7 +2,7 @@
   "name": "improved-sql-intellisense",
   "displayName": "Improved SQL IntelliSense",
   "description": "SQL Server IntelliSense with Contains search, context-aware completion, cross-database resolution, and rich metadata.",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "publisher": "Bismarck",
   "author": "Bismarck",
   "license": "MIT",
@@ -41,6 +41,10 @@
   "contributes": {
     "commands": [
       {
+        "command": "improvedSqlIntellisense.expandSelectStar",
+        "title": "Improved SQL IntelliSense: Expand SELECT * to Columns"
+      },
+      {
         "command": "improvedSqlIntellisense.refreshMetadata",
         "title": "Refresh IntelliSense Metadata"
       },
@@ -69,9 +73,21 @@
           "type": "boolean",
           "default": false,
           "description": "Write detailed diagnostics to the Improved SQL IntelliSense output channel."
+        },
+        "improvedSqlIntellisense.smartAliases.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Suggest short aliases after completing row sources in FROM, JOIN and APPLY clauses."
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "improvedSqlIntellisense.expandSelectStar",
+        "key": "tab",
+        "when": "editorTextFocus && editorLangId == sql && improvedSqlIntellisense.canExpandSelectStar && !suggestWidgetVisible && !inSnippetMode"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
@@ -85,7 +101,7 @@
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
     "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run test:extension && npm run build",
-    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.6.5.vsix",
+    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.6.6.vsix",
     "publish:marketplace": "vsce publish"
   },
   "devDependencies": {

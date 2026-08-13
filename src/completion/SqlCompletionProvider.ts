@@ -7,6 +7,7 @@ import { createCandidates, type CompletionScope } from "./CandidateFactory.js";
 import { CompletionScopeResolver } from "./CompletionScopeResolver.js";
 import { presentCandidate } from "./CompletionPresenter.js";
 import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
+import { resolveSmartAliasContext } from "../parser/SmartAlias.js";
 
 export class SqlCompletionProvider implements vscode.CompletionItemProvider {
   private readonly loggedFailures = new Set<string>();
@@ -61,6 +62,33 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
       context.cursor,
       scope,
     );
+    if (
+      vscode.workspace
+        .getConfiguration("improvedSqlIntellisense.smartAliases", document.uri)
+        .get<boolean>("enabled") ??
+      true
+    ) {
+      const alias = resolveSmartAliasContext(
+        context.sql,
+        context.cursor,
+        semantics,
+        scope,
+      );
+      if (alias) {
+        const item = new vscode.CompletionItem(
+          `AS ${alias.alias}`,
+          vscode.CompletionItemKind.Snippet,
+        );
+        item.detail = `alias for ${alias.objectName}`;
+        item.insertText = new vscode.SnippetString(
+          `${alias.leadingSpace ? " " : ""}AS \${1:${alias.alias}}`,
+        );
+        item.range = new vscode.Range(position, position);
+        item.sortText = "00000000";
+        item.filterText = `AS ${alias.alias}`;
+        return new vscode.CompletionList([item], false);
+      }
+    }
     const memberAlias = context.qualifier?.parts[0];
     const memberSource = memberAlias
       ? semantics.aliases.get(memberAlias.toLocaleLowerCase("en-US"))

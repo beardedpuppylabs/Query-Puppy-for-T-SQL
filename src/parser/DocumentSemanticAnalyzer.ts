@@ -1,4 +1,5 @@
 import type { DatabaseIndex } from "../metadata/DatabaseIndex.js";
+import { quoteIdentifier } from "../metadata/SqlTypeFormatter.js";
 import {
   normalizeName,
   type ColumnMetadata,
@@ -232,6 +233,29 @@ function columnFromDefinition(
 interface SelectSources {
   readonly ordered: readonly (readonly ColumnMetadata[])[];
   readonly bindings: ReadonlyMap<string, readonly ColumnMetadata[]>;
+}
+
+export interface SelectWildcardExpansion {
+  readonly start: number;
+  readonly end: number;
+  readonly qualification: "unqualified" | "qualified";
+  readonly sources: readonly {
+    readonly qualifier: string;
+    readonly columns: readonly ColumnMetadata[];
+  }[];
+}
+
+export function wildcardColumnExpressions(
+  expansion: SelectWildcardExpansion,
+): readonly string[] {
+  return expansion.sources.flatMap((source) =>
+    source.columns.map((column) => {
+      const columnName = quoteIdentifier(column.name);
+      return expansion.qualification === "qualified"
+        ? `${quoteIdentifier(source.qualifier)}.${columnName}`
+        : columnName;
+    }),
+  );
 }
 function selectSources(
   tokens: readonly SqlToken[],
@@ -608,5 +632,141 @@ export function analyzeDocumentSemantics(
     rowSources,
     aliases,
     orderByColumns: inOrderBy ? currentProjection : [],
+  };
+}
+
+/** Resolves only an exact projection wildcard and never performs catalog I/O. */
+export function resolveSelectWildcard(
+  sql: string,
+  cursor: number,
+  catalog?: SemanticCatalog,
+): SelectWildcardExpansion | undefined {
+  const tokens = tokenizeSql(sql);
+  const starIndex = tokens.findIndex(
+    (token) => token.text === "*" && token.end === cursor,
+  );
+  if (starIndex < 0) return undefined;
+  let depth = 0;
+  const depths = tokens.map((token) => {
+    const current = depth;
+    if (token.text === "(") depth++;
+    if (token.text === ")") depth--;
+    return current;
+  });
+  const starDepth = depths[starIndex];
+  let select = -1;
+  for (let i = starIndex - 1; i >= 0; i--) {
+    if (depths[i] !== starDepth) continue;
+    if (tokens[i]?.text === ";" || tokens[i]?.normalized === "go") break;
+    if (tokens[i]?.normalized === "from") return undefined;
+    if (tokens[i]?.normalized === "select") {
+      select = i;
+      break;
+    }
+  }
+  if (select < 0) return undefined;
+  const previous = tokens[starIndex - 1];
+  const qualifierToken =
+    previous?.text === "." && ident(tokens[starIndex - 2])
+      ? tokens[starIndex - 2]
+      : undefined;
+  const itemStart = qualifierToken ? starIndex - 2 : starIndex;
+  const before = tokens[itemStart - 1];
+  const after = tokens[starIndex + 1];
+  if (
+    (before &&
+      depths[itemStart - 1] === starDepth &&
+      before.text !== "," &&
+      before.normalized !== "select") ||
+    (after &&
+      depths[starIndex + 1] === starDepth &&
+      after.text !== "," &&
+      after.normalized !== "into" &&
+      after.normalized !== "from")
+  )
+    return undefined;
+  let end = tokens.length;
+  for (let i = starIndex + 1; i < tokens.length; i++) {
+    if (depths[i] !== starDepth) continue;
+    if (tokens[i]?.text === ";" || tokens[i]?.normalized === "go") {
+      end = i;
+      break;
+    }
+  }
+  const from = tokens.findIndex(
+    (token, index) =>
+      index > starIndex &&
+      index < end &&
+      depths[index] === starDepth &&
+      token.normalized === "from",
+  );
+  if (from < 0) return undefined;
+  const semantics = analyzeDocumentSemantics(sql, cursor, catalog);
+  const bindings = selectSources(
+    tokens,
+    from,
+    end,
+    semantics.rowSources,
+    catalog,
+  ).bindings;
+  if (qualifierToken) {
+    const columns = bindings.get(normalizeName(qualifierToken.text)) ?? [];
+    if (!columns.length) return undefined;
+    return {
+      start: qualifierToken.start,
+      end: tokens[starIndex]?.end ?? cursor,
+      qualification: "qualified",
+      sources: [{ qualifier: qualifierToken.text, columns }],
+    };
+  }
+  const sources: {
+    qualifier: string;
+    columns: readonly ColumnMetadata[];
+    explicitAlias: boolean;
+  }[] = [];
+  let localDepth = 0;
+  for (let i = from; i < end; i++) {
+    if (tokens[i]?.text === "(") localDepth++;
+    if (tokens[i]?.text === ")") localDepth--;
+    if (
+      localDepth !== 0 ||
+      !["from", "join", "apply"].includes(tokens[i]?.normalized ?? "")
+    )
+      continue;
+    let p = i + 1;
+    let objectName = "";
+    if (tokens[p]?.text === "(") {
+      const close = matching(tokens, p);
+      p = close;
+    } else {
+      if (!ident(tokens[p])) continue;
+      objectName = tokens[p]?.text ?? "";
+      while (tokens[p + 1]?.text === "." && ident(tokens[p + 2])) p += 2;
+      objectName = tokens[p]?.text ?? objectName;
+      if (tokens[p + 1]?.text === "(") p = matching(tokens, p + 1);
+    }
+    if (tokens[p + 1]?.normalized === "as") p++;
+    const aliasToken =
+      ident(tokens[p + 1]) && !reserved.has(tokens[p + 1]?.normalized ?? "")
+        ? tokens[p + 1]
+        : undefined;
+    const alias = aliasToken?.text ?? objectName;
+    const columns = bindings.get(normalizeName(alias)) ?? [];
+    if (!columns.length) return undefined;
+    sources.push({
+      qualifier: alias,
+      columns,
+      explicitAlias: Boolean(aliasToken),
+    });
+  }
+  if (!sources.length) return undefined;
+  return {
+    start: tokens[starIndex]?.start ?? cursor - 1,
+    end: cursor,
+    qualification:
+      sources.length > 1 || sources[0]?.explicitAlias
+        ? "qualified"
+        : "unqualified",
+    sources: sources.map(({ qualifier, columns }) => ({ qualifier, columns })),
   };
 }

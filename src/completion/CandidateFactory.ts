@@ -247,6 +247,21 @@ export function createCandidates(
         })),
       );
   }
+  const aliasable = new Set([
+    "table",
+    "view",
+    "tableValuedFunction",
+    "synonym",
+    "cte",
+    "tempTable",
+    "tableVariable",
+  ]);
+  if (context.baseKind === "rowSource")
+    candidates = candidates.map((candidate) =>
+      aliasable.has(candidate.kind) && !candidate.triggerSuggest
+        ? { ...candidate, triggerAliasSuggest: true }
+        : candidate,
+    );
   const unique = new Map<string, CompletionCandidate>();
   for (const candidate of candidates)
     unique.set(`${candidate.kind}:${candidate.normalizedName}`, candidate);

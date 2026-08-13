@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.6
+
+- Added explicit Tab-only expansion of semantic `SELECT *` and `alias.*` projections using cached row-source columns.
+- Added smart, editable `AS` alias suggestions after tables, views, CTEs, local row sources, and TVFs.
+
 ## 0.6.5
 
 - Fixed automatic Signature Help when typing function-call parentheses and argument commas.

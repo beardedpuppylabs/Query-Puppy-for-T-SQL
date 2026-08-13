@@ -59,6 +59,11 @@ export function presentCandidate(
       command: "editor.action.triggerSuggest",
       title: "Suggest schema objects",
     };
+  else if (candidate.triggerAliasSuggest)
+    item.command = {
+      command: "improvedSqlIntellisense.triggerAliasSuggest",
+      title: "Suggest row-source alias",
+    };
   return item;
 }
 
