@@ -7,6 +7,7 @@ import type {
 import type { MetadataLoader } from "../mssql/MetadataLoader.js";
 import type { SqlCompletionContext } from "../parser/SqlContextResolver.js";
 import type { CompletionScope } from "./CandidateFactory.js";
+import { documentDatabaseReferences } from "../parser/DocumentSemanticAnalyzer.js";
 
 const normalize = (name: string): string => name.toLocaleLowerCase("en-US");
 
@@ -37,9 +38,26 @@ export class CompletionScopeResolver {
       activeIndex,
       context,
     );
-    if (requested && normalize(requested) !== normalize(active.database)) {
-      const secondary = await this.ensureDatabase(active, requested);
-      indexes.set(normalize(requested), secondary);
+    const documentReferences = documentDatabaseReferences(
+      context.sql,
+      context.cursor,
+    );
+    const requestedDatabases = new Map<string, string>();
+    if (requested) requestedDatabases.set(normalize(requested), requested);
+    for (const database of documentReferences)
+      requestedDatabases.set(normalize(database), database);
+    requestedDatabases.delete(normalize(active.database));
+    if (requestedDatabases.size) {
+      const available = await this.discoverDatabases(active);
+      await Promise.all(
+        [...requestedDatabases].map(async ([key]) => {
+          const actual = available.find(
+            (candidate) => normalize(candidate) === key,
+          );
+          if (!actual) return;
+          indexes.set(key, await this.ensureDatabase(active, actual));
+        }),
+      );
     }
     return {
       activeDatabase: active.database,

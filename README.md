@@ -28,7 +28,8 @@ Matching is contiguous and case-insensitive: `addr` can occur anywhere in a name
 
 - Case-insensitive Contains completion
 - Schemas, tables, views, synonyms, table-valued functions, scalar functions, and stored procedures
-- CTEs, temporary tables, and table variables
+- Column-aware CTEs, temporary tables, table variables, and derived tables
+- `SELECT INTO`, `VALUES`, `CROSS APPLY`, and `OUTER APPLY` row-source inference
 - Column detail with datatype and `NULL`/`NOT NULL`
 - Scalar-function signatures and return types, and stored-procedure signatures
 - Alias member completion such as `c.addr`
@@ -105,6 +106,22 @@ sys.columns
 sys.objects
 ```
 
+### Document-local row sources
+
+Projected columns, aliases, types, and nullability are inferred where reliable:
+
+```sql
+WITH CustomerData AS
+(
+    SELECT CustomerId, BillingAddressId
+    FROM dbo.Customers
+)
+SELECT c.
+FROM CustomerData c
+```
+
+Temporary tables created with `CREATE TABLE` or `SELECT INTO`, table variables, derived tables, `VALUES`, and APPLY sources participate in the same alias-member completion.
+
 Use **Refresh IntelliSense Metadata** after schema changes and **Show Improved SQL IntelliSense Status** for connection, cache, and completion-provider diagnostics.
 
 ## Requirements
@@ -120,7 +137,8 @@ Improved SQL IntelliSense has no telemetry. It does not transmit query text to a
 ## Known limitations
 
 - The defensive tokenizer is not a complete T-SQL compiler. Deeply nested queries or unusual grammar can reduce context accuracy.
-- CTE, table-variable, and temporary-table names are recognized, but their columns are not inferred yet.
+- Unaliased computed projections without a reliable SQL output name are omitted.
+- Recursive CTE and UNION branch type reconciliation is best-effort.
 - Stored-procedure first-result-set discovery is not performed; no result schema is fabricated.
 - Metadata refresh after DDL is explicit.
 - Cross-database completion is limited to databases on the active SQL Server connection. Linked Servers and four-part names are out of scope.

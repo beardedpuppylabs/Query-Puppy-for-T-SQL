@@ -122,6 +122,33 @@ test("database-qualified alias requests its originating database", async () => {
   assert.deepEqual(loads, ["DatabaseA", "DatabaseB"]);
 });
 
+test("CTE projection loads databases explicitly referenced inside its statement", async () => {
+  const loads: string[] = [];
+  const connections = {
+    listDatabases: async () => ["DatabaseA", "DatabaseB"],
+  } as unknown as ConnectionService;
+  const loader = {
+    load: async ({ database }: { database: string }) => {
+      loads.push(database);
+      return databaseIndex(database, ["dbo", "archive"]);
+    },
+  } as unknown as MetadataLoader;
+  const resolver = new CompletionScopeResolver(
+    connections,
+    loader,
+    new MetadataCache(),
+    () => undefined,
+  );
+  const sql =
+    "WITH x AS (SELECT * FROM DatabaseB.archive.CustomerAddressArchive a) SELECT y. FROM x y";
+  const scope = await resolver.resolve(
+    { connectionId: "connection", database: "DatabaseA" },
+    resolveSqlContext(sql, sql.indexOf("y.") + 2),
+  );
+  assert.deepEqual(loads, ["DatabaseA", "DatabaseB"]);
+  assert.ok(scope.indexes.has("databaseb"));
+});
+
 test("changing the active database selects its own cached default scope", async () => {
   const connections = {
     listDatabases: async () => [],

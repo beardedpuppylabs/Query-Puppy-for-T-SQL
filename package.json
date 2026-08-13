@@ -2,7 +2,7 @@
   "name": "improved-sql-intellisense",
   "displayName": "Improved SQL IntelliSense",
   "description": "SQL Server IntelliSense with Contains search, context-aware completion, cross-database resolution, and rich metadata.",
-  "version": "0.4.2",
+  "version": "0.5.1",
   "publisher": "Bismarck",
   "author": "Bismarck",
   "license": "MIT",
@@ -80,7 +80,7 @@
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
     "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run build",
-    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.4.2.vsix",
+    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.5.1.vsix",
     "publish:marketplace": "vsce publish"
   },
   "devDependencies": {

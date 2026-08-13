@@ -26,6 +26,8 @@ const kinds: Record<SqlObjectKind, vscode.CompletionItemKind> = {
   variable: vscode.CompletionItemKind.Variable,
   tableVariable: vscode.CompletionItemKind.Variable,
   tempTable: vscode.CompletionItemKind.Struct,
+  derivedTable: vscode.CompletionItemKind.Struct,
+  values: vscode.CompletionItemKind.Struct,
   keyword: vscode.CompletionItemKind.Keyword,
 };
 export function presentCandidate(

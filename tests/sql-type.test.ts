@@ -26,3 +26,10 @@ test("formats SQL Server catalog types", () => {
   assert.equal(quoteIdentifier("Customer"), "Customer");
   assert.equal(quoteDatabaseIdentifier("ERP]Lab"), "[ERP]]Lab]");
 });
+
+test("preserves valid temporary and variable identifiers", () => {
+  assert.equal(quoteIdentifier("#Temp"), "#Temp");
+  assert.equal(quoteIdentifier("##GlobalTemp"), "##GlobalTemp");
+  assert.equal(quoteIdentifier("@Rows"), "@Rows");
+  assert.equal(quoteIdentifier("Address Text"), "[Address Text]");
+});

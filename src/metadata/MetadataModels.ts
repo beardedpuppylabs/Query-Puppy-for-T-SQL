@@ -14,6 +14,8 @@ export type SqlObjectKind =
   | "variable"
   | "tableVariable"
   | "tempTable"
+  | "derivedTable"
+  | "values"
   | "keyword";
 
 export interface SqlType {
@@ -54,6 +56,8 @@ export interface DatabaseObject {
     | "variable"
     | "tableVariable"
     | "tempTable"
+    | "derivedTable"
+    | "values"
     | "keyword"
   >;
   readonly columns: readonly ColumnMetadata[];
@@ -90,5 +94,7 @@ export const friendlyKind = (kind: SqlObjectKind): string =>
     variable: "variable",
     tableVariable: "table variable",
     tempTable: "temp table",
+    derivedTable: "derived table",
+    values: "VALUES row source",
     keyword: "keyword",
   })[kind];

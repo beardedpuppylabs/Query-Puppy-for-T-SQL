@@ -31,6 +31,10 @@ The mssql adapter is the only connection boundary. One catalog batch populates a
 
 The current public mssql connection-sharing API is marked for future retirement. Its use is isolated in `MssqlApi` and `ConnectionService` so a future public replacement can be adopted without changing the completion engine.
 
+Database catalog metadata and document-local semantics are separate layers. `MetadataCache` retains connection/database catalog indexes; `DocumentSemanticAnalyzer` creates scoped row sources and SELECT projections from tokens without querying SQL Server. `DocumentSemanticCache` keys this analysis by document URI, version, cursor, and available catalog identity and discards entries when documents close.
+
+Alias-member completion from this extension is columns-only. If a semantic alias resolves to an empty projection, debug logging records that condition once; generic `abc` document words shown alongside an empty provider result come from the editor's independent word-based suggestions, not from this extension. The extension does not modify `editor.wordBasedSuggestions`.
+
 Build and package independently with:
 
 ```bash

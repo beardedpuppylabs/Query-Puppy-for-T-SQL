@@ -6,10 +6,13 @@ import { resolveSqlContext } from "../parser/SqlContextResolver.js";
 import { createCandidates, type CompletionScope } from "./CandidateFactory.js";
 import { CompletionScopeResolver } from "./CompletionScopeResolver.js";
 import { presentCandidate } from "./CompletionPresenter.js";
+import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
 
 export class SqlCompletionProvider implements vscode.CompletionItemProvider {
   private readonly loggedFailures = new Set<string>();
   private readonly scopes: CompletionScopeResolver;
+  private readonly documentSemantics = new DocumentSemanticCache();
+  private readonly loggedEmptyProjections = new Set<string>();
 
   constructor(
     private readonly connections: ConnectionService,
@@ -51,7 +54,31 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     }
     if (token.isCancellationRequested)
       return new vscode.CompletionList([], true);
-    const candidates = createCandidates(context, scope);
+    const semantics = this.documentSemantics.get(
+      document.uri.toString(),
+      document.version,
+      context.sql,
+      context.cursor,
+      scope,
+    );
+    const memberAlias = context.qualifier?.parts[0];
+    const memberSource = memberAlias
+      ? semantics.aliases.get(memberAlias.toLocaleLowerCase("en-US"))
+      : undefined;
+    if (
+      (context.kind === "member" || context.kind === "qualified") &&
+      memberSource &&
+      memberSource.columns.length === 0
+    ) {
+      const identity = `${document.uri.toString()}:${String(document.version)}:${memberSource.sourceId}`;
+      if (!this.loggedEmptyProjections.has(identity)) {
+        this.loggedEmptyProjections.add(identity);
+        this.debug(
+          `Resolved alias \`${memberAlias ?? memberSource.name}\` to ${memberSource.sourceKind} \`${memberSource.name}\`, but the projection contains 0 columns.`,
+        );
+      }
+    }
+    const candidates = createCandidates(context, scope, semantics);
     const types = new Set(candidates.map((candidate) => candidate.kind));
     const start = document.positionAt(context.replacementStart);
     const range = new vscode.Range(start, position);
@@ -67,6 +94,10 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
       ),
       true,
     );
+  }
+
+  closeDocument(uri: vscode.Uri): void {
+    this.documentSemantics.delete(uri.toString());
   }
 
   private logFailureOnce(key: string, error: unknown): void {

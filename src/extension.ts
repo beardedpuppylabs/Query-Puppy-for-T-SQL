@@ -35,6 +35,9 @@ export function activate(context: vscode.ExtensionContext): void {
       provider,
       ".",
     ),
+    vscode.workspace.onDidCloseTextDocument((document) =>
+      provider.closeDocument(document.uri),
+    ),
     vscode.commands.registerCommand(
       "improvedSqlIntellisense.refreshMetadata",
       () => refreshMetadata(connections, loader, cache),

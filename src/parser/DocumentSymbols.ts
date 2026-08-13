@@ -25,6 +25,7 @@ const isIdentifier = (token: SqlToken | undefined): token is SqlToken =>
   token?.kind === "variable";
 export function resolveDocumentSymbols(
   tokens: readonly SqlToken[],
+  cursor = Number.POSITIVE_INFINITY,
 ): DocumentSymbols {
   const aliases = new Map<string, SourceReference>();
   const locals: LocalSymbol[] = [];
@@ -36,9 +37,18 @@ export function resolveDocumentSymbols(
       locals.push(symbol);
     }
   };
+  let cursorDepth = 0;
+  for (const token of tokens) {
+    if (token.start >= cursor) break;
+    if (token.text === "(") cursorDepth++;
+    if (token.text === ")") cursorDepth--;
+  }
+  let depth = 0;
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     if (!token) continue;
+    if (token.text === "(") depth++;
+    if (token.text === ")") depth--;
     if (token.normalized === "with" || (token.text === "," && i > 0)) {
       const name = tokens[i + 1];
       const as = tokens[i + 2];
@@ -79,6 +89,7 @@ export function resolveDocumentSymbols(
       token.text !== ","
     )
       continue;
+    if (depth > cursorDepth) continue;
     let cursor = i + 1;
     const first = tokens[cursor];
     if (!isIdentifier(first)) continue;

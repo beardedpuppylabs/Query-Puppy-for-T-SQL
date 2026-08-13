@@ -37,7 +37,7 @@ export function formatSqlType(type: SqlType): string {
 }
 
 export function quoteIdentifier(name: string): string {
-  return /^[A-Za-z_][A-Za-z0-9_@$#]*$/.test(name)
+  return /^(?:#{1,2}|@)?[A-Za-z_][A-Za-z0-9_@$#]*$/.test(name)
     ? name
     : `[${name.replaceAll("]", "]]")}]`;
 }

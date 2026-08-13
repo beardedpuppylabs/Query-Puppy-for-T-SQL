@@ -100,6 +100,48 @@ test(
           candidate.sourceObject.name === "Customers",
       ),
     );
+
+    const localScope = {
+      activeDatabase: process.env["MSSQL_TEST_DATABASE"] ?? "",
+      indexes: new Map([
+        [(process.env["MSSQL_TEST_DATABASE"] ?? "").toLowerCase(), index],
+      ]),
+    };
+    const cteSql = `WITH X AS
+(
+  SELECT CustomerId, BillingAddressId, EmailAddress
+  FROM ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.dbo.Customers
+)
+SELECT x.addr
+FROM X x`;
+    const cteCandidates = createCandidates(
+      resolveSqlContext(cteSql, cteSql.indexOf("x.addr") + "x.addr".length),
+      localScope,
+    );
+    assert.deepEqual(
+      cteCandidates.map((candidate) => candidate.name),
+      ["BillingAddressId", "EmailAddress"],
+    );
+    assert.ok(cteCandidates.every((candidate) => candidate.kind === "column"));
+
+    const intoSql = `SELECT CustomerId, BillingAddressId
+INTO #T
+FROM ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.dbo.Customers;
+SELECT t.
+FROM #T t`;
+    const intoCandidates = createCandidates(
+      resolveSqlContext(intoSql, intoSql.indexOf("t.") + 2),
+      localScope,
+    );
+    assert.deepEqual(
+      intoCandidates.map((candidate) => candidate.name),
+      ["BillingAddressId", "CustomerId"],
+    );
+    assert.equal(
+      intoCandidates.find((candidate) => candidate.name === "CustomerId")
+        ?.sqlType?.name,
+      "bigint",
+    );
   },
 );
 
@@ -337,6 +379,55 @@ JOIN ${secondaryDatabase}.reporting.CustomerAddressReport r ON r.CustomerId = c.
       secondaryColumns.every(
         (candidate) => candidate.database === secondaryDatabase,
       ),
+    );
+    const billingSource = active.findObject("billing", "BillingAddress_0001");
+    const archiveSource = secondary.findObject(
+      "archive",
+      "CustomerAddressArchive",
+    );
+    assert.ok(
+      billingSource,
+      "missing real billing.BillingAddress_0001 fixture",
+    );
+    assert.ok(
+      archiveSource,
+      "missing real archive.CustomerAddressArchive fixture",
+    );
+    const cteSql = `WITH bla AS
+(
+    SELECT a.BillingAddressId, a.BillingCode
+    FROM ${activeDatabase}.billing.BillingAddress_0001 AS a
+),
+ala AS
+(
+    SELECT *
+    FROM ${secondaryDatabase}.archive.CustomerAddressArchive AS b
+)
+SELECT *
+FROM bla AS x
+JOIN ala AS y ON y.`;
+    const yColumns = createCandidates(resolveSqlContext(cteSql), scope);
+    const xColumns = createCandidates(
+      resolveSqlContext(cteSql.replace("ON y.", "ON x.")),
+      scope,
+    );
+    assert.deepEqual(
+      xColumns.map((candidate) => candidate.name),
+      ["BillingAddressId", "BillingCode"],
+    );
+    assert.deepEqual(
+      new Set(yColumns.map((candidate) => candidate.name)),
+      new Set(archiveSource.columns.map((column) => column.name)),
+    );
+    assert.ok(
+      yColumns.every(
+        (candidate) =>
+          candidate.kind === "column" &&
+          !["BillingAddressId", "BillingCode"].includes(candidate.name),
+      ),
+    );
+    context.diagnostic(
+      `CTE aliases verified: x=${String(xColumns.length)} columns, y=${String(yColumns.length)} columns`,
     );
     assert.equal(cache.get("integration", activeDatabase), active);
     assert.equal(cache.get("integration", secondaryDatabase), secondary);

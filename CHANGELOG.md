@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.1
+
+- Fixed column-scope leakage between multiple CTEs.
+- Fixed `SELECT *` column inference for CTEs and local row sources.
+- Fixed alias-member completion for CTEs backed by cross-database sources.
+
+## 0.5.0
+
+- Added column-aware completion for CTEs, including projection aliases and explicit column lists.
+- Added typed completion for local and global temporary tables and table variables.
+- Added SELECT INTO column inference, including aliases and resolvable star projections.
+- Added derived-table and VALUES row-source completion.
+- Added CROSS APPLY and OUTER APPLY row-source support.
+- Added SELECT projection aliases in ORDER BY completion.
+
 ## 0.4.2
 
 - Improved setup handling for overlapping Microsoft mssql suggestions.

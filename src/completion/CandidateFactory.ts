@@ -6,6 +6,11 @@ import {
 import { resolveAliasSource } from "../parser/AliasResolver.js";
 import { quoteIdentifier } from "../metadata/SqlTypeFormatter.js";
 import type { SqlCompletionContext } from "../parser/SqlContextResolver.js";
+import {
+  analyzeDocumentSemantics,
+  type DocumentSemanticModel,
+  type RowSource,
+} from "../parser/DocumentSemanticAnalyzer.js";
 import { containsMatch } from "./ContainsMatcher.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
 import { sortCandidates, TYPE_ORDER } from "./CompletionSorter.js";
@@ -63,17 +68,24 @@ const schemaCandidate = (
 export function createCandidates(
   context: SqlCompletionContext,
   scopeOrIndex?: CompletionScope | DatabaseIndex,
+  semanticModel?: DocumentSemanticModel,
 ): CompletionCandidate[] {
   const scope = toScope(scopeOrIndex);
   const activeIndex = scope?.indexes.get(
     normalizedDatabase(scope.activeDatabase),
   );
+  const semantics =
+    semanticModel ??
+    analyzeDocumentSemantics(context.sql, context.cursor, scope);
   let candidates: CompletionCandidate[] = [];
   let sortKind = context.kind;
   if (context.kind === "unsupported") return [];
   if (context.kind === "member") {
+    const alias = context.qualifier?.parts[0] ?? "";
+    const local = semantics.aliases.get(normalizeName(alias));
+    if (local) candidates = localColumnCandidates(local);
     const source = context.aliasSource;
-    if (source && !source.unsupported && scope) {
+    if (!local && source && !source.unsupported && scope) {
       const database = source.database ?? scope.activeDatabase;
       const index = scope.indexes.get(normalizedDatabase(database));
       if (index) {
@@ -84,7 +96,11 @@ export function createCandidates(
     }
   } else if (context.kind === "qualified") {
     const parts = context.qualifier?.parts ?? [];
-    if (parts.length === 2 && scope) {
+    const local = semantics.aliases.get(normalizeName(parts[0] ?? ""));
+    if (parts.length === 2 && local) {
+      candidates = localColumnCandidates(local);
+      sortKind = "member";
+    } else if (parts.length === 2 && scope) {
       const qualifier = parts[0] ?? "";
       if (activeIndex?.hasSchema(qualifier)) {
         candidates = objectsInSchema(activeIndex, qualifier);
@@ -144,15 +160,33 @@ export function createCandidates(
       );
     }
     candidates.push(
-      ...context.symbols.locals
-        .filter((local) => allowed.has(local.kind))
+      ...semantics.rowSources
+        .filter(
+          (local) =>
+            allowed.has(local.sourceKind) &&
+            !["derivedTable", "values"].includes(local.sourceKind),
+        )
         .map((local) => ({
           name: local.name,
           normalizedName: normalizeName(local.name),
-          kind: local.kind,
+          kind: local.sourceKind,
           ...(context.kind === "rowSource" ? { priority: 1 } : {}),
         })),
     );
+    if (context.kind === "expression") {
+      for (const source of semantics.aliases.values())
+        candidates.push(...localColumnCandidates(source));
+      candidates.push(
+        ...semantics.orderByColumns.map((column) => ({
+          name: column.name,
+          normalizedName: column.normalizedName,
+          kind: "column" as const,
+          sqlType: column.type,
+          nullable: column.nullable,
+          column,
+        })),
+      );
+    }
     if (context.kind === "rowSource" && scope?.databaseNames)
       candidates.push(
         ...scope.databaseNames.map((database) => ({
@@ -171,13 +205,27 @@ export function createCandidates(
         })),
       );
   }
+  const unique = new Map<string, CompletionCandidate>();
+  for (const candidate of candidates)
+    unique.set(`${candidate.kind}:${candidate.normalizedName}`, candidate);
   return sortCandidates(
-    candidates.filter((candidate) =>
+    [...unique.values()].filter((candidate) =>
       containsMatch(candidate.normalizedName, context.search),
     ),
     context.search,
     sortKind,
   );
+}
+
+function localColumnCandidates(source: RowSource): CompletionCandidate[] {
+  return source.columns.map((column) => ({
+    name: column.name,
+    normalizedName: column.normalizedName,
+    kind: "column",
+    sqlType: column.type,
+    nullable: column.nullable,
+    column,
+  }));
 }
 
 function objectsAcrossSchemas(index: DatabaseIndex): CompletionCandidate[] {

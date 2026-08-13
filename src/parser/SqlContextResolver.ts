@@ -28,6 +28,8 @@ export interface SqlCompletionContext {
   readonly qualifier?: IdentifierQualifier;
   readonly aliasSource?: SourceReference;
   readonly symbols: DocumentSymbols;
+  readonly sql: string;
+  readonly cursor: number;
 }
 
 const isReferenceToken = (token: SqlToken | undefined): boolean =>
@@ -42,7 +44,26 @@ export function resolveSqlContext(
 ): SqlCompletionContext {
   const prefix = sql.slice(0, cursor);
   const tokens = tokenizeSql(prefix);
-  const symbols = resolveDocumentSymbols(tokenizeSql(sql));
+  const allTokens = tokenizeSql(sql);
+  let symbolStart = 0;
+  let symbolEnd = allTokens.length;
+  for (let i = 0; i < allTokens.length; i++) {
+    const token = allTokens[i];
+    if (!token) continue;
+    if (
+      token.end <= cursor &&
+      (token.text === ";" || token.normalized === "go")
+    )
+      symbolStart = i + 1;
+    if (token.start >= cursor && token.text === ";") {
+      symbolEnd = i;
+      break;
+    }
+  }
+  const symbols = resolveDocumentSymbols(
+    allTokens.slice(symbolStart, symbolEnd),
+    cursor,
+  );
   const last = tokens.at(-1);
   const hasSearch = Boolean(
     last &&
@@ -53,6 +74,7 @@ export function resolveSqlContext(
   );
   const search = hasSearch && last ? last.text : "";
   const replacementStart = hasSearch && last ? last.start : cursor;
+  const common = { search, replacementStart, symbols, sql, cursor };
 
   let tailStart = tokens.length;
   while (tailStart > 0 && isReferenceToken(tokens[tailStart - 1])) {
@@ -78,8 +100,7 @@ export function resolveSqlContext(
       return {
         kind: "unsupported",
         baseKind,
-        search,
-        replacementStart,
+        ...common,
         qualifier,
         symbols,
       };
@@ -89,8 +110,7 @@ export function resolveSqlContext(
         return {
           kind: "member",
           baseKind,
-          search,
-          replacementStart,
+          ...common,
           qualifier,
           aliasSource,
           symbols,
@@ -99,13 +119,12 @@ export function resolveSqlContext(
     return {
       kind: "qualified",
       baseKind,
-      search,
-      replacementStart,
+      ...common,
       qualifier,
       symbols,
     };
   }
-  return { kind: baseKind, baseKind, search, replacementStart, symbols };
+  return { kind: baseKind, baseKind, ...common };
 }
 
 function referenceParts(tokens: readonly SqlToken[]): string[] {
@@ -132,6 +151,10 @@ function resolveBaseKind(
     significant?.normalized === "execute"
   )
     return "execute";
+  if (
+    recent.some((word, index) => word === "order" && recent[index + 1] === "by")
+  )
+    return "expression";
   const rowSource =
     ["from", "join", "apply"].includes(significant?.normalized ?? "") ||
     recent.some(

@@ -125,3 +125,30 @@ Final 0.4.1 verification: formatting, ESLint, strict compilation, 40 unit tests,
 - [x] Run both real database integration suites and the complete release verification flow.
 
 Final 0.4.2 verification: formatting, ESLint, strict compilation, 45 unit tests, both live SQL Server integration tests, production bundling, VSIX packaging, and archive inspection pass. The package contains the public README, changelog, MIT License, support guide, extension manifest, bundle, and icon; no runtime dependency tree or credentials are included.
+
+## 0.5.0 document-local SQL semantics
+
+- [x] Add a common document-local `RowSource` model with columns, kind, alias, scope origin, and source position.
+- [x] Add reusable SELECT projection analysis with direct-column metadata propagation, aliases, computed names, and star expansion.
+- [x] Add statement-scoped CTEs, declaration-order references, explicit column lists, and conservative recursive behavior.
+- [x] Add typed local/global temporary tables, table variables, SELECT INTO, and straightforward ALTER TABLE ADD.
+- [x] Add derived tables, VALUES alias lists, and CROSS/OUTER APPLY sources.
+- [x] Add ORDER BY projection aliases and statement-bounded alias resolution.
+- [x] Cache document semantics by URI/version/cursor and keep catalog metadata independent.
+- [x] Preserve comments/string exclusion, Contains semantics, and all catalog/cross-database behavior.
+
+Remaining advanced work includes complete recursive/UNION type reconciliation, unnamed expression outputs, full correlated subquery visibility, PIVOT/UNPIVOT, OPENJSON/OPENXML/OPENROWSET, and a complete T-SQL grammar.
+
+Final 0.5.0 verification: formatting, ESLint, strict compilation, 58 unit tests, both live IntelliSenseLab integration suites, production bundling, VSIX packaging, and archive security/content inspection pass. Live catalog-backed cases prove projection-only CTE Contains completion and SELECT INTO type propagation from `dbo.Customers`; all prior cross-database behavior remains covered.
+
+## 0.5.1 CTE projection isolation repair
+
+- [x] Restrict star expansion to row sources actually present in the current SELECT scope.
+- [x] Separate ordered star sources from alias/name lookup bindings so one source is expanded once.
+- [x] Give every local row source a stable internal identity and immutable, independently owned projection.
+- [x] Load metadata for databases explicitly referenced inside document-local row-source definitions.
+- [x] Keep final-query aliases independent from aliases internal to CTE definitions.
+- [x] Prove strict member candidates and identify editor word-based suggestions as an independent fallback.
+- [x] Reproduce the exact two-database query in unit and live integration tests.
+
+Final 0.5.1 verification: formatting, ESLint, strict compilation, 62 unit tests, both live SQL integration suites, production bundling, VSIX packaging, and archive inspection pass. The exact real query resolves `x` to 2 `BillingAddress_0001` projection columns and `y` to 6 `CustomerAddressArchive` projection columns without leakage; the package contains no credentials or Proposed API dependency.

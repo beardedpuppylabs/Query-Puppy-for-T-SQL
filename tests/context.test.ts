@@ -79,3 +79,19 @@ test("comments and strings do not produce aliases", () => {
   );
   assert.equal(context.symbols.aliases.size, 0);
 });
+
+test("nested aliases do not leak outward and outer aliases remain correlated", () => {
+  const outer =
+    "SELECT innerAlias. FROM dbo.Customers outerAlias WHERE EXISTS (SELECT 1 FROM dbo.Customers innerAlias)";
+  assert.equal(
+    resolveSqlContext(outer, outer.indexOf("innerAlias.") + 11).aliasSource,
+    undefined,
+  );
+  const correlated =
+    "SELECT * FROM dbo.Customers outerAlias WHERE EXISTS (SELECT outerAlias. FROM dbo.Customers innerAlias)";
+  assert.equal(
+    resolveSqlContext(correlated, correlated.indexOf("outerAlias.", 30) + 11)
+      .aliasSource?.alias,
+    "outerAlias",
+  );
+});

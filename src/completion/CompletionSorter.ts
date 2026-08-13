@@ -11,6 +11,8 @@ export const TYPE_ORDER: Readonly<
     "cte",
     "tempTable",
     "tableVariable",
+    "derivedTable",
+    "values",
     "table",
     "view",
     "tableValuedFunction",
