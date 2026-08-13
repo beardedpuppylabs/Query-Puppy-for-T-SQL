@@ -12,7 +12,13 @@ export interface RowSource {
   readonly name: string;
   readonly alias?: string;
   readonly sourceKind:
-    "cte" | "tempTable" | "tableVariable" | "derivedTable" | "values";
+    | "cte"
+    | "tempTable"
+    | "tableVariable"
+    | "derivedTable"
+    | "values"
+    | "inserted"
+    | "deleted";
   readonly columns: readonly ColumnMetadata[];
   readonly origin: { readonly start: number; readonly end: number };
 }
@@ -32,16 +38,30 @@ export function documentDatabaseReferences(
   const tokens = tokenizeSql(sql).filter((token) => token.start < cursor);
   const references = new Map<string, string>();
   for (let i = 0; i < tokens.length; i++) {
-    if (!["from", "join", "apply"].includes(tokens[i]?.normalized ?? ""))
+    const keyword = tokens[i]?.normalized ?? "";
+    const offset =
+      keyword === "insert" && tokens[i + 1]?.normalized === "into" ? 2 : 1;
+    if (
+      ![
+        "from",
+        "join",
+        "apply",
+        "update",
+        "delete",
+        "exec",
+        "execute",
+        "insert",
+      ].includes(keyword)
+    )
       continue;
-    const database = tokens[i + 1];
-    const schema = tokens[i + 3];
-    const object = tokens[i + 5];
+    const database = tokens[i + offset];
+    const schema = tokens[i + offset + 2];
+    const object = tokens[i + offset + 4];
     if (
       ident(database) &&
-      tokens[i + 2]?.text === "." &&
+      tokens[i + offset + 1]?.text === "." &&
       ident(schema) &&
-      tokens[i + 4]?.text === "." &&
+      tokens[i + offset + 3]?.text === "." &&
       ident(object)
     )
       references.set(normalizeName(database.text), database.text);

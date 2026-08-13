@@ -22,12 +22,15 @@ const kinds: Record<SqlObjectKind, vscode.CompletionItemKind> = {
   sequence: vscode.CompletionItemKind.Value,
   userType: vscode.CompletionItemKind.TypeParameter,
   column: vscode.CompletionItemKind.Field,
+  procedureParameter: vscode.CompletionItemKind.Variable,
   cte: vscode.CompletionItemKind.Struct,
   variable: vscode.CompletionItemKind.Variable,
   tableVariable: vscode.CompletionItemKind.Variable,
   tempTable: vscode.CompletionItemKind.Struct,
   derivedTable: vscode.CompletionItemKind.Struct,
   values: vscode.CompletionItemKind.Struct,
+  inserted: vscode.CompletionItemKind.Struct,
+  deleted: vscode.CompletionItemKind.Struct,
   keyword: vscode.CompletionItemKind.Keyword,
 };
 export function presentCandidate(

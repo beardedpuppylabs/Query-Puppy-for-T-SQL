@@ -5,6 +5,7 @@
 .env.*
 .prettierignore
 .vscode/**
+.vscode-test/**
 AGENTS.md
 docs/**
 src/**

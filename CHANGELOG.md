@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.6.5
+
+- Fixed automatic Signature Help when typing function-call parentheses and argument commas.
+- Improved Signature Help reliability with auto-closing parentheses in VS Code and VSCodium.
+
+## 0.6.4
+
+- Fixed automatic Signature Help activation for user-defined functions.
+- Fixed scalar-function Signature Help resolution in interactive SQL editors.
+
+## 0.6.3
+
+- Fixed automatic Signature Help activation for scalar and table-valued functions in SQL editors.
+- Improved diagnostics for disabled parameter hints.
+
+## 0.6.2
+
+- Fixed Signature Help for user-defined scalar and table-valued functions.
+- Fixed active-parameter tracking for nested function arguments.
+
+## 0.6.1
+
+- Fixed UPDATE SET completion for directly qualified table targets.
+- Fixed Signature Help triggering and active-parameter tracking for scalar and table-valued functions.
+- Fixed `deleted` completion in DELETE and UPDATE OUTPUT clauses.
+- Fixed incomplete `inserted`/`deleted` column matching.
+- Fixed DML target metadata leaking between statements.
+
+## 0.6.0
+
+- Added writable-column completion for INSERT target lists and UPDATE SET targets, excluding identity, computed, generated, hidden, and rowversion columns.
+- Added named stored-procedure parameter completion for EXEC/EXECUTE, including used-parameter exclusion and OUTPUT details.
+- Added scalar and table-valued function signature help with nested-call-aware active parameter tracking.
+- Added INSERT/UPDATE/DELETE OUTPUT completion for the synthetic `inserted` and `deleted` row sources.
+- Extended same-server cross-database metadata resolution to DML targets, procedures, and callable signatures.
+
 ## 0.5.1
 
 - Fixed column-scope leakage between multiple CTEs.

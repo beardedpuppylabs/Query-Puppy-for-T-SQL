@@ -152,3 +152,70 @@ Final 0.5.0 verification: formatting, ESLint, strict compilation, 58 unit tests,
 - [x] Reproduce the exact two-database query in unit and live integration tests.
 
 Final 0.5.1 verification: formatting, ESLint, strict compilation, 62 unit tests, both live SQL integration suites, production bundling, VSIX packaging, and archive inspection pass. The exact real query resolves `x` to 2 `BillingAddress_0001` projection columns and `y` to 6 `CustomerAddressArchive` projection columns without leakage; the package contains no credentials or Proposed API dependency.
+
+## 0.6.0 DML and callable-object intelligence
+
+- [x] Retain SQL Server writability flags and apply a conservative writable-column policy.
+- [x] Add target-aware INSERT and UPDATE completion with used-column exclusion.
+- [x] Add DELETE target resolution and DML-correct `inserted`/`deleted` OUTPUT scopes.
+- [x] Add ordered EXEC/EXECUTE named-parameter completion with OUTPUT presentation.
+- [x] Add scalar/TVF signature help with nested-comma tracking.
+- [x] Preserve lazy, connection-and-database-specific metadata loading for qualified targets.
+- [x] Add unit and real fixture coverage for DML, procedures, functions, and OUTPUT.
+
+All DML and callable analysis is performed over the cached typed catalog and defensive token stream. It does not open a connection or query on a keystroke. Explicit secondary-database qualification uses the existing lazy metadata cache path.
+
+MERGE, trigger-body pseudo tables, OUTPUT INTO mapping, positional EXEC assistance, built-in function signatures, Linked Servers, and full T-SQL grammar remain outside this milestone.
+
+## 0.6.1 DML and Signature Help correctness repair
+
+- [x] Resolve DML targets and synthetic OUTPUT sources from only the statement containing the cursor.
+- [x] Preserve full target-table metadata for valid `inserted` and `deleted` sources while retaining writable filtering only for assignment targets.
+- [x] Repair exact-cursor three-part function database discovery and explicitly register call/argument Signature Help triggers.
+- [x] Cover direct qualified UPDATE targets, nested signature arguments, invalid pseudo sources, sequential-statement isolation, and both cross-database aliases.
+
+Statement boundaries are derived from tokenizer-visible semicolons and `GO` separators. The repair deliberately adds no last-known-target fallback: incomplete statements either resolve their own target or return no DML-specific candidates.
+
+## 0.6.2 Signature Help host verification
+
+- [x] Share one SQL document selector between completion and Signature Help registration.
+- [x] Register `(` and `,` call triggers with explicit comma retrigger metadata.
+- [x] Report the effective editor parameter-hints setting without changing it.
+- [x] Add non-spammy debug diagnostics for Signature Help resolution.
+- [x] Execute the actually registered provider through `vscode.executeSignatureHelpProvider` in a VS Code Extension Host.
+- [x] Cover scalar, TVF, nested-argument, second-parameter, explicit invocation, and three-part database-qualified calls.
+
+Extension Host tests run against VS Code 1.105.1, matching the minimum declared engine. A test-only catalog hook is registered exclusively in `ExtensionMode.Test`; production calls continue to use the shared mssql connection and existing metadata cache.
+
+## 0.6.3 interactive Signature Help activation
+
+- [x] Prove explicit Signature Help for both `file:` and `untitled:` SQL documents.
+- [x] Prove native automatic `(` and comma retrigger invocation through an active untitled editor.
+- [x] Prove `editor.action.triggerParameterHints` reaches the registered provider.
+- [x] Verify the same automatic path in VSCodium with the real mssql extension loaded.
+- [x] Add scoped parameter-hints diagnostics without mutating editor configuration.
+- [x] Add a narrowly scoped delayed UI fallback for qualified SQL function calls when native triggering does not invoke the provider.
+
+The fallback observes only single SQL edits ending in `(` or comma, requires a schema- or database-qualified call shape, waits for native registration first, and does nothing if the provider has already run for that document version. It therefore avoids arbitrary parentheses, duplicate invocations, and catalog queries of its own.
+
+## 0.6.4 installed-editor Signature Help repair
+
+- [x] Separate native provider invocation from successful SignatureHelp construction.
+- [x] Derive fallback cursor state from the document edit rather than potentially stale editor selection.
+- [x] Preserve native/manual TVF behavior and test scalar and TVF kinds independently.
+- [x] Give file and untitled SQL providers a higher selector score than competing generic SQL providers.
+- [x] Add an installed-runtime diagnostic command reporting parsed call, catalog kind, parameters, return semantics, and provider result.
+- [x] Keep fallback activation restricted to qualified SQL function-call edits and native parameter-hint UI commands.
+
+The corrected fallback waits 200 ms for a successful native result and invokes `editor.action.triggerParameterHints` only if none was constructed for the current document version. It creates no SQL query, does not observe arbitrary typing, and cannot loop because parameter-hint commands do not edit the document.
+
+## 0.6.5 automatic Signature Help synchronization
+
+- [x] Synchronize qualified function-call edit triggers with the matching post-edit selection event.
+- [x] Derive the exact expected cursor from `(`, `()`, and comma content changes.
+- [x] Suppress fallback only after valid Signature Help succeeds at the same URI, version, and cursor.
+- [x] Cancel stale requests after later edits, selection changes, editor switches, version changes, and document closure.
+- [x] Keep one validated, one-shot bounded fallback for hosts that omit the matching selection event.
+- [x] Resolve fallback candidates exclusively from cached scalar-function and TVF metadata.
+
+Native `(` and comma registration remains primary. A single pending trigger now follows the edit to its exact post-edit selection; a 75 ms backup uses the same URI, version, cursor, generation, configuration, and cached-resolution checks and is cancelled once handled.

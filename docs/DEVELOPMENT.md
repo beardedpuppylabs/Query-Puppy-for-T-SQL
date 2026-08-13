@@ -41,3 +41,5 @@ Build and package independently with:
 npm run build
 npm run package
 ```
+
+The DML/callable analyzer is a pure parser/catalog layer in `src/parser/DmlCallAnalyzer.ts`. Completion presentation remains in `src/completion`; VS Code SignatureHelp is adapted at that boundary by `SqlSignatureHelpProvider`. Writable flags originate in the single cached catalog query, and every lookup remains keyed by connection and database.

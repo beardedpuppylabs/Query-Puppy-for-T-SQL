@@ -2,7 +2,14 @@ import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/**", ".build/**", "node_modules/**"] },
+  {
+    ignores: [
+      "dist/**",
+      ".build/**",
+      "node_modules/**",
+      "tests/fixtures/mssql-stub/extension.cjs",
+    ],
+  },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {

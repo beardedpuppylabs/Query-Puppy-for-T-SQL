@@ -2,7 +2,7 @@
   "name": "improved-sql-intellisense",
   "displayName": "Improved SQL IntelliSense",
   "description": "SQL Server IntelliSense with Contains search, context-aware completion, cross-database resolution, and rich metadata.",
-  "version": "0.5.1",
+  "version": "0.6.5",
   "publisher": "Bismarck",
   "author": "Bismarck",
   "license": "MIT",
@@ -51,6 +51,10 @@
       {
         "command": "improvedSqlIntellisense.disableMicrosoftSuggestions",
         "title": "Improved SQL IntelliSense: Disable Microsoft SQL Suggestions"
+      },
+      {
+        "command": "improvedSqlIntellisense.diagnoseSignatureHelp",
+        "title": "Improved SQL IntelliSense: Diagnose Signature Help"
       }
     ],
     "configuration": {
@@ -76,18 +80,20 @@
     "compile": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:integration": "node --import tsx --test tests/integration/*.test.ts",
+    "test:extension": "npm run build && node scripts/run-extension-tests.mjs",
     "lint": "eslint src tests",
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
-    "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run build",
-    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.5.1.vsix",
+    "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run test:extension && npm run build",
+    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.6.5.vsix",
     "publish:marketplace": "vsce publish"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@types/node": "^24.10.1",
     "@types/mssql": "^9.1.8",
+    "@types/node": "^24.10.1",
     "@types/vscode": "^1.105.0",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.6.2",
     "esbuild": "^0.27.0",
     "eslint": "^9.39.1",

@@ -14,6 +14,7 @@ export interface CompletionCandidate {
   readonly schema?: string;
   readonly sqlType?: SqlType;
   readonly nullable?: boolean;
+  readonly parameterOutput?: boolean;
   readonly parameters?: readonly ParameterMetadata[];
   readonly returnType?: SqlType;
   readonly sourceObject?: DatabaseObject;

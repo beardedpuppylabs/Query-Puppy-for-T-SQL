@@ -152,3 +152,86 @@ test("developer-facing system views are mapped without enabling all system noise
     /o\.is_ms_shipped\s*=\s*0\s+OR\s+o\.is_ms_shipped\s*=\s*1/,
   );
 });
+
+test("column writability flags are retained from catalog metadata", async () => {
+  const rows = [
+    row("O", "7", "dbo", "Orders", "table"),
+    row(
+      "C",
+      "7",
+      "dbo",
+      "Orders",
+      undefined,
+      "Id",
+      "sys",
+      "bigint",
+      "8",
+      "19",
+      "0",
+      "False",
+      undefined,
+      "1",
+      undefined,
+      "True",
+      "False",
+      "0",
+      "False",
+    ),
+    row(
+      "C",
+      "7",
+      "dbo",
+      "Orders",
+      undefined,
+      "Gross",
+      "sys",
+      "decimal",
+      "9",
+      "18",
+      "2",
+      "True",
+      undefined,
+      "2",
+      undefined,
+      "False",
+      "True",
+      "0",
+      "False",
+    ),
+    row(
+      "C",
+      "7",
+      "dbo",
+      "Orders",
+      undefined,
+      "PeriodStart",
+      "sys",
+      "datetime2",
+      "8",
+      "27",
+      "3",
+      "False",
+      undefined,
+      "3",
+      undefined,
+      "False",
+      "False",
+      "1",
+      "True",
+    ),
+  ];
+  const connections = {
+    query: async () => ({ rowCount: rows.length, rows }),
+  } as unknown as ConnectionService;
+  const object = (
+    await new MetadataLoader(connections).load({
+      connectionId: "c",
+      database: "db",
+    })
+  ).findObject("dbo", "Orders");
+  assert.ok(object);
+  assert.equal(object.columns[0]?.identity, true);
+  assert.equal(object.columns[1]?.computed, true);
+  assert.equal(object.columns[2]?.generatedAlways, true);
+  assert.equal(object.columns[2].hidden, true);
+});

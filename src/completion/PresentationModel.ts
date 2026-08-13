@@ -17,8 +17,13 @@ export function presentationModel(
     )
     .join(", ");
   let detail = "";
-  if (candidate.kind === "column" && candidate.sqlType)
+  if (
+    (candidate.kind === "column" || candidate.kind === "procedureParameter") &&
+    candidate.sqlType
+  )
     detail = ` ${formatSqlType(candidate.sqlType)} ${candidate.nullable ? "NULL" : "NOT NULL"}`;
+  if (candidate.kind === "procedureParameter" && candidate.sqlType)
+    detail = ` ${formatSqlType(candidate.sqlType)}${candidate.parameterOutput ? " OUTPUT" : ""}`;
   else if (candidate.kind === "scalarFunction")
     detail = `(${params})${candidate.returnType ? ` → ${formatSqlType(candidate.returnType)}` : ""}`;
   else if (candidate.kind === "tableValuedFunction")

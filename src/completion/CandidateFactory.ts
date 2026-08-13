@@ -14,6 +14,7 @@ import {
 import { containsMatch } from "./ContainsMatcher.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
 import { sortCandidates, TYPE_ORDER } from "./CompletionSorter.js";
+import { analyzeDmlCompletion } from "../parser/DmlCallAnalyzer.js";
 
 export interface CompletionScope {
   readonly activeDatabase: string;
@@ -77,6 +78,47 @@ export function createCandidates(
   const semantics =
     semanticModel ??
     analyzeDocumentSemantics(context.sql, context.cursor, scope);
+  if (scope) {
+    const dml = analyzeDmlCompletion(
+      context.sql,
+      context.cursor,
+      scope,
+      semantics.aliases,
+    );
+    if (dml?.kind === "none") return [];
+    if (dml?.kind === "columns" || dml?.kind === "pseudo") {
+      const columns = dml.kind === "pseudo" ? dml.source.columns : dml.columns;
+      return sortCandidates(
+        columns
+          .filter((column) =>
+            containsMatch(column.normalizedName, context.search),
+          )
+          .map((column) => ({
+            name: column.name,
+            normalizedName: column.normalizedName,
+            kind: "column" as const,
+            sqlType: column.type,
+            nullable: column.nullable,
+            column,
+          })),
+        context.search,
+        "member",
+      );
+    }
+    if (dml?.kind === "parameters")
+      return dml.parameters
+        .filter((parameter) =>
+          containsMatch(normalizeName(parameter.name), context.search),
+        )
+        .map((parameter) => ({
+          name: parameter.name,
+          normalizedName: normalizeName(parameter.name),
+          kind: "procedureParameter" as const,
+          sqlType: parameter.type,
+          nullable: false,
+          parameterOutput: parameter.output,
+        }));
+  }
   let candidates: CompletionCandidate[] = [];
   let sortKind = context.kind;
   if (context.kind === "unsupported") return [];

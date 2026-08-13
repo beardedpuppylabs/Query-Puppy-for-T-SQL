@@ -49,46 +49,49 @@ export const METADATA_QUERY = String.raw`
 SET NOCOUNT ON;
 SELECT record_kind, object_id, schema_name, object_name, object_kind, member_name,
        type_schema, type_name, max_length, precision_value, scale_value,
-       is_nullable, is_output, ordinal, base_object_name
+       is_nullable, is_output, ordinal, base_object_name, is_identity, is_computed, generated_always_type, is_hidden
 FROM (
  SELECT 'D' record_kind, COUNT_BIG(*) object_id, DB_NAME() schema_name, NULL object_name, NULL object_kind,
         NULL member_name, NULL type_schema, NULL type_name, NULL max_length, NULL precision_value,
-        NULL scale_value, NULL is_nullable, NULL is_output, NULL ordinal, NULL base_object_name
+        NULL scale_value, NULL is_nullable, NULL is_output, NULL ordinal, NULL base_object_name,
+        NULL is_identity, NULL is_computed, NULL generated_always_type, NULL is_hidden
  FROM sys.objects WHERE is_ms_shipped = 0
  UNION ALL
  SELECT 'S' record_kind, NULL object_id, s.name schema_name, NULL object_name, NULL object_kind,
         NULL member_name, NULL type_schema, NULL type_name, NULL max_length, NULL precision_value,
-        NULL scale_value, NULL is_nullable, NULL is_output, NULL ordinal, NULL base_object_name
+        NULL scale_value, NULL is_nullable, NULL is_output, NULL ordinal, NULL base_object_name, NULL,NULL,NULL,NULL
  FROM sys.schemas s WHERE s.schema_id < 16384
  UNION ALL
  SELECT 'O', o.object_id, SCHEMA_NAME(o.schema_id), o.name,
         CASE o.type WHEN 'U' THEN 'table' WHEN 'V' THEN 'view' WHEN 'P' THEN 'procedure'
           WHEN 'FN' THEN 'scalarFunction' WHEN 'FS' THEN 'scalarFunction'
           WHEN 'IF' THEN 'tableValuedFunction' WHEN 'TF' THEN 'tableValuedFunction' WHEN 'FT' THEN 'tableValuedFunction' END,
-        NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+        NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,NULL,NULL,NULL
  FROM sys.all_objects o
  WHERE (o.is_ms_shipped = 0 AND o.type IN ('U','V','P','FN','FS','IF','TF','FT'))
     OR ${developerSystemViewPredicate}
  UNION ALL
- SELECT 'O', sy.object_id, SCHEMA_NAME(sy.schema_id), sy.name, 'synonym', NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,sy.base_object_name
+ SELECT 'O', sy.object_id, SCHEMA_NAME(sy.schema_id), sy.name, 'synonym', NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,sy.base_object_name,NULL,NULL,NULL,NULL
  FROM sys.synonyms sy
  UNION ALL
  SELECT 'O', seq.object_id, SCHEMA_NAME(seq.schema_id), seq.name, 'sequence', NULL,
-        SCHEMA_NAME(t.schema_id), t.name, t.max_length, t.precision, t.scale, NULL,NULL,NULL,NULL
+        SCHEMA_NAME(t.schema_id), t.name, t.max_length, t.precision, t.scale, NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL
  FROM sys.sequences seq JOIN sys.types t ON seq.user_type_id=t.user_type_id
  UNION ALL
  SELECT 'O', t.user_type_id, SCHEMA_NAME(t.schema_id), t.name, 'userType', NULL,
-        SCHEMA_NAME(t.schema_id), t.name, t.max_length, t.precision, t.scale, NULL,NULL,NULL,NULL
+        SCHEMA_NAME(t.schema_id), t.name, t.max_length, t.precision, t.scale, NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL
  FROM sys.types t WHERE t.is_user_defined=1 AND t.is_table_type=0
  UNION ALL
  SELECT 'C', c.object_id, SCHEMA_NAME(o.schema_id), o.name, NULL, c.name,
-        SCHEMA_NAME(t.schema_id), t.name, c.max_length, c.precision, c.scale, c.is_nullable,NULL,c.column_id,NULL
+        SCHEMA_NAME(t.schema_id), t.name, c.max_length, c.precision, c.scale, c.is_nullable,NULL,c.column_id,NULL,
+        COALESCE(uc.is_identity,0),COALESCE(uc.is_computed,0),COALESCE(uc.generated_always_type,0),COALESCE(uc.is_hidden,0)
  FROM sys.all_columns c JOIN sys.all_objects o ON c.object_id=o.object_id JOIN sys.types t ON c.user_type_id=t.user_type_id
+ LEFT JOIN sys.columns uc ON uc.object_id=c.object_id AND uc.column_id=c.column_id
  WHERE (o.is_ms_shipped=0 AND o.type IN ('U','V','IF','TF','FT'))
     OR ${developerSystemViewPredicate}
  UNION ALL
  SELECT 'P', p.object_id, SCHEMA_NAME(o.schema_id), o.name, NULL, p.name,
-        SCHEMA_NAME(t.schema_id), t.name, p.max_length, p.precision, p.scale, NULL,p.is_output,p.parameter_id,NULL
+        SCHEMA_NAME(t.schema_id), t.name, p.max_length, p.precision, p.scale, NULL,p.is_output,p.parameter_id,NULL,NULL,NULL,NULL,NULL
  FROM sys.parameters p JOIN sys.objects o ON p.object_id=o.object_id JOIN sys.types t ON p.user_type_id=t.user_type_id
  WHERE o.is_ms_shipped=0 AND o.type IN ('P','FN','FS','IF','TF','FT')
 ) metadata ORDER BY record_kind, schema_name, object_name, ordinal;`;
@@ -218,6 +221,10 @@ export class MetadataLoader {
           type,
           nullable: bool(row, 11),
           ordinal,
+          ...(bool(row, 15) ? { identity: true } : {}),
+          ...(bool(row, 16) ? { computed: true } : {}),
+          ...((number(row, 17) ?? 0) > 0 ? { generatedAlways: true } : {}),
+          ...(bool(row, 18) ? { hidden: true } : {}),
         });
       if (record === "P") {
         target.parameters.push({

@@ -32,6 +32,9 @@ Matching is contiguous and case-insensitive: `addr` can occur anywhere in a name
 - `SELECT INTO`, `VALUES`, `CROSS APPLY`, and `OUTER APPLY` row-source inference
 - Column detail with datatype and `NULL`/`NOT NULL`
 - Scalar-function signatures and return types, and stored-procedure signatures
+- INSERT/UPDATE writable-column and EXEC named-parameter completion
+- Automatic function Signature Help while typing, with active-parameter tracking; use `Ctrl+Shift+Space` to reopen it manually
+- DML OUTPUT completion through `inserted` and `deleted`
 - Alias member completion such as `c.addr`
 - `Schema.Object`, `Database.Schema.Object`, and `Database..Object` navigation
 - Same-server cross-database completion and database-wide cross-schema search
@@ -57,6 +60,22 @@ This can suggest any table, view, or table-valued function whose name contains `
 SELECT c.addr
 FROM dbo.Customers AS c
 ```
+
+### DML and callable objects
+
+```sql
+INSERT INTO dbo.Customers (CustomerCode, EmailAddress)
+
+UPDATE c SET BillingAddressId = a.AddressId
+FROM dbo.Customers AS c
+JOIN dbo.Addresses AS a ON a.CustomerId = c.CustomerId
+
+EXEC dbo.FindCustomerAddress @Search = N'Berlin', @MaxRows = 10
+
+SELECT billing.CalculateBillingTotal(NetAmount, TaxRate)
+```
+
+INSERT and UPDATE target completion omits server-maintained columns. EXEC named parameters remain in declaration order and disappear after assignment. Function calls show their parameter list and return type while the cursor moves between arguments.
 
 ### Schema
 

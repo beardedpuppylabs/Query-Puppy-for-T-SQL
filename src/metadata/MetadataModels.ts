@@ -10,12 +10,15 @@ export type SqlObjectKind =
   | "sequence"
   | "userType"
   | "column"
+  | "procedureParameter"
   | "cte"
   | "variable"
   | "tableVariable"
   | "tempTable"
   | "derivedTable"
   | "values"
+  | "inserted"
+  | "deleted"
   | "keyword";
 
 export interface SqlType {
@@ -33,7 +36,18 @@ export interface ColumnMetadata {
   readonly type: SqlType;
   readonly nullable: boolean;
   readonly ordinal: number;
+  readonly identity?: boolean;
+  readonly computed?: boolean;
+  readonly generatedAlways?: boolean;
+  readonly hidden?: boolean;
 }
+
+export const isWritableColumn = (column: ColumnMetadata): boolean =>
+  !column.identity &&
+  !column.computed &&
+  !column.generatedAlways &&
+  !column.hidden &&
+  !["timestamp", "rowversion"].includes(column.type.name.toLowerCase());
 
 export interface ParameterMetadata {
   readonly name: string;
@@ -52,12 +66,15 @@ export interface DatabaseObject {
     | "database"
     | "schema"
     | "column"
+    | "procedureParameter"
     | "cte"
     | "variable"
     | "tableVariable"
     | "tempTable"
     | "derivedTable"
     | "values"
+    | "inserted"
+    | "deleted"
     | "keyword"
   >;
   readonly columns: readonly ColumnMetadata[];
@@ -90,11 +107,14 @@ export const friendlyKind = (kind: SqlObjectKind): string =>
     sequence: "sequence",
     userType: "user-defined type",
     column: "column",
+    procedureParameter: "parameter",
     cte: "CTE",
     variable: "variable",
     tableVariable: "table variable",
     tempTable: "temp table",
     derivedTable: "derived table",
     values: "VALUES row source",
+    inserted: "inserted row",
+    deleted: "deleted row",
     keyword: "keyword",
   })[kind];

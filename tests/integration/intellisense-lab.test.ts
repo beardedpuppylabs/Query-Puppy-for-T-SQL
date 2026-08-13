@@ -7,6 +7,12 @@ import { MetadataLoader } from "../../src/mssql/MetadataLoader.js";
 import type { ConnectionService } from "../../src/mssql/ConnectionService.js";
 import type { DbCellValue } from "../../src/mssql/SimpleExecuteResult.js";
 import { resolveSqlContext } from "../../src/parser/SqlContextResolver.js";
+import {
+  functionInvocationDatabase,
+  functionSignatureLabel,
+  resolveFunctionSignature,
+} from "../../src/parser/DmlCallAnalyzer.js";
+import { isWritableColumn } from "../../src/metadata/MetadataModels.js";
 
 const names = [
   "MSSQL_TEST_SERVER",
@@ -205,6 +211,44 @@ test(
         [secondaryDatabase.toLowerCase(), secondary],
       ]),
     };
+    const aliasSql = `SELECT c., ca.
+FROM ${secondaryDatabase}.dbo.Customers AS c
+JOIN ${activeDatabase}.dbo.CustomerAddresses AS ca ON 1=1`;
+    const reportingAlias = createCandidates(
+      resolveSqlContext(aliasSql, aliasSql.indexOf("c.") + 2),
+      scope,
+    );
+    const activeAlias = createCandidates(
+      resolveSqlContext(aliasSql, aliasSql.indexOf("ca.") + 3),
+      scope,
+    );
+    assert.deepEqual(
+      new Set(reportingAlias.map((candidate) => candidate.name)),
+      new Set([
+        "CustomerDisplayName",
+        "CustomerNumber",
+        "LastReportedAt",
+        "ReportAddressId",
+        "ReportingCustomerId",
+        "ReportingEmailAddress",
+        "ReportingGroup",
+        "SnapshotDate",
+      ]),
+    );
+    assert.deepEqual(
+      new Set(activeAlias.map((candidate) => candidate.name)),
+      new Set([
+        "CustomerAddressId",
+        "CustomerId",
+        "AddressId",
+        "BillingAddressId",
+        "ShippingAddressId",
+        "EmailAddress",
+        "AddressLabel",
+        "IsDefault",
+        "CreatedAt",
+      ]),
+    );
     const databaseCandidates = createCandidates(
       resolveSqlContext("SELECT * FROM Intelli"),
       scope,
@@ -428,6 +472,174 @@ JOIN ala AS y ON y.`;
     );
     context.diagnostic(
       `CTE aliases verified: x=${String(xColumns.length)} columns, y=${String(yColumns.length)} columns`,
+    );
+    const orders = active.findObject("sales", "CustomerOrders");
+    assert.ok(orders);
+    const writableNames = orders.columns
+      .filter(isWritableColumn)
+      .map((column) => column.name);
+    assert.equal(writableNames.includes("CustomerOrderId"), false);
+    assert.equal(writableNames.includes("GrossAmount"), false);
+    for (const expected of [
+      "CustomerId",
+      "BillingAddressId",
+      "ShippingAddressId",
+      "OrderNumber",
+      "OrderDate",
+      "NetAmount",
+      "TaxAmount",
+      "OrderStatus",
+      "CreatedAt",
+    ])
+      assert.ok(
+        writableNames.includes(expected),
+        `missing writable order column ${expected}`,
+      );
+    const insertCandidates = createCandidates(
+      resolveSqlContext(
+        `INSERT INTO ${activeDatabase}.sales.CustomerOrders (Order`,
+      ),
+      scope,
+    );
+    assert.ok(
+      insertCandidates.some((candidate) => candidate.name === "OrderNumber"),
+    );
+    assert.ok(
+      insertCandidates.every(
+        (candidate) =>
+          !["CustomerOrderId", "GrossAmount"].includes(candidate.name),
+      ),
+    );
+    const updateCandidates = createCandidates(
+      resolveSqlContext(
+        `UPDATE ${activeDatabase}.sales.CustomerOrders SET Amount`,
+      ),
+      scope,
+    );
+    assert.ok(
+      updateCandidates.some((candidate) => candidate.name === "NetAmount"),
+    );
+    assert.ok(
+      updateCandidates.some((candidate) => candidate.name === "TaxAmount"),
+    );
+    assert.ok(
+      updateCandidates.every((candidate) => candidate.name !== "GrossAmount"),
+    );
+    const customerUpdate = createCandidates(
+      resolveSqlContext(`UPDATE ${activeDatabase}.dbo.Customers SET Addr`),
+      scope,
+    );
+    assert.deepEqual(
+      customerUpdate.map((candidate) => candidate.name),
+      [
+        "BillingAddressId",
+        "EmailAddress",
+        "PrimaryAddressId",
+        "ShippingAddressId",
+      ],
+    );
+    assert.ok(customerUpdate.every((candidate) => candidate.kind === "column"));
+
+    const execCandidates = createCandidates(
+      resolveSqlContext(`EXEC ${activeDatabase}.dbo.FindCustomerAddress @`),
+      scope,
+    );
+    assert.deepEqual(
+      execCandidates.map((candidate) => candidate.name),
+      ["@Search", "@MaxRows", "@RowsAffected"],
+    );
+    assert.equal(execCandidates.at(-1)?.parameterOutput, true);
+    const scalarSql = `SELECT ${activeDatabase}.billing.CalculateBillingTotal_0001(`;
+    const scalar = resolveFunctionSignature(scalarSql, scalarSql.length, scope);
+    assert.ok(scalar);
+    assert.equal(
+      functionSignatureLabel(scalar.object),
+      "billing.CalculateBillingTotal_0001(@NetAmount decimal(18,2), @TaxRate decimal(9,4)) → decimal(18,2)",
+    );
+    assert.equal(
+      functionInvocationDatabase(scalarSql, scalarSql.length),
+      activeDatabase,
+    );
+    assert.equal(scalar.activeParameter, 0);
+    for (const invocation of [
+      `${scalarSql}100,`,
+      `${scalarSql}COALESCE(100, 0),`,
+    ])
+      assert.equal(
+        resolveFunctionSignature(invocation, invocation.length, scope)
+          ?.activeParameter,
+        1,
+      );
+    const tvfSql = `SELECT * FROM ${activeDatabase}.reporting.GetCustomerAddresses_0001(`;
+    const tvf = resolveFunctionSignature(tvfSql, tvfSql.length, scope);
+    assert.ok(tvf);
+    assert.equal(
+      functionSignatureLabel(tvf.object),
+      "reporting.GetCustomerAddresses_0001(@CustomerId bigint) → table",
+    );
+    const outputCandidates = createCandidates(
+      resolveSqlContext(
+        `UPDATE ${activeDatabase}.dbo.Customers SET EmailAddress=N'x' OUTPUT inserted.`,
+      ),
+      scope,
+    );
+    assert.deepEqual(
+      new Set(outputCandidates.map((candidate) => candidate.name)),
+      new Set(
+        active
+          .findObject("dbo", "Customers")
+          ?.columns.map((column) => column.name),
+      ),
+    );
+    const outputContains = createCandidates(
+      resolveSqlContext(
+        `UPDATE ${activeDatabase}.dbo.Customers SET EmailAddress=N'x' OUTPUT inserted.addr`,
+      ),
+      scope,
+    );
+    assert.deepEqual(
+      outputContains.map((candidate) => candidate.name),
+      [
+        "BillingAddressId",
+        "EmailAddress",
+        "PrimaryAddressId",
+        "ShippingAddressId",
+      ],
+    );
+    const statementIsolationSql = `INSERT INTO ${activeDatabase}.sales.CustomerOrders (OrderNumber) OUTPUT inserted.;
+DELETE FROM ${activeDatabase}.dbo.Customers OUTPUT inserted.;
+DELETE FROM ${activeDatabase}.dbo.Customers OUTPUT deleted.`;
+    const invalidInserted = statementIsolationSql.indexOf(
+      "inserted.;",
+      statementIsolationSql.indexOf("DELETE"),
+    );
+    assert.deepEqual(
+      createCandidates(
+        resolveSqlContext(
+          statementIsolationSql,
+          invalidInserted + "inserted.".length,
+        ),
+        scope,
+      ),
+      [],
+    );
+    const deletedCursor =
+      statementIsolationSql.lastIndexOf("deleted.") + "deleted.".length;
+    assert.deepEqual(
+      new Set(
+        createCandidates(
+          resolveSqlContext(statementIsolationSql, deletedCursor),
+          scope,
+        ).map((candidate) => candidate.name),
+      ),
+      new Set(
+        active
+          .findObject("dbo", "Customers")
+          ?.columns.map((column) => column.name),
+      ),
+    );
+    context.diagnostic(
+      `DML/callable metadata verified: writableOrders=${String(writableNames.length)}, execParameters=${String(execCandidates.length)}, outputColumns=${String(outputCandidates.length)}`,
     );
     assert.equal(cache.get("integration", activeDatabase), active);
     assert.equal(cache.get("integration", secondaryDatabase), secondary);
