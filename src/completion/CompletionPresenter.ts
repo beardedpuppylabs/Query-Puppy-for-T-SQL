@@ -47,6 +47,10 @@ export function presentCandidate(
     ...(model.description ? { description: model.description } : {}),
   };
   const item = new vscode.CompletionItem(label, kinds[candidate.kind]);
+  (item as vscode.CompletionItem & { data?: unknown }).data = {
+    provider: "improved-sql-intellisense",
+    semanticKind: candidate.kind,
+  };
   item.range = replacement;
   item.insertText = candidate.insertText ?? quoteIdentifier(candidate.name);
   // VS Code filters the replacement prefix against filterText. Prefixing with the user's

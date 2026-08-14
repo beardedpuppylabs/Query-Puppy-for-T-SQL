@@ -222,6 +222,121 @@ JOIN ${activeDatabase}.dbo.CustomerAddresses AS ca ON 1=1`;
       resolveSqlContext(aliasSql, aliasSql.indexOf("ca.") + 3),
       scope,
     );
+    const correlatedSql = `SELECT *
+FROM ${secondaryDatabase}.dbo.Customers AS r
+WHERE EXISTS
+(
+  SELECT 1
+  FROM ${activeDatabase}.sales.CustomerOrders AS o
+  WHERE o.CustomerId = r.ReportingCustomerId
+    AND o.
+    AND r.
+)`;
+    const localOrderColumns = createCandidates(
+      resolveSqlContext(
+        correlatedSql,
+        correlatedSql.indexOf("AND o.") + "AND o.".length,
+      ),
+      scope,
+    );
+    const correlatedReportingColumns = createCandidates(
+      resolveSqlContext(
+        correlatedSql,
+        correlatedSql.indexOf("AND r.") + "AND r.".length,
+      ),
+      scope,
+    );
+    assert.deepEqual(
+      new Set(localOrderColumns.map((candidate) => candidate.name)),
+      new Set(
+        active
+          .findObject("sales", "CustomerOrders")
+          ?.columns.map((column) => column.name),
+      ),
+    );
+    assert.deepEqual(
+      new Set(correlatedReportingColumns.map((candidate) => candidate.name)),
+      new Set(
+        secondary
+          .findObject("dbo", "Customers")
+          ?.columns.map((column) => column.name),
+      ),
+    );
+    assert.ok(
+      correlatedReportingColumns.every(
+        (candidate) => candidate.database === secondaryDatabase,
+      ),
+    );
+    const activeCorrelationSql = `SELECT *
+FROM ${activeDatabase}.dbo.Customers AS c
+WHERE EXISTS
+(
+  SELECT 1
+  FROM ${activeDatabase}.sales.CustomerOrders AS o
+  WHERE o.CustomerId = c.
+);`;
+    const activeCorrelation = createCandidates(
+      resolveSqlContext(
+        activeCorrelationSql,
+        activeCorrelationSql.indexOf("c.") + 2,
+      ),
+      scope,
+    );
+    assert.deepEqual(
+      activeCorrelation.map((candidate) => candidate.name),
+      active
+        .findObject("dbo", "Customers")
+        ?.columns.map((column) => column.name)
+        .sort((left, right) => left.localeCompare(right)),
+    );
+    assert.ok(
+      activeCorrelation.every(
+        (candidate) => candidate.database === activeDatabase,
+      ),
+    );
+    for (const applyKind of ["CROSS APPLY", "OUTER APPLY"]) {
+      const applyCorrelationSql = `SELECT *
+FROM ${activeDatabase}.dbo.Customers AS c
+${applyKind}
+(
+  SELECT TOP 1 o.CustomerOrderId, o.OrderNumber
+  FROM ${activeDatabase}.sales.CustomerOrders AS o
+  WHERE o.CustomerId = c.
+) AS lastOrder;`;
+      assert.deepEqual(
+        createCandidates(
+          resolveSqlContext(
+            applyCorrelationSql,
+            applyCorrelationSql.indexOf("c.") + 2,
+          ),
+          scope,
+        ).map((candidate) => candidate.name),
+        active
+          .findObject("dbo", "Customers")
+          ?.columns.map((column) => column.name)
+          .sort((left, right) => left.localeCompare(right)),
+      );
+    }
+    const topApplySql = `SELECT lastOrder.
+FROM ${activeDatabase}.dbo.Customers AS c
+CROSS APPLY
+(
+  SELECT TOP 1
+    o.CustomerOrderId,
+    o.OrderNumber
+  FROM ${activeDatabase}.sales.CustomerOrders AS o
+  WHERE o.CustomerId = c.CustomerId
+) AS lastOrder`;
+    assert.deepEqual(
+      createCandidates(
+        resolveSqlContext(
+          topApplySql,
+          topApplySql.indexOf("lastOrder.") + "lastOrder.".length,
+        ),
+        scope,
+      ).map((candidate) => candidate.name),
+      ["CustomerOrderId", "OrderNumber"],
+    );
     assert.deepEqual(
       new Set(reportingAlias.map((candidate) => candidate.name)),
       new Set([

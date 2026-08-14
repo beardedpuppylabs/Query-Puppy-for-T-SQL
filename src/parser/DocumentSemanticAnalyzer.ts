@@ -3,6 +3,7 @@ import { quoteIdentifier } from "../metadata/SqlTypeFormatter.js";
 import {
   normalizeName,
   type ColumnMetadata,
+  type DatabaseObject,
   type SqlType,
 } from "../metadata/MetadataModels.js";
 import type { SqlToken } from "./SqlTokenizer.js";
@@ -12,6 +13,9 @@ export interface RowSource {
   readonly sourceId: string;
   readonly name: string;
   readonly alias?: string;
+  readonly database?: string;
+  readonly schema?: string;
+  readonly sourceObject?: DatabaseObject;
   readonly sourceKind:
     | "cte"
     | "tempTable"
@@ -23,9 +27,32 @@ export interface RowSource {
   readonly columns: readonly ColumnMetadata[];
   readonly origin: { readonly start: number; readonly end: number };
 }
+export type QueryScopeKind =
+  | "topLevelQuery"
+  | "correlatedExpressionSubquery"
+  | "derivedTable"
+  | "applyRightQuery"
+  | "cteDefinition";
+export interface ScopedRowSource {
+  readonly source: RowSource;
+  readonly qualifier: string;
+  readonly scopeDistance: number;
+  readonly outer: boolean;
+}
+export interface QueryScope {
+  readonly id: string;
+  readonly kind: QueryScopeKind;
+  readonly range: { readonly start: number; readonly end: number };
+  readonly parentId?: string;
+  readonly localRowSources: readonly ScopedRowSource[];
+  readonly allowsOuterReferences: boolean;
+}
 export interface DocumentSemanticModel {
   readonly rowSources: readonly RowSource[];
   readonly aliases: ReadonlyMap<string, RowSource>;
+  readonly queryScopes: readonly QueryScope[];
+  readonly activeQueryScope?: QueryScope;
+  readonly visibleRowSources: readonly ScopedRowSource[];
   readonly orderByColumns: readonly ColumnMetadata[];
 }
 export interface SemanticCatalog {
@@ -174,6 +201,25 @@ function catalogColumns(
   );
   return found.length === 1 ? (found[0]?.columns ?? []) : [];
 }
+function catalogObject(
+  parts: readonly string[],
+  catalog?: SemanticCatalog,
+): DatabaseObject | undefined {
+  if (!catalog || parts.length === 0) return undefined;
+  const database =
+    parts.length === 3
+      ? (parts[0] ?? catalog.activeDatabase)
+      : catalog.activeDatabase;
+  const schema = parts.length >= 2 ? parts.at(-2) : undefined;
+  const name = parts.at(-1) ?? "";
+  const index = catalog.indexes.get(normalizeName(database));
+  if (!index) return undefined;
+  if (schema) return index.findObject(schema, name);
+  const matches = index.objects.filter(
+    (object) => normalizeName(object.name) === normalizeName(name),
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+}
 function definitionColumns(
   tokens: readonly SqlToken[],
   open: number,
@@ -233,6 +279,28 @@ function columnFromDefinition(
 interface SelectSources {
   readonly ordered: readonly (readonly ColumnMetadata[])[];
   readonly bindings: ReadonlyMap<string, readonly ColumnMetadata[]>;
+}
+
+/** Returns the first projection token after SELECT modifiers such as TOP. */
+function projectionStart(
+  tokens: readonly SqlToken[],
+  select: number,
+  end: number,
+): number {
+  let current = select + 1;
+  if (["all", "distinct"].includes(tokens[current]?.normalized ?? ""))
+    current++;
+  if (tokens[current]?.normalized !== "top") return current;
+  current++;
+  if (tokens[current]?.text === "(") current = matching(tokens, current) + 1;
+  else if (current < end) current++;
+  if (tokens[current]?.normalized === "percent") current++;
+  if (
+    tokens[current]?.normalized === "with" &&
+    tokens[current + 1]?.normalized === "ties"
+  )
+    current += 2;
+  return Math.min(current, end);
 }
 
 export interface SelectWildcardExpansion {
@@ -341,7 +409,11 @@ function projection(
   const bindings = new Map(sources.bindings);
   for (const [name, columns] of inherited ?? [])
     if (!bindings.has(name)) bindings.set(name, columns);
-  return segments(tokens, select + 1, projectionEnd).flatMap((part, index) => {
+  return segments(
+    tokens,
+    projectionStart(tokens, select, projectionEnd),
+    projectionEnd,
+  ).flatMap((part, index) => {
     if (!part.length) return [];
     let alias: SqlToken | undefined;
     const as = part.findIndex((t) => t.normalized === "as");
@@ -449,6 +521,249 @@ function derivedSources(
     i = close;
   }
   return out;
+}
+
+interface MutableQueryScope {
+  readonly id: string;
+  readonly kind: QueryScopeKind;
+  readonly startToken: number;
+  readonly endToken: number;
+  readonly range: { readonly start: number; readonly end: number };
+  readonly parent?: MutableQueryScope;
+  readonly local: ScopedRowSource[];
+  readonly applyOpenToken?: number;
+}
+
+const tokenDepths = (tokens: readonly SqlToken[]): readonly number[] => {
+  let depth = 0;
+  return tokens.map((token) => {
+    const value = depth;
+    if (token.text === "(") depth++;
+    else if (token.text === ")") depth--;
+    return value;
+  });
+};
+
+function objectRowSource(
+  parts: readonly string[],
+  alias: string,
+  origin: { readonly start: number; readonly end: number },
+  catalog?: SemanticCatalog,
+): RowSource {
+  const database = parts.length === 3 ? parts[0] : catalog?.activeDatabase;
+  const schema = parts.length >= 2 ? parts.at(-2) : undefined;
+  const sourceObject = catalogObject(parts, catalog);
+  return rowSource({
+    name: parts.at(-1) ?? alias,
+    alias,
+    ...(database ? { database } : {}),
+    ...(schema ? { schema } : {}),
+    ...(sourceObject ? { sourceObject } : {}),
+    sourceKind: "derivedTable",
+    columns: catalogColumns(parts, catalog),
+    origin,
+  });
+}
+
+function queryScopeModel(
+  tokens: readonly SqlToken[],
+  statementTokenStart: number,
+  statementTokenEnd: number,
+  cursor: number,
+  known: readonly RowSource[],
+  catalog?: SemanticCatalog,
+): {
+  readonly scopes: readonly QueryScope[];
+  readonly active?: QueryScope;
+  readonly visible: readonly ScopedRowSource[];
+} {
+  const depths = tokenDepths(tokens);
+  const mutable: MutableQueryScope[] = [];
+  const statementEndOffset =
+    tokens[statementTokenEnd]?.start ?? tokens.at(-1)?.end ?? cursor;
+  for (let select = statementTokenStart; select < statementTokenEnd; select++) {
+    if (tokens[select]?.normalized !== "select") continue;
+    const selectDepth = depths[select] ?? 0;
+    let open = -1;
+    for (let i = select - 1; i >= statementTokenStart; i--) {
+      if (tokens[i]?.text === "(" && (depths[i] ?? 0) === selectDepth - 1) {
+        open = i;
+        break;
+      }
+      if ((depths[i] ?? 0) < selectDepth - 1) break;
+    }
+    let endToken = statementTokenEnd;
+    if (open >= 0) {
+      const close = matching(tokens, open);
+      endToken =
+        close > open
+          ? Math.min(close + 1, statementTokenEnd)
+          : statementTokenEnd;
+    }
+    const parent = [...mutable]
+      .reverse()
+      .find(
+        (candidate) =>
+          select > candidate.startToken && select < candidate.endToken,
+      );
+    let kind: QueryScopeKind = parent
+      ? "correlatedExpressionSubquery"
+      : "topLevelQuery";
+    let applyOpenToken: number | undefined;
+    if (open >= 0) {
+      const previous = tokens[open - 1]?.normalized;
+      if (previous === "apply") {
+        kind = "applyRightQuery";
+        applyOpenToken = open;
+      } else if (previous === "from" || previous === "join")
+        kind = "derivedTable";
+      const cte = known.find(
+        (source) =>
+          source.sourceKind === "cte" &&
+          source.origin.start < (tokens[select]?.start ?? 0) &&
+          source.origin.end >= (tokens[select]?.end ?? 0),
+      );
+      if (cte && !parent) kind = "cteDefinition";
+    }
+    mutable.push({
+      id: `query-${String(mutable.length + 1)}`,
+      kind,
+      startToken: select,
+      endToken,
+      range: {
+        start:
+          open >= 0 ? (tokens[open]?.start ?? 0) : (tokens[select]?.start ?? 0),
+        end: tokens[endToken - 1]?.end ?? statementEndOffset,
+      },
+      ...(parent ? { parent } : {}),
+      local: [],
+      ...(applyOpenToken === undefined ? {} : { applyOpenToken }),
+    });
+  }
+  for (const scope of mutable) {
+    const depth = depths[scope.startToken] ?? 0;
+    for (let i = scope.startToken + 1; i < scope.endToken; i++) {
+      if ((depths[i] ?? 0) !== depth) continue;
+      if (!["from", "join", "apply"].includes(tokens[i]?.normalized ?? ""))
+        continue;
+      let p = i + 1;
+      let source: RowSource | undefined;
+      let parts: string[] = [];
+      if (tokens[p]?.text === "(") {
+        const close = matching(tokens, p);
+        p = close;
+        source = known.find(
+          (candidate) => candidate.origin.start === tokens[i]?.start,
+        );
+      } else if (ident(tokens[p])) {
+        parts = [tokens[p]?.text ?? ""];
+        while (tokens[p + 1]?.text === "." && ident(tokens[p + 2])) {
+          parts.push(tokens[p + 2]?.text ?? "");
+          p += 2;
+        }
+        if (tokens[p + 1]?.text === "." && !ident(tokens[p + 2])) continue;
+        if (tokens[p + 1]?.text === "(") p = matching(tokens, p + 1);
+      } else continue;
+      if (tokens[p + 1]?.normalized === "as") p++;
+      const aliasToken =
+        ident(tokens[p + 1]) && !reserved.has(tokens[p + 1]?.normalized ?? "")
+          ? tokens[p + 1]
+          : undefined;
+      const qualifier = aliasToken?.text ?? source?.alias ?? parts.at(-1);
+      if (!qualifier) continue;
+      source ??=
+        known.find(
+          (candidate) =>
+            normalizeName(candidate.name) === normalizeName(parts.at(-1) ?? ""),
+        ) ??
+        objectRowSource(
+          parts,
+          qualifier,
+          {
+            start: tokens[i]?.start ?? 0,
+            end: aliasToken?.end ?? tokens[p]?.end ?? 0,
+          },
+          catalog,
+        );
+      scope.local.push({ source, qualifier, scopeDistance: 0, outer: false });
+    }
+  }
+  const activeMutable = [...mutable]
+    .filter((scope) => scope.range.start <= cursor && cursor <= scope.range.end)
+    .sort((a, b) => b.range.start - a.range.start)[0];
+  const publicScopes: QueryScope[] = mutable.map((scope) => ({
+    id: scope.id,
+    kind: scope.kind,
+    range: scope.range,
+    ...(scope.parent ? { parentId: scope.parent.id } : {}),
+    localRowSources: scope.local,
+    allowsOuterReferences:
+      scope.kind === "correlatedExpressionSubquery" ||
+      scope.kind === "applyRightQuery",
+  }));
+  const visible: ScopedRowSource[] = [];
+  const names = new Set<string>();
+  let current = activeMutable;
+  let distance = 0;
+  let canContinue = true;
+  let upperBound: number | undefined;
+  while (current && canContinue) {
+    const currentUpperBound = upperBound;
+    const eligible =
+      currentUpperBound === undefined
+        ? current.local
+        : current.local.filter(
+            (binding) => binding.source.origin.end <= currentUpperBound,
+          );
+    for (const binding of eligible) {
+      const normalized = normalizeName(binding.qualifier);
+      if (names.has(normalized)) continue;
+      names.add(normalized);
+      visible.push({
+        ...binding,
+        scopeDistance: distance,
+        outer: distance > 0,
+      });
+    }
+    if (!current.parent) break;
+    canContinue =
+      current.kind === "correlatedExpressionSubquery" ||
+      current.kind === "applyRightQuery";
+    upperBound =
+      current.kind === "applyRightQuery" && current.applyOpenToken !== undefined
+        ? tokens[current.applyOpenToken]?.start
+        : undefined;
+    current = canContinue ? current.parent : undefined;
+    distance++;
+  }
+  return {
+    scopes: publicScopes,
+    ...(activeMutable
+      ? { active: publicScopes[mutable.indexOf(activeMutable)] as QueryScope }
+      : {}),
+    visible,
+  };
+}
+
+/** Resolves an alias in semantic proximity order without consulting statement-wide symbols. */
+export function resolveVisibleRowSource(
+  model: DocumentSemanticModel,
+  alias: string,
+): ScopedRowSource | undefined {
+  const normalized = normalizeName(alias);
+  const scoped = model.visibleRowSources.find(
+    (binding) => normalizeName(binding.qualifier) === normalized,
+  );
+  if (scoped || model.activeQueryScope) return scoped;
+  const statementSource = model.aliases.get(normalized);
+  return statementSource
+    ? {
+        source: statementSource,
+        qualifier: alias,
+        scopeDistance: 0,
+        outer: false,
+      }
+    : undefined;
 }
 export function analyzeDocumentSemantics(
   sql: string,
@@ -586,34 +901,46 @@ export function analyzeDocumentSemantics(
     catalog,
   );
   rowSources.push(...derived);
-  const aliases = new Map<string, RowSource>();
-  for (const source of rowSources)
-    aliases.set(normalizeName(source.alias ?? source.name), source);
-  let cursorDepth = 0;
-  for (
-    let i = batch;
-    i < tokens.length && (tokens[i]?.start ?? 0) < cursor;
-    i++
-  ) {
-    if (tokens[i]?.text === "(") cursorDepth++;
-    if (tokens[i]?.text === ")") cursorDepth--;
-  }
-  const maps = selectSources(
+  const queryModel = queryScopeModel(
     tokens,
     batch,
     statementEnd,
+    cursor,
     rowSources,
     catalog,
-    cursorDepth,
-  ).bindings;
-  for (const [alias, columns] of maps) {
-    const local = rowSources.find(
-      (s) =>
-        s.columns === columns ||
-        normalizeName(s.name) === alias ||
-        normalizeName(s.alias ?? "") === alias,
-    );
-    if (local) aliases.set(alias, local);
+  );
+  const aliases = new Map<string, RowSource>();
+  for (const binding of queryModel.visible)
+    aliases.set(normalizeName(binding.qualifier), binding.source);
+  if (!queryModel.active) {
+    for (const [alias, columns] of selectSources(
+      tokens,
+      batch,
+      statementEnd,
+      rowSources,
+      catalog,
+    ).bindings) {
+      const local = rowSources.find(
+        (source) =>
+          source.columns === columns ||
+          normalizeName(source.name) === alias ||
+          normalizeName(source.alias ?? "") === alias,
+      );
+      aliases.set(
+        alias,
+        local ??
+          rowSource({
+            name: alias,
+            alias,
+            sourceKind: "derivedTable",
+            columns,
+            origin: {
+              start: tokens[batch]?.start ?? 0,
+              end: tokens[statementEnd - 1]?.end ?? cursor,
+            },
+          }),
+      );
+    }
   }
   const currentProjection = projection(
     tokens,
@@ -631,6 +958,9 @@ export function analyzeDocumentSemantics(
   return {
     rowSources,
     aliases,
+    queryScopes: queryModel.scopes,
+    ...(queryModel.active ? { activeQueryScope: queryModel.active } : {}),
+    visibleRowSources: queryModel.visible,
     orderByColumns: inOrderBy ? currentProjection : [],
   };
 }

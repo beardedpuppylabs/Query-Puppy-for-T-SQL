@@ -29,6 +29,7 @@ Matching is contiguous and case-insensitive: `addr` can occur anywhere in a name
 - Case-insensitive Contains completion
 - Schemas, tables, views, synonyms, table-valued functions, scalar functions, and stored procedures
 - Column-aware CTEs, temporary tables, table variables, and derived tables
+- Nested query completion with correlated outer-alias resolution, lexical shadowing, and scope isolation
 - `SELECT INTO`, `VALUES`, `CROSS APPLY`, and `OUTER APPLY` row-source inference
 - Column detail with datatype and `NULL`/`NOT NULL`
 - Scalar-function signatures and return types, and stored-procedure signatures
@@ -44,6 +45,7 @@ Matching is contiguous and case-insensitive: `addr` can occur anywhere in a name
 - In-memory metadata caching
 - **Refresh IntelliSense Metadata** after DDL changes
 - **Show Improved SQL IntelliSense Status** plus an optional diagnostic output channel
+- **Diagnose Query Scope** for cursor scope, visible RowSources, correlation, and semantic candidate details
 
 ## Usage
 
@@ -51,7 +53,7 @@ Matching is contiguous and case-insensitive: `addr` can occur anywhere in a name
 
 Place the cursor directly after `*` in a SELECT projection and press Tab. The extension replaces only that wildcard with columns already available from catalog or document-local metadata. Enter always retains its normal editor behavior, and Tab behaves normally outside a resolvable projection wildcard.
 
-For `alias.*`, only that alias is expanded. A plain `*` includes visible row sources in source order and qualifies generated columns.
+For `alias.*`, only that alias is expanded. A plain `*` includes visible row sources in source order; it stays unqualified for one unaliased source and uses deterministic qualifiers for aliased or multiple sources.
 
 ### Smart aliases
 
@@ -71,6 +73,22 @@ This can suggest any table, view, or table-valued function whose name contains `
 ```sql
 SELECT c.addr
 FROM dbo.Customers AS c
+```
+
+### Nested and correlated queries
+
+Aliases are resolved from the innermost query outward. Expression subqueries can use eligible outer aliases, while inner and sibling aliases remain private. Ordinary derived tables do not correlate; the right side of `CROSS APPLY` and `OUTER APPLY` can see left-side row sources.
+
+```sql
+SELECT *
+FROM dbo.Customers AS c
+WHERE EXISTS
+(
+    SELECT 1
+    FROM sales.CustomerOrders AS o
+    WHERE o.CustomerId = c.CustomerId
+      AND o.
+)
 ```
 
 ### DML and callable objects

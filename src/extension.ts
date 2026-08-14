@@ -241,9 +241,61 @@ export function activate(context: vscode.ExtensionContext): void {
         );
       },
     ),
+    vscode.commands.registerCommand(
+      "improvedSqlIntellisense.diagnoseQueryScope",
+      async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== "sql") {
+          await vscode.window.showInformationMessage(
+            "Open a SQL editor and place the cursor at a completion position.",
+          );
+          return;
+        }
+        try {
+          const report = await provider.diagnoseQueryScope(
+            editor.document,
+            editor.selection.active,
+          );
+          output.appendLine(`Query Scope diagnosis:\n${report}`);
+          output.show(true);
+          await vscode.window.showInformationMessage(
+            "Query Scope diagnosis was written to the Improved SQL IntelliSense output channel.",
+          );
+        } catch (error) {
+          output.appendLine(
+            `Query Scope diagnosis failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      },
+    ),
   );
   if (context.extensionMode === vscode.ExtensionMode.Test)
     context.subscriptions.push(
+      vscode.commands.registerCommand(
+        "improvedSqlIntellisense.test.setCompletionScope",
+        (scope: import("./completion/CandidateFactory.js").CompletionScope) =>
+          provider.setTestScope(scope),
+      ),
+      vscode.commands.registerCommand(
+        "improvedSqlIntellisense.test.provideCompletions",
+        async (document: vscode.TextDocument, position: vscode.Position) => {
+          const cancellation = new vscode.CancellationTokenSource();
+          try {
+            return await provider.provideCompletionItems(
+              document,
+              position,
+              cancellation.token,
+            );
+          } finally {
+            cancellation.dispose();
+          }
+        },
+      ),
+      vscode.commands.registerCommand(
+        "improvedSqlIntellisense.test.diagnoseQueryScope",
+        (document: vscode.TextDocument, position: vscode.Position) =>
+          provider.diagnoseQueryScope(document, position),
+      ),
       vscode.commands.registerCommand(
         "improvedSqlIntellisense.test.setSignatureScope",
         (scope: import("./completion/CandidateFactory.js").CompletionScope) =>

@@ -230,3 +230,43 @@ Native `(` and comma registration remains primary. A single pending trigger now 
 - [x] Cover invalid stars, multiple sources, collisions, naming, and a 200-column source.
 
 Wildcard expansion and alias generation reuse cached catalog/document semantics. This milestone deliberately adds no snippet manager, query UI/history, nested scope work, MERGE, OPENJSON, or PIVOT support.
+
+## 0.7.0 nested query scopes and correlated subqueries
+
+- [x] Represent SELECT scopes as an explicit hierarchy with cursor ranges, parents, local row sources, and correlation policy.
+- [x] Resolve aliases locally first, then through eligible parent scopes with lexical shadowing and semantic-distance ordering.
+- [x] Isolate closed inner scopes, siblings, statements, CTE definitions, and ordinary derived tables.
+- [x] Support multi-level correlation in EXISTS, IN, and scalar expression subqueries.
+- [x] Allow APPLY right-side queries to correlate only to row sources available on their left.
+- [x] Preserve database identity for correlated catalog sources and tolerate unfinished nested SQL.
+- [x] Add provider-level, parser, cache-versioning, catalog-fixture, and 0.6.x regression coverage.
+
+The QueryScope model is built from the defensive tokenizer, so strings and comments cannot create scopes. Scope construction performs no catalog I/O: catalog-backed bindings use only indexes supplied by the connection-and-database metadata cache. Set-operation projection reconciliation remains deferred.
+
+## 0.7.1 SELECT modifier projection repair
+
+- [x] Locate the first real projection expression after `ALL`, `DISTINCT`, and nesting-aware `TOP` syntax.
+- [x] Preserve semantic projection order for numeric, parenthesized, expression, PERCENT, and WITH TIES variants.
+- [x] Verify complete TOP projections through CTEs, ordinary derived tables, CROSS APPLY, and OUTER APPLY.
+- [x] Cover expression aliases, three-column projections, star inference, the registered provider, and the live fixture.
+
+The repair is confined to the shared projection parser. It does not alter QueryScope correlation policy or introduce set-operation projection reconciliation.
+
+## 0.7.2 correlated member resolution repair
+
+- [x] Resolve explicit members directly from the ordered QueryScope visibility chain rather than a flattened statement symbol fallback.
+- [x] Rebind a visible source's stored database/schema/object identity from already-cached metadata when its inferred column list is empty.
+- [x] Preserve local shadowing, sibling/outward isolation, derived-table non-correlation, and APPLY left-side eligibility.
+- [x] Add exact mid-document provider and live-fixture regressions for EXISTS, APPLY, three-level, cross-database, and negative scope cases.
+
+The fallback is deliberately constrained to a binding proven visible by QueryScope. It performs no metadata I/O and cannot make a statement-wide or illegal derived-table alias visible.
+
+## 0.7.3 nested provider correctness and diagnostics
+
+- [x] Test the provider directly with clean SQL documents and explicit provider provenance instead of aggregate editor labels.
+- [x] Assert semantic column kind and datatype/nullability presentation for nested local and correlated completions.
+- [x] Validate the three-level QueryScope tree independently from CompletionItem production.
+- [x] Add a Query Scope diagnostic command backed by the same cursor-specific semantic model and cached metadata scope.
+- [x] Retain registered-pipeline, live-fixture, negative isolation, TOP/APPLY projection, and 0.6.x regression coverage.
+
+Direct provider tests now prove that successful labels originate from Improved SQL IntelliSense rather than editor word-based suggestions. The internal provenance marker is not displayed in the completion UI.

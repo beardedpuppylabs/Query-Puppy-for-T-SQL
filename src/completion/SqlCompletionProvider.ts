@@ -8,12 +8,14 @@ import { CompletionScopeResolver } from "./CompletionScopeResolver.js";
 import { presentCandidate } from "./CompletionPresenter.js";
 import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
 import { resolveSmartAliasContext } from "../parser/SmartAlias.js";
+import { resolveVisibleRowSource } from "../parser/DocumentSemanticAnalyzer.js";
 
 export class SqlCompletionProvider implements vscode.CompletionItemProvider {
   private readonly loggedFailures = new Set<string>();
   private readonly scopes: CompletionScopeResolver;
   private readonly documentSemantics = new DocumentSemanticCache();
   private readonly loggedEmptyProjections = new Set<string>();
+  private testScope?: CompletionScope;
 
   constructor(
     private readonly connections: ConnectionService,
@@ -27,6 +29,54 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
       cache,
       (key, error) => this.logFailureOnce(key, error),
     );
+  }
+  setTestScope(scope: CompletionScope): void {
+    this.testScope = scope;
+  }
+  async diagnoseQueryScope(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+  ): Promise<string> {
+    const context = resolveSqlContext(
+      document.getText(),
+      document.offsetAt(position),
+    );
+    let scope = this.testScope;
+    if (!scope) {
+      const active = await this.connections.active();
+      if (active) scope = await this.scopes.resolve(active, context);
+    }
+    const semantics = this.documentSemantics.get(
+      document.uri.toString(),
+      document.version,
+      context.sql,
+      context.cursor,
+      scope,
+    );
+    const qualifier = context.qualifier?.parts[0];
+    const binding = qualifier
+      ? resolveVisibleRowSource(semantics, qualifier)
+      : undefined;
+    const candidates = createCandidates(context, scope, semantics);
+    const local = semantics.visibleRowSources.filter(
+      (source) => source.scopeDistance === 0,
+    );
+    const parents = semantics.visibleRowSources.filter(
+      (source) => source.scopeDistance > 0,
+    );
+    const identity = binding
+      ? `${binding.source.database ? `${binding.source.database}.` : ""}${binding.source.schema ? `${binding.source.schema}.` : ""}${binding.source.name}`
+      : "unresolved";
+    return [
+      `Scope kind: ${semantics.activeQueryScope?.kind ?? "none"}`,
+      `Local RowSources: ${local.map((source) => `${source.qualifier} -> ${source.source.name}`).join(", ") || "none"}`,
+      `Correlation allowed: ${semantics.activeQueryScope?.allowsOuterReferences ? "yes" : "no"}`,
+      `Eligible parents: ${parents.map((source) => `${source.qualifier} (distance ${String(source.scopeDistance)}) -> ${source.source.name}`).join(", ") || "none"}`,
+      `Explicit qualifier: ${qualifier ?? "none"}`,
+      `Resolved RowSource: ${identity}`,
+      `Resolved columns: ${String(binding?.source.columns.length ?? 0)}`,
+      `Semantic candidates: ${String(candidates.length)}`,
+    ].join("\n");
   }
   async provideCompletionItems(
     document: vscode.TextDocument,
@@ -45,10 +95,10 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
       this.debug("Ignoring unsupported four-part identifier completion.");
       return new vscode.CompletionList([], false);
     }
-    let scope: CompletionScope | undefined;
+    let scope: CompletionScope | undefined = this.testScope;
     try {
-      const active = await this.connections.active();
-      if (active && !token.isCancellationRequested)
+      const active = scope ? undefined : await this.connections.active();
+      if (!scope && active && !token.isCancellationRequested)
         scope = await this.scopes.resolve(active, context);
     } catch (error) {
       this.logFailureOnce("completion", error);
@@ -62,6 +112,24 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
       context.cursor,
       scope,
     );
+    if (semantics.activeQueryScope)
+      this.debug(
+        `Query scope at cursor: ${semantics.activeQueryScope.kind}; visible aliases: ${
+          semantics.visibleRowSources
+            .map(
+              (binding) =>
+                `${binding.qualifier}${binding.outer ? " (outer)" : ""} -> ${binding.source.database ? `${binding.source.database}.` : ""}${binding.source.schema ? `${binding.source.schema}.` : ""}${binding.source.name}`,
+            )
+            .join(", ") || "none"
+        }; outer correlation: ${semantics.activeQueryScope.allowsOuterReferences ? "enabled" : "disabled"}.`,
+      );
+    const requestedAlias = context.qualifier?.parts[0];
+    if (requestedAlias) {
+      const binding = resolveVisibleRowSource(semantics, requestedAlias);
+      this.debug(
+        `Scoped alias lookup: requested=${requestedAlias}; local=${binding?.scopeDistance === 0 ? "yes" : "no"}; parent=${binding?.outer ? `yes (distance ${String(binding.scopeDistance)})` : "no"}; match=${binding ? `${binding.source.database ? `${binding.source.database}.` : ""}${binding.source.schema ? `${binding.source.schema}.` : ""}${binding.source.name}` : "none"}.`,
+      );
+    }
     if (
       vscode.workspace
         .getConfiguration("improvedSqlIntellisense.smartAliases", document.uri)

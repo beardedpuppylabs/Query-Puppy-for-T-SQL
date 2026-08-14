@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.7.3
+
+- Fixed semantic member completion inside nested and correlated query scopes.
+- Added Query Scope diagnostics and reliable provider-origin verification for nested completions.
+
+## 0.7.2
+
+- Fixed correlated outer-alias completion in nested subqueries and APPLY expressions.
+
+## 0.7.1
+
+- Fixed incomplete column inference for `TOP`, `DISTINCT`, and `ALL` queries used in CTEs, derived tables, and APPLY expressions.
+
+## 0.7.0
+
+- Added nested query scope awareness and correlated subquery completion for outer aliases.
+- Added local-first alias resolution, lexical shadowing, and isolation between inner, outer, sibling, CTE, and statement scopes.
+- Added APPLY-aware left-side correlation while keeping ordinary derived tables non-correlated.
+- Added scope-aware column ordering and concise outer-scope origin details.
+
 ## 0.6.6
 
 - Added explicit Tab-only expansion of semantic `SELECT *` and `alias.*` projections using cached row-source columns.

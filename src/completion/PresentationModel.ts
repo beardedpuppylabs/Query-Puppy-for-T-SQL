@@ -32,6 +32,12 @@ export function presentationModel(
     detail = `(${params})${candidate.sourceObject?.columns.length ? ` → ${String(candidate.sourceObject.columns.length)} columns` : ""}`;
   return {
     detail,
-    ...(mixed ? { description: friendlyKind(candidate.kind) } : {}),
+    ...(candidate.sourceQualifier
+      ? {
+          description: `${candidate.sourceQualifier}${candidate.outerScope ? " (outer)" : ""}`,
+        }
+      : mixed
+        ? { description: friendlyKind(candidate.kind) }
+        : {}),
   };
 }

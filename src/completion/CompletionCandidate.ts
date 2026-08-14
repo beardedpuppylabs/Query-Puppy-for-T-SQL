@@ -27,4 +27,8 @@ export interface CompletionCandidate {
   readonly triggerAliasSuggest?: boolean;
   /** Semantic group priority for mixed qualification and row-source domains. */
   readonly priority?: number;
+  /** Qualifier that owns a column in the cursor's query scope. */
+  readonly sourceQualifier?: string;
+  /** True when the semantic origin is an eligible correlated parent scope. */
+  readonly outerScope?: boolean;
 }

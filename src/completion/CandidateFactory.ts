@@ -3,11 +3,11 @@ import {
   normalizeName,
   type DatabaseObject,
 } from "../metadata/MetadataModels.js";
-import { resolveAliasSource } from "../parser/AliasResolver.js";
 import { quoteIdentifier } from "../metadata/SqlTypeFormatter.js";
 import type { SqlCompletionContext } from "../parser/SqlContextResolver.js";
 import {
   analyzeDocumentSemantics,
+  resolveVisibleRowSource,
   type DocumentSemanticModel,
   type RowSource,
 } from "../parser/DocumentSemanticAnalyzer.js";
@@ -37,22 +37,6 @@ const objectCandidate = (
   sourceObject: object,
   ...(object.baseObjectName ? { baseObjectName: object.baseObjectName } : {}),
 });
-const columnCandidates = (
-  object: DatabaseObject,
-  database: string,
-): CompletionCandidate[] =>
-  object.columns.map((column) => ({
-    name: column.name,
-    normalizedName: column.normalizedName,
-    kind: "column",
-    database,
-    schema: object.schema,
-    sqlType: column.type,
-    nullable: column.nullable,
-    sourceObject: object,
-    column,
-  }));
-
 const schemaCandidate = (
   schema: string,
   database: string,
@@ -124,23 +108,13 @@ export function createCandidates(
   if (context.kind === "unsupported") return [];
   if (context.kind === "member") {
     const alias = context.qualifier?.parts[0] ?? "";
-    const local = semantics.aliases.get(normalizeName(alias));
-    if (local) candidates = localColumnCandidates(local);
-    const source = context.aliasSource;
-    if (!local && source && !source.unsupported && scope) {
-      const database = source.database ?? scope.activeDatabase;
-      const index = scope.indexes.get(normalizedDatabase(database));
-      if (index) {
-        const object = resolveAliasSource(source, index);
-        if (object)
-          candidates = columnCandidates(object, index.metadata.database);
-      }
-    }
+    const binding = resolveVisibleRowSource(semantics, alias);
+    if (binding) candidates = scopedColumnCandidates(binding.source, scope);
   } else if (context.kind === "qualified") {
     const parts = context.qualifier?.parts ?? [];
-    const local = semantics.aliases.get(normalizeName(parts[0] ?? ""));
-    if (parts.length === 2 && local) {
-      candidates = localColumnCandidates(local);
+    const binding = resolveVisibleRowSource(semantics, parts[0] ?? "");
+    if (parts.length === 2 && binding) {
+      candidates = scopedColumnCandidates(binding.source, scope);
       sortKind = "member";
     } else if (parts.length === 2 && scope) {
       const qualifier = parts[0] ?? "";
@@ -173,19 +147,6 @@ export function createCandidates(
   } else {
     const allowed = new Set(TYPE_ORDER[context.kind]);
     if (activeIndex) {
-      if (context.kind === "expression" && scope) {
-        for (const source of context.symbols.aliases.values()) {
-          if (source.unsupported) continue;
-          const database = source.database ?? scope.activeDatabase;
-          const index = scope.indexes.get(normalizedDatabase(database));
-          if (!index) continue;
-          const object = resolveAliasSource(source, index);
-          if (object)
-            candidates.push(
-              ...columnCandidates(object, index.metadata.database),
-            );
-        }
-      }
       if (context.kind === "rowSource")
         candidates.push(
           ...activeIndex.metadata.schemas.map((schema) =>
@@ -216,8 +177,15 @@ export function createCandidates(
         })),
     );
     if (context.kind === "expression") {
-      for (const source of semantics.aliases.values())
-        candidates.push(...localColumnCandidates(source));
+      for (const binding of semantics.visibleRowSources)
+        candidates.push(
+          ...localColumnCandidates(binding.source).map((candidate) => ({
+            ...candidate,
+            sourceQualifier: binding.qualifier,
+            outerScope: binding.outer,
+            priority: binding.scopeDistance,
+          })),
+        );
       candidates.push(
         ...semantics.orderByColumns.map((column) => ({
           name: column.name,
@@ -264,7 +232,10 @@ export function createCandidates(
     );
   const unique = new Map<string, CompletionCandidate>();
   for (const candidate of candidates)
-    unique.set(`${candidate.kind}:${candidate.normalizedName}`, candidate);
+    unique.set(
+      `${candidate.kind}:${candidate.normalizedName}:${candidate.sourceQualifier ?? ""}`,
+      candidate,
+    );
   return sortCandidates(
     [...unique.values()].filter((candidate) =>
       containsMatch(candidate.normalizedName, context.search),
@@ -281,6 +252,33 @@ function localColumnCandidates(source: RowSource): CompletionCandidate[] {
     kind: "column",
     sqlType: column.type,
     nullable: column.nullable,
+    column,
+    ...(source.database ? { database: source.database } : {}),
+    ...(source.schema ? { schema: source.schema } : {}),
+    ...(source.sourceObject ? { sourceObject: source.sourceObject } : {}),
+  }));
+}
+
+function scopedColumnCandidates(
+  source: RowSource,
+  scope?: CompletionScope,
+): CompletionCandidate[] {
+  if (source.columns.length || !scope) return localColumnCandidates(source);
+  const database = source.database ?? scope.activeDatabase;
+  const index = scope.indexes.get(normalizedDatabase(database));
+  const object =
+    source.sourceObject ??
+    (source.schema ? index?.findObject(source.schema, source.name) : undefined);
+  if (!object) return [];
+  return object.columns.map((column) => ({
+    name: column.name,
+    normalizedName: column.normalizedName,
+    kind: "column",
+    database: index?.metadata.database ?? database,
+    schema: object.schema,
+    sqlType: column.type,
+    nullable: column.nullable,
+    sourceObject: object,
     column,
   }));
 }
