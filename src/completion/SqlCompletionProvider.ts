@@ -9,6 +9,10 @@ import { presentCandidate } from "./CompletionPresenter.js";
 import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
 import { resolveSmartAliasContext } from "../parser/SmartAlias.js";
 import { resolveVisibleRowSource } from "../parser/DocumentSemanticAnalyzer.js";
+import {
+  classifyCompletionContext,
+  completionDomainPolicy,
+} from "../parser/CompletionContextClassifier.js";
 
 export class SqlCompletionProvider implements vscode.CompletionItemProvider {
   private readonly loggedFailures = new Set<string>();
@@ -58,6 +62,12 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
       ? resolveVisibleRowSource(semantics, qualifier)
       : undefined;
     const candidates = createCandidates(context, scope, semantics);
+    const clause = classifyCompletionContext(
+      context.sql,
+      context.cursor,
+      semantics,
+    );
+    const policy = completionDomainPolicy(clause);
     const local = semantics.visibleRowSources.filter(
       (source) => source.scopeDistance === 0,
     );
@@ -69,6 +79,11 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
       : "unresolved";
     return [
       `Scope kind: ${semantics.activeQueryScope?.kind ?? "none"}`,
+      `Clause context: ${clause.clause}`,
+      `Expression domain: ${clause.expression ? "yes" : "no"}`,
+      `Projection aliases: ${policy.allowProjectionAliases ? "allowed" : "hidden"}`,
+      `JOIN left sources: ${clause.join?.leftVisibleRowSources.map((source) => source.qualifier).join(", ") || "none"}`,
+      `JOIN current right source: ${clause.join?.currentRightRowSource?.qualifier ?? "none"}`,
       `Local RowSources: ${local.map((source) => `${source.qualifier} -> ${source.source.name}`).join(", ") || "none"}`,
       `Correlation allowed: ${semantics.activeQueryScope?.allowsOuterReferences ? "yes" : "no"}`,
       `Eligible parents: ${parents.map((source) => `${source.qualifier} (distance ${String(source.scopeDistance)}) -> ${source.source.name}`).join(", ") || "none"}`,
@@ -147,6 +162,10 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
           `AS ${alias.alias}`,
           vscode.CompletionItemKind.Snippet,
         );
+        (item as vscode.CompletionItem & { data?: unknown }).data = {
+          provider: "improved-sql-intellisense",
+          semanticKind: "rowSourceAlias",
+        };
         item.detail = `alias for ${alias.objectName}`;
         item.insertText = new vscode.SnippetString(
           `${alias.leadingSpace ? " " : ""}AS \${1:${alias.alias}}`,

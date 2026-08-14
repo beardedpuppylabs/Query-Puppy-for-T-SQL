@@ -79,6 +79,29 @@ const index = new DatabaseIndex({
     },
     {
       schema: "billing",
+      name: "BillingAddresses",
+      normalizedName: "billingaddresses",
+      kind: "table",
+      parameters: [],
+      columns: [
+        {
+          name: "BillingAddressId",
+          normalizedName: "billingaddressid",
+          type: { name: "bigint" },
+          nullable: false,
+          ordinal: 1,
+        },
+        {
+          name: "BillingEmailAddress",
+          normalizedName: "billingemailaddress",
+          type: { name: "nvarchar", maxLength: 400 },
+          nullable: true,
+          ordinal: 2,
+        },
+      ],
+    },
+    {
+      schema: "billing",
       name: "CalculateBillingTotal_0001",
       normalizedName: "calculatebillingtotal_0001",
       kind: "scalarFunction",
@@ -467,6 +490,336 @@ CROSS APPLY
       ),
     ),
     ["CustomerOrderId", "OrderNumber"],
+  );
+  const setCte = `WITH X AS
+(
+  SELECT c.CustomerId AS Id, c.CustomerCode AS Value FROM dbo.Customers c
+  UNION ALL
+  SELECT b.BillingAddressId, b.BillingEmailAddress FROM billing.BillingAddresses b
+)
+SELECT x. FROM X x`;
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(setCte, setCte.indexOf("x.") + "x.".length),
+    ),
+    ["Id", "Value"],
+  );
+  const starSet = `WITH Combined AS
+(
+  SELECT c.* FROM ${database}.dbo.Customers AS c
+  UNION ALL
+  SELECT c2.* FROM ${database}.dbo.Customers AS c2
+)
+SELECT x. FROM Combined AS x`;
+  const starSetItems = await semanticCompletion(
+    starSet,
+    starSet.indexOf("x.") + 2,
+  );
+  assert.deepEqual(labels(starSetItems), ["CustomerCode", "CustomerId"]);
+  assert.ok(
+    starSetItems.every(
+      (item) =>
+        item.kind === vscode.CompletionItemKind.Field &&
+        item.data?.provider === "improved-sql-intellisense" &&
+        item.data.semanticKind === "column" &&
+        typeof item.label !== "string" &&
+        item.label.detail?.includes("NOT NULL") === true,
+    ),
+  );
+  const exactSecondBranch = `SELECT c.CustomerId, c.CustomerCode
+FROM ${database}.dbo.Customers AS c
+UNION ALL
+SELECT b.CustomerId, b.
+FROM ${database}.billing.BillingAddresses AS b`;
+  const secondBranchItems = await semanticCompletion(
+    exactSecondBranch,
+    exactSecondBranch.indexOf("b.\n") + 2,
+  );
+  assert.deepEqual(labels(secondBranchItems), [
+    "BillingAddressId",
+    "BillingEmailAddress",
+  ]);
+  assert.ok(
+    secondBranchItems.every(
+      (item) =>
+        item.kind === vscode.CompletionItemKind.Field &&
+        item.data?.provider === "improved-sql-intellisense" &&
+        typeof item.label !== "string" &&
+        /bigint|nvarchar/.test(item.label.detail ?? ""),
+    ),
+  );
+  const exactCorrelatedSet = `SELECT * FROM ${database}.dbo.Customers AS c
+WHERE EXISTS
+(
+  SELECT 1 FROM ${database}.sales.CustomerOrders AS o
+  WHERE o.CustomerOrderId = c.CustomerId
+  UNION ALL
+  SELECT 1 FROM ${database}.dbo.CustomerAddresses AS ca
+  WHERE ca.CustomerAddressId = c.
+)`;
+  const correlatedSecondItems = await semanticCompletion(
+    exactCorrelatedSet,
+    exactCorrelatedSet.lastIndexOf("c.") + 2,
+  );
+  assert.deepEqual(labels(correlatedSecondItems), [
+    "CustomerCode",
+    "CustomerId",
+  ]);
+  assert.ok(
+    correlatedSecondItems.every(
+      (item) => item.data?.provider === "improved-sql-intellisense",
+    ),
+  );
+  const selectExpression = `SELECT cust
+FROM ${database}.dbo.Customers AS c`;
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        selectExpression,
+        selectExpression.indexOf("cust") + 4,
+      ),
+    ),
+    ["CustomerCode", "CustomerId"],
+  );
+  const whereExpression = `SELECT * FROM ${database}.dbo.Customers AS c
+WHERE cust`;
+  assert.deepEqual(labels(await semanticCompletion(whereExpression)), [
+    "CustomerCode",
+    "CustomerId",
+  ]);
+  const joinExpression = `SELECT * FROM ${database}.dbo.Customers AS c
+JOIN ${database}.sales.CustomerOrders AS o ON o. AND c.`;
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        joinExpression,
+        joinExpression.indexOf("ON o.") + "ON o.".length,
+      ),
+    ),
+    ["CustomerOrderId", "OrderNumber"],
+  );
+  assert.deepEqual(
+    labels(await semanticCompletion(joinExpression, joinExpression.length)),
+    ["CustomerCode", "CustomerId"],
+  );
+  const positionalJoins = `SELECT * FROM ${database}.dbo.Customers c
+JOIN ${database}.sales.CustomerOrders o ON c. AND o. AND ca.
+JOIN ${database}.dbo.CustomerAddresses ca ON c. AND o. AND ca.
+JOIN ${database}.billing.BillingAddresses b ON b.`;
+  const positional = async (needle: string, occurrence = 0) => {
+    let start = -1;
+    for (let index = 0; index <= occurrence; index++)
+      start = positionalJoins.indexOf(needle, start + 1);
+    return labels(
+      await semanticCompletion(positionalJoins, start + needle.length),
+    );
+  };
+  assert.deepEqual(await positional("ON c."), ["CustomerCode", "CustomerId"]);
+  assert.deepEqual(await positional("AND o."), [
+    "CustomerOrderId",
+    "OrderNumber",
+  ]);
+  assert.deepEqual(await positional("AND ca."), []);
+  assert.deepEqual(await positional("ON c.", 1), [
+    "CustomerCode",
+    "CustomerId",
+  ]);
+  assert.deepEqual(await positional("AND o.", 1), [
+    "CustomerOrderId",
+    "OrderNumber",
+  ]);
+  assert.deepEqual(await positional("AND ca.", 1), [
+    "AddressLabel",
+    "CustomerAddressId",
+  ]);
+  assert.deepEqual(await positional("ON b."), [
+    "BillingAddressId",
+    "BillingEmailAddress",
+  ]);
+  for (const apply of ["CROSS APPLY", "OUTER APPLY"]) {
+    const sql = `SELECT * FROM ${database}.dbo.Customers c
+${apply} (SELECT c., future.) x
+JOIN ${database}.sales.CustomerOrders future ON 1=1`;
+    assert.deepEqual(
+      labels(
+        await semanticCompletion(
+          sql,
+          sql.indexOf("SELECT c.") + "SELECT c.".length,
+        ),
+      ),
+      ["CustomerCode", "CustomerId"],
+    );
+    assert.deepEqual(
+      labels(
+        await semanticCompletion(
+          sql,
+          sql.indexOf("future.") + "future.".length,
+        ),
+      ),
+      [],
+    );
+  }
+  for (const clause of ["GROUP BY", "HAVING"]) {
+    const sql = `SELECT c.CustomerCode AS Contact FROM ${database}.dbo.Customers c ${clause} cont`;
+    assert.deepEqual(labels(await semanticCompletion(sql)), []);
+  }
+  const orderAlias = `SELECT c.CustomerCode AS Contact FROM ${database}.dbo.Customers c ORDER BY cont`;
+  assert.deepEqual(labels(await semanticCompletion(orderAlias)), ["Contact"]);
+  const setOrder = `SELECT c.CustomerId AS Id, c.CustomerCode AS Value FROM ${database}.dbo.Customers c
+UNION ALL SELECT o.CustomerOrderId AS WrongId, o.OrderNumber AS WrongValue FROM ${database}.sales.CustomerOrders o
+ORDER BY val`;
+  assert.deepEqual(labels(await semanticCompletion(setOrder)), ["Value"]);
+  const functionArgument = `SELECT ${database}.billing.CalculateBillingTotal_0001(cust, 0.19)
+FROM ${database}.dbo.Customers c`;
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        functionArgument,
+        functionArgument.indexOf("cust") + 4,
+      ),
+    ),
+    ["CustomerCode", "CustomerId"],
+  );
+  const expressionDomain = `SELECT${" "}
+FROM ${database}.dbo.Customers c`;
+  const expressionItems = await semanticCompletion(
+    expressionDomain,
+    expressionDomain.indexOf("\n"),
+  );
+  assert.ok(
+    expressionItems.some((item) => item.data?.semanticKind === "column"),
+  );
+  assert.ok(
+    expressionItems.some(
+      (item) => item.data?.semanticKind === "rowSourceAlias",
+    ),
+  );
+  assert.ok(
+    expressionItems.every(
+      (item) =>
+        ![
+          "table",
+          "view",
+          "tableValuedFunction",
+          "procedure",
+          "schema",
+          "database",
+        ].includes(item.data?.semanticKind ?? ""),
+    ),
+  );
+  const updateExpression = `UPDATE c SET CustomerCode = cust
+FROM ${database}.dbo.Customers c`;
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        updateExpression,
+        updateExpression.indexOf("cust") + 4,
+      ),
+    ),
+    ["CustomerCode", "CustomerId"],
+  );
+  assert.ok(
+    labels(
+      await semanticCompletion(`SELECT * FROM ${database}.dbo.Cust`),
+    ).includes("Customers"),
+  );
+  assert.deepEqual(
+    labels(await semanticCompletion(`SELECT * FROM ${database}.dbo.Customers`)),
+    ["AS c"],
+  );
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        `SELECT * FROM ${database}.dbo.Customers AS c;
+SELECT * FROM ${database}.dbo.Customers`,
+      ),
+    ),
+    ["AS c"],
+  );
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        `SELECT * FROM ${database}.dbo.Customers AS c
+JOIN ${database}.dbo.CustomerAddresses`,
+      ),
+    ),
+    ["AS ca"],
+  );
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        `SELECT * FROM ${database}.dbo.Customers AS c
+JOIN ${database}.dbo.Customers`,
+      ),
+    ),
+    ["AS c2"],
+  );
+  const setDerived = `SELECT x. FROM
+(
+  SELECT c.CustomerId AS Id, c.CustomerCode AS Code FROM dbo.Customers c
+  UNION
+  SELECT b.BillingAddressId, b.BillingEmailAddress FROM billing.BillingAddresses b
+) x`;
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        setDerived,
+        setDerived.indexOf("x.") + "x.".length,
+      ),
+    ),
+    ["Code", "Id"],
+  );
+  const setBranches = `SELECT c.CustomerId FROM dbo.Customers c
+UNION ALL
+SELECT b. FROM billing.BillingAddresses b WHERE c.`;
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        setBranches,
+        setBranches.indexOf("b.") + "b.".length,
+      ),
+    ),
+    ["BillingAddressId", "BillingEmailAddress"],
+  );
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        setBranches,
+        setBranches.indexOf("WHERE c.") + "WHERE c.".length,
+      ),
+    ),
+    [],
+  );
+  const correlatedSet = `SELECT * FROM dbo.Customers c WHERE EXISTS
+(
+  SELECT o.CustomerOrderId FROM sales.CustomerOrders o
+  UNION ALL
+  SELECT ca.CustomerAddressId FROM dbo.CustomerAddresses ca WHERE c.
+)`;
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        correlatedSet,
+        correlatedSet.indexOf("WHERE c.") + "WHERE c.".length,
+      ),
+    ),
+    ["CustomerCode", "CustomerId"],
+  );
+  const crossDatabaseSet = `WITH X AS
+(
+  SELECT c.CustomerId AS Id, c.CustomerCode AS Value FROM dbo.Customers c
+  UNION ALL
+  SELECT r.ReportingCustomerId, r.CustomerDisplayName FROM ${reportingDatabase}.dbo.Customers r
+)
+SELECT x. FROM X x`;
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        crossDatabaseSet,
+        crossDatabaseSet.indexOf("x.") + "x.".length,
+      ),
+    ),
+    ["Id", "Value"],
   );
   assert.deepEqual(
     labels(

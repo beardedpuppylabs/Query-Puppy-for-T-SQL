@@ -270,3 +270,47 @@ The fallback is deliberately constrained to a binding proven visible by QuerySco
 - [x] Retain registered-pipeline, live-fixture, negative isolation, TOP/APPLY projection, and 0.6.x regression coverage.
 
 Direct provider tests now prove that successful labels originate from Improved SQL IntelliSense rather than editor word-based suggestions. The internal provenance marker is not displayed in the completion UI.
+
+## 0.7.4 set operation intelligence
+
+- [x] Parse `UNION`, `UNION ALL`, `INTERSECT`, and `EXCEPT` as semantic set expressions with SQL Server precedence and left associativity.
+- [x] Reconcile result columns by ordinal from the first branch while conservatively merging compatible type and nullability information.
+- [x] Isolate aliases between branches and retain only correlation explicitly allowed by the enclosing QueryScope.
+- [x] Flow set results through CTEs, derived tables, APPLY sources, member completion, and SELECT wildcard expansion.
+- [x] Preserve connection/database source identity without loading metadata during document analysis.
+- [x] Add tokenizer, incomplete SQL, branch visibility, provider provenance, cache invalidation, cross-database, and live-fixture regressions.
+
+The implementation uses only tokenized document structure and metadata indexes already supplied by the connection-and-database cache. Comments and strings cannot create set boundaries, and editing a set query performs no SQL query or eager secondary-database load.
+
+## 0.7.5 set-operation projection and member repair
+
+- [x] Expand semantic `*` and `alias.*` projections into ordered RowSource columns before set ordinal reconciliation.
+- [x] Preserve duplicate projection positions and assign ordinals from the expanded result sequence.
+- [x] Cover fully qualified first, second, third, incomplete, parenthesized, correlated, isolated, and cross-database set branches.
+- [x] Assert direct provider provenance, column kind, and datatype/nullability presentation in clean documents.
+- [x] Verify the exact 15-column Customers star result and 9-column BillingAddresses member result against the live fixture.
+
+Set branches remain sibling QueryScopes: each resolves its own local RowSources and may walk only the common eligible correlation parent. The provider uses the existing cursor-to-scope-to-visible-source pipeline; no statement-wide alias fallback or document edit is involved.
+
+## 0.7.6 Clause & Expression Intelligence
+
+- [x] Add one tokenizer- and QueryScope-backed clause classifier for SELECT, WHERE, JOIN ON, GROUP BY, HAVING, ORDER BY, and function arguments.
+- [x] Add a reusable completion-domain policy that separates expression candidates from RowSource, schema, database, and procedure domains before matching.
+- [x] Represent JOIN-condition participants as the current right RowSource, eligible left RowSources, and correlated outer RowSources.
+- [x] Keep peer SELECT, GROUP BY, and HAVING aliases hidden while prioritizing projection aliases in ORDER BY.
+- [x] Use the composed set result for final ORDER BY and reject branch-local explicit members there.
+- [x] Reuse expression completion for UPDATE right-hand sides while preserving writable SET targets and other DML behavior.
+- [x] Cover incomplete/nested clauses, provider provenance, live metadata, and the complete 0.6.x/0.7.x regression suite.
+
+Clause classification performs no metadata access. Candidate policies select semantic domains before Contains matching and deterministic sorting; scalar functions remain expression values while TVFs and procedures do not.
+
+## 0.7.7 positional JOIN visibility and scoped smart aliases
+
+- [x] Make strict member completion inside ON consume the positional JoinConditionContext instead of the whole QueryScope.
+- [x] Expose current-right, previously visible, outer, combined cursor-visible sources, and the active JOIN range for future FK intelligence.
+- [x] Preserve left-to-right visibility through multiple JOINs and APPLY while rejecting every future RowSource.
+- [x] Restrict smart-alias collision state to cursor-visible semantics and current-statement symbols.
+- [x] Preserve deterministic same-scope collision suffixes and provider provenance for smart-alias snippets.
+- [x] Add direct-provider, unit, and live-fixture regressions for both repairs.
+
+No foreign completion items are inspected or modified. The fixes affect only Improved SQL IntelliSense semantic candidates and retain incomplete RowSource Contains completion before smart-alias takeover.

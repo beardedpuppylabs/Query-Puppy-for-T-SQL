@@ -7,6 +7,8 @@ import { MetadataLoader } from "../../src/mssql/MetadataLoader.js";
 import type { ConnectionService } from "../../src/mssql/ConnectionService.js";
 import type { DbCellValue } from "../../src/mssql/SimpleExecuteResult.js";
 import { resolveSqlContext } from "../../src/parser/SqlContextResolver.js";
+import { analyzeDocumentSemantics } from "../../src/parser/DocumentSemanticAnalyzer.js";
+import { resolveSmartAliasContext } from "../../src/parser/SmartAlias.js";
 import {
   functionInvocationDatabase,
   functionSignatureLabel,
@@ -130,6 +132,104 @@ FROM X x`;
     );
     assert.ok(cteCandidates.every((candidate) => candidate.kind === "column"));
 
+    const whereSql = `SELECT * FROM ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.dbo.Customers c WHERE addr`;
+    const whereCandidates = createCandidates(
+      resolveSqlContext(whereSql),
+      localScope,
+    );
+    for (const expected of [
+      "BillingAddressId",
+      "EmailAddress",
+      "PrimaryAddressId",
+      "ShippingAddressId",
+    ])
+      assert.ok(
+        whereCandidates.some((candidate) => candidate.name === expected),
+      );
+    assert.ok(
+      whereCandidates.every(
+        (candidate) =>
+          ![
+            "database",
+            "schema",
+            "table",
+            "view",
+            "tableValuedFunction",
+            "procedure",
+          ].includes(candidate.kind),
+      ),
+    );
+    const orderSql = `SELECT c.EmailAddress AS Contact FROM ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.dbo.Customers c ORDER BY cont`;
+    assert.equal(
+      createCandidates(resolveSqlContext(orderSql), localScope)[0]?.name,
+      "Contact",
+    );
+    const functionSql = `SELECT ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.billing.CalculateBillingTotal_0001(cred, 0.19)
+FROM ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.dbo.Customers c`;
+    const functionCursor = functionSql.indexOf("cred") + 4;
+    assert.ok(
+      createCandidates(
+        resolveSqlContext(functionSql, functionCursor),
+        localScope,
+      ).some((candidate) => candidate.name === "CreditLimit"),
+    );
+    const setOrderSql = `SELECT c.CustomerId AS Id, c.EmailAddress AS Value
+FROM ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.dbo.Customers c
+UNION ALL
+SELECT b.BillingAddressId AS WrongId, b.BillingEmailAddress AS WrongValue
+FROM ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.billing.BillingAddresses b
+ORDER BY val`;
+    assert.equal(
+      createCandidates(resolveSqlContext(setOrderSql), localScope)[0]?.name,
+      "Value",
+    );
+    const joinVisibilitySql = `SELECT *
+FROM ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.dbo.Customers AS c
+JOIN ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.sales.CustomerOrders AS o
+  ON ca.
+JOIN ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.dbo.CustomerAddresses AS ca
+  ON ca.`;
+    assert.deepEqual(
+      createCandidates(
+        resolveSqlContext(
+          joinVisibilitySql,
+          joinVisibilitySql.indexOf("ON ca.") + "ON ca.".length,
+        ),
+        localScope,
+      ),
+      [],
+    );
+    const secondJoin = createCandidates(
+      resolveSqlContext(
+        joinVisibilitySql,
+        joinVisibilitySql.lastIndexOf("ON ca.") + "ON ca.".length,
+      ),
+      localScope,
+    );
+    assert.deepEqual(
+      new Set(secondJoin.map((candidate) => candidate.name)),
+      new Set(
+        index
+          .findObject("dbo", "CustomerAddresses")
+          ?.columns.map((column) => column.name),
+      ),
+    );
+    const separateAliasSql = `SELECT * FROM ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.dbo.Customers AS c;
+SELECT * FROM ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.dbo.Customers`;
+    assert.equal(
+      resolveSmartAliasContext(
+        separateAliasSql,
+        separateAliasSql.length,
+        analyzeDocumentSemantics(
+          separateAliasSql,
+          separateAliasSql.length,
+          localScope,
+        ),
+        localScope,
+      )?.alias,
+      "c",
+    );
+
     const intoSql = `SELECT CustomerId, BillingAddressId
 INTO #T
 FROM ${process.env["MSSQL_TEST_DATABASE"] ?? ""}.dbo.Customers;
@@ -211,6 +311,151 @@ test(
         [secondaryDatabase.toLowerCase(), secondary],
       ]),
     };
+    const setCteSql = `WITH X AS
+(
+  SELECT c.CustomerId AS Id, c.EmailAddress AS Value
+  FROM ${activeDatabase}.dbo.Customers AS c
+  UNION ALL
+  SELECT b.BillingAddressId AS IgnoredId, b.BillingEmailAddress AS IgnoredValue
+  FROM ${activeDatabase}.billing.BillingAddresses AS b
+)
+SELECT x. FROM X AS x`;
+    const setResult = createCandidates(
+      resolveSqlContext(setCteSql, setCteSql.indexOf("x.") + "x.".length),
+      scope,
+    );
+    assert.deepEqual(
+      setResult.map((candidate) => candidate.name),
+      ["Id", "Value"],
+    );
+    const starSetSql = `WITH Combined AS
+(
+  SELECT c.* FROM ${activeDatabase}.dbo.Customers AS c
+  UNION ALL
+  SELECT c2.* FROM ${activeDatabase}.dbo.Customers AS c2
+)
+SELECT x. FROM Combined AS x`;
+    const starSetResult = createCandidates(
+      resolveSqlContext(starSetSql, starSetSql.indexOf("x.") + "x.".length),
+      scope,
+    );
+    assert.deepEqual(
+      new Set(starSetResult.map((candidate) => candidate.name)),
+      new Set(
+        active
+          .findObject("dbo", "Customers")
+          ?.columns.map((column) => column.name),
+      ),
+    );
+    assert.ok(starSetResult.every((candidate) => candidate.kind === "column"));
+    const projectionBranchSql = `SELECT c.CustomerId, c.EmailAddress
+FROM ${activeDatabase}.dbo.Customers AS c
+UNION ALL
+SELECT b.CustomerId, b.
+FROM ${activeDatabase}.billing.BillingAddresses AS b`;
+    const projectionBranch = createCandidates(
+      resolveSqlContext(
+        projectionBranchSql,
+        projectionBranchSql.indexOf("b.\n") + "b.".length,
+      ),
+      scope,
+    );
+    assert.deepEqual(
+      new Set(projectionBranch.map((candidate) => candidate.name)),
+      new Set(
+        active
+          .findObject("billing", "BillingAddresses")
+          ?.columns.map((column) => column.name),
+      ),
+    );
+    assert.ok(
+      projectionBranch.every(
+        (candidate) => candidate.sqlType && candidate.nullable !== undefined,
+      ),
+    );
+    const correlatedSetSql = `SELECT *
+FROM ${activeDatabase}.dbo.Customers AS c
+WHERE EXISTS
+(
+  SELECT 1 FROM ${activeDatabase}.sales.CustomerOrders AS o
+  WHERE o.CustomerId = c.CustomerId
+  UNION ALL
+  SELECT 1 FROM ${activeDatabase}.dbo.CustomerAddresses AS ca
+  WHERE ca.CustomerId = c.
+)`;
+    const correlatedSetResult = createCandidates(
+      resolveSqlContext(
+        correlatedSetSql,
+        correlatedSetSql.lastIndexOf("c.") + "c.".length,
+      ),
+      scope,
+    );
+    assert.deepEqual(
+      new Set(correlatedSetResult.map((candidate) => candidate.name)),
+      new Set(
+        active
+          .findObject("dbo", "Customers")
+          ?.columns.map((column) => column.name),
+      ),
+    );
+    const branchSql = `SELECT c.CustomerId
+FROM ${activeDatabase}.dbo.Customers AS c
+UNION ALL
+SELECT b.BillingAddressId
+FROM ${activeDatabase}.billing.BillingAddresses AS b
+WHERE b. AND c.`;
+    const branchLocal = createCandidates(
+      resolveSqlContext(branchSql, branchSql.lastIndexOf("b.") + "b.".length),
+      scope,
+    );
+    assert.deepEqual(
+      new Set(branchLocal.map((candidate) => candidate.name)),
+      new Set(
+        active
+          .findObject("billing", "BillingAddresses")
+          ?.columns.map((column) => column.name),
+      ),
+    );
+    assert.deepEqual(
+      createCandidates(
+        resolveSqlContext(
+          branchSql,
+          branchSql.indexOf("c.", branchSql.indexOf("UNION")) + "c.".length,
+        ),
+        scope,
+      ),
+      [],
+    );
+    const crossDatabaseSetSql = `SELECT c.CustomerId AS Id, c.EmailAddress AS Value
+FROM ${activeDatabase}.dbo.Customers AS c
+UNION ALL
+SELECT r.ReportingCustomerId AS IgnoredId, r.ReportingEmailAddress AS IgnoredValue
+FROM ${secondaryDatabase}.dbo.Customers AS r
+WHERE r.`;
+    const reportingBranch = createCandidates(
+      resolveSqlContext(
+        crossDatabaseSetSql,
+        crossDatabaseSetSql.lastIndexOf("r.") + "r.".length,
+      ),
+      scope,
+    );
+    assert.ok(reportingBranch.length > 0);
+    assert.ok(
+      reportingBranch.every(
+        (candidate) => candidate.database === secondaryDatabase,
+      ),
+    );
+    const crossDatabaseSetModel = analyzeDocumentSemantics(
+      crossDatabaseSetSql,
+      crossDatabaseSetSql.length,
+      scope,
+    );
+    assert.deepEqual(
+      crossDatabaseSetModel.setQueryExpressions[0]?.projection.map(
+        (column) => column.name,
+      ),
+      ["Id", "Value"],
+    );
     const aliasSql = `SELECT c., ca.
 FROM ${secondaryDatabase}.dbo.Customers AS c
 JOIN ${activeDatabase}.dbo.CustomerAddresses AS ca ON 1=1`;

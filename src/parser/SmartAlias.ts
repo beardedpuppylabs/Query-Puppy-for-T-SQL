@@ -119,8 +119,19 @@ export function resolveSmartAliasContext(
     (!object || object.columns.length === 0)
   )
     return undefined;
-  const used = new Set([...semantics.aliases.keys()]);
-  for (const alias of resolveDocumentSymbols(tokens, cursor).aliases.keys())
+  const used = new Set(
+    semantics.visibleRowSources
+      .filter((binding) => binding.source.origin.start < cursor)
+      .map((binding) => normalizeName(binding.qualifier)),
+  );
+  let statementStart = 0;
+  for (let i = 0; i < tokens.length; i++)
+    if (tokens[i]?.text === ";" || tokens[i]?.normalized === "go")
+      statementStart = i + 1;
+  for (const alias of resolveDocumentSymbols(
+    tokens.slice(statementStart),
+    cursor,
+  ).aliases.keys())
     used.add(alias);
   const base = aliasFromObjectName(objectName);
   let alias = base;

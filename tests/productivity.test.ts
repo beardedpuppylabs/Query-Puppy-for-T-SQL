@@ -47,6 +47,14 @@ const index = new DatabaseIndex({
       parameters: [],
       columns: columns.slice(0, 2),
     },
+    {
+      schema: "dbo",
+      name: "CustomerAddresses",
+      normalizedName: "customeraddresses",
+      kind: "table",
+      parameters: [],
+      columns: columns.slice(0, 4),
+    },
   ],
 });
 const catalog = { activeDatabase: "Db", indexes: new Map([["db", index]]) };
@@ -198,4 +206,53 @@ test("smart aliases split names and avoid visible collisions", () => {
     resolveSmartAliasContext("SELECT 1 ", 9, semantics, catalog),
     undefined,
   );
+});
+
+test("smart alias collisions are limited to the current visible query scope", () => {
+  const isolated = "SELECT * FROM dbo.Customers";
+  assert.equal(
+    resolveSmartAliasContext(
+      isolated,
+      isolated.length,
+      analyzeDocumentSemantics(isolated, isolated.length, catalog),
+      catalog,
+    )?.alias,
+    "c",
+  );
+  const separate =
+    "SELECT * FROM dbo.Customers AS c; SELECT * FROM dbo.Customers";
+  assert.equal(
+    resolveSmartAliasContext(
+      separate,
+      separate.length,
+      analyzeDocumentSemantics(separate, separate.length, catalog),
+      catalog,
+    )?.alias,
+    "c",
+  );
+  const collision = "SELECT * FROM dbo.Customers AS c JOIN dbo.Contacts";
+  assert.equal(
+    resolveSmartAliasContext(
+      collision,
+      collision.length,
+      analyzeDocumentSemantics(collision, collision.length, catalog),
+      catalog,
+    )?.alias,
+    "c2",
+  );
+  for (const [schema, objectName, alias] of [
+    ["sales", "CustomerOrders", "co"],
+    ["dbo", "CustomerAddresses", "ca"],
+  ] as const) {
+    const sql = `SELECT * FROM ${schema}.${objectName}`;
+    assert.equal(
+      resolveSmartAliasContext(
+        sql,
+        sql.length,
+        analyzeDocumentSemantics(sql, sql.length, catalog),
+        catalog,
+      )?.alias,
+      alias,
+    );
+  }
 });

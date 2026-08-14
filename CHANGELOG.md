@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.7.7
+
+- Fixed JOIN-condition completion leaking aliases from later JOIN clauses.
+- Fixed smart-alias collision detection across unrelated SQL statements.
+
+## 0.7.6
+
+- Added clause-aware expression completion for SELECT, WHERE, JOIN ON, GROUP BY, HAVING, and ORDER BY.
+- Added SELECT projection-alias completion in ORDER BY.
+- Improved function-argument completion and filtering of irrelevant catalog objects.
+- Added set-result-aware final ORDER BY completion.
+
+## 0.7.5
+
+- Fixed column inference for wildcard projections in `UNION`, `INTERSECT`, and `EXCEPT` queries.
+- Fixed and strengthened local and correlated member completion inside set-operation branches.
+
+## 0.7.4
+
+- Added semantic projection reconciliation for `UNION`, `UNION ALL`, `INTERSECT`, and `EXCEPT`, including SQL Server operator precedence and first-branch result names.
+- Isolated set-operation branch aliases while preserving valid outer correlation and same-server cross-database metadata identity.
+- Added set-result completion and wildcard expansion for CTEs, derived tables, and APPLY row sources.
+
 ## 0.7.3
 
 - Fixed semantic member completion inside nested and correlated query scopes.

@@ -47,12 +47,28 @@ export interface QueryScope {
   readonly localRowSources: readonly ScopedRowSource[];
   readonly allowsOuterReferences: boolean;
 }
+export type SetOperator = "union" | "unionAll" | "intersect" | "except";
+export type SetQueryExpression =
+  | {
+      readonly kind: "branch";
+      readonly range: { readonly start: number; readonly end: number };
+      readonly projection: readonly ColumnMetadata[];
+    }
+  | {
+      readonly kind: "set";
+      readonly operator: SetOperator;
+      readonly left: SetQueryExpression;
+      readonly right: SetQueryExpression;
+      readonly range: { readonly start: number; readonly end: number };
+      readonly projection: readonly ColumnMetadata[];
+    };
 export interface DocumentSemanticModel {
   readonly rowSources: readonly RowSource[];
   readonly aliases: ReadonlyMap<string, RowSource>;
   readonly queryScopes: readonly QueryScope[];
   readonly activeQueryScope?: QueryScope;
   readonly visibleRowSources: readonly ScopedRowSource[];
+  readonly setQueryExpressions: readonly SetQueryExpression[];
   readonly orderByColumns: readonly ColumnMetadata[];
 }
 export interface SemanticCatalog {
@@ -377,7 +393,198 @@ function selectSources(
   }
   return { ordered, bindings };
 }
+
+interface SetOperandRange {
+  readonly start: number;
+  readonly end: number;
+}
+interface DirectSetParts {
+  readonly operands: readonly SetOperandRange[];
+  readonly operators: readonly SetOperator[];
+}
+function directSetParts(
+  tokens: readonly SqlToken[],
+  start: number,
+  end: number,
+): DirectSetParts | undefined {
+  const operands: SetOperandRange[] = [];
+  const operators: SetOperator[] = [];
+  let depth = 0;
+  let operandStart = start;
+  for (let i = start; i < end; i++) {
+    if (tokens[i]?.text === "(") depth++;
+    else if (tokens[i]?.text === ")") depth--;
+    if (depth !== 0) continue;
+    const normalized = tokens[i]?.normalized;
+    if (!["union", "intersect", "except"].includes(normalized ?? "")) continue;
+    operands.push({ start: operandStart, end: i });
+    if (normalized === "union" && tokens[i + 1]?.normalized === "all") {
+      operators.push("unionAll");
+      i++;
+    } else operators.push(normalized as SetOperator);
+    operandStart = i + 1;
+  }
+  if (!operators.length) return undefined;
+  operands.push({ start: operandStart, end });
+  return { operands, operators };
+}
+function unwrapOperand(
+  tokens: readonly SqlToken[],
+  operand: SetOperandRange,
+): SetOperandRange {
+  let { start, end } = operand;
+  while (tokens[start]?.text === "(" && matching(tokens, start) === end - 1) {
+    start++;
+    end--;
+  }
+  return { start, end };
+}
+const sameType = (left: SqlType, right: SqlType): boolean =>
+  normalizeName(left.name) === normalizeName(right.name) &&
+  normalizeName(left.schema ?? "") === normalizeName(right.schema ?? "") &&
+  left.maxLength === right.maxLength &&
+  left.precision === right.precision &&
+  left.scale === right.scale &&
+  Boolean(left.userDefined) === Boolean(right.userDefined);
+function reconcileSetProjection(
+  branches: readonly (readonly ColumnMetadata[])[],
+): ColumnMetadata[] {
+  const first = branches[0] ?? [];
+  return first.map((column, index) => {
+    const later = branches
+      .slice(1)
+      .flatMap((branch) => (branch[index] ? [branch[index]] : []));
+    const type = later.every((candidate) =>
+      sameType(column.type, candidate.type),
+    )
+      ? column.type
+      : unknownType;
+    return {
+      ...column,
+      type,
+      nullable:
+        column.nullable || later.some((candidate) => candidate.nullable),
+      ordinal: index + 1,
+    };
+  });
+}
+const setPrecedence = (operator: SetOperator): number =>
+  operator === "intersect" ? 2 : 1;
+function setExpression(
+  tokens: readonly SqlToken[],
+  start: number,
+  end: number,
+  known: readonly RowSource[],
+  catalog?: SemanticCatalog,
+): SetQueryExpression | undefined {
+  const range = unwrapOperand(tokens, { start, end });
+  const direct = directSetParts(tokens, range.start, range.end);
+  if (!direct) return undefined;
+  const nodes: SetQueryExpression[] = direct.operands.map((operand) => {
+    const unwrapped = unwrapOperand(tokens, operand);
+    return (
+      setExpression(tokens, unwrapped.start, unwrapped.end, known, catalog) ?? {
+        kind: "branch",
+        range: {
+          start: tokens[unwrapped.start]?.start ?? 0,
+          end: tokens[unwrapped.end - 1]?.end ?? 0,
+        },
+        projection: singleProjection(
+          tokens,
+          unwrapped.start,
+          unwrapped.end,
+          known,
+          catalog,
+        ),
+      }
+    );
+  });
+  const operatorStack: SetOperator[] = [];
+  const nodeStack: SetQueryExpression[] = [];
+  const reduce = (): void => {
+    const right = nodeStack.pop();
+    const left = nodeStack.pop();
+    const operator = operatorStack.pop();
+    if (!left || !right || !operator) return;
+    nodeStack.push({
+      kind: "set",
+      operator,
+      left,
+      right,
+      range: { start: left.range.start, end: right.range.end },
+      projection: reconcileSetProjection([left.projection, right.projection]),
+    });
+  };
+  nodeStack.push(nodes[0] as SetQueryExpression);
+  for (let i = 0; i < direct.operators.length; i++) {
+    const operator = direct.operators[i] as SetOperator;
+    while (
+      operatorStack.length &&
+      setPrecedence(operatorStack.at(-1) as SetOperator) >=
+        setPrecedence(operator)
+    )
+      reduce();
+    operatorStack.push(operator);
+    nodeStack.push(nodes[i + 1] as SetQueryExpression);
+  }
+  while (operatorStack.length) reduce();
+  return nodeStack[0];
+}
+function collectSetExpressions(
+  tokens: readonly SqlToken[],
+  start: number,
+  end: number,
+  known: readonly RowSource[],
+  catalog?: SemanticCatalog,
+): SetQueryExpression[] {
+  const root = setExpression(tokens, start, end, known, catalog);
+  if (root) return [root];
+  const expressions: SetQueryExpression[] = [];
+  for (let i = start; i < end; i++) {
+    if (tokens[i]?.text !== "(") continue;
+    const close = matching(tokens, i);
+    const nested = setExpression(tokens, i + 1, close, known, catalog);
+    if (nested) {
+      expressions.push(nested);
+      i = close;
+    }
+  }
+  return expressions;
+}
 function projection(
+  tokens: readonly SqlToken[],
+  start: number,
+  end: number,
+  known: readonly RowSource[],
+  catalog?: SemanticCatalog,
+  inherited?: ReadonlyMap<string, readonly ColumnMetadata[]>,
+): ColumnMetadata[] {
+  const unwrapped = unwrapOperand(tokens, { start, end });
+  const set = directSetParts(tokens, unwrapped.start, unwrapped.end);
+  if (!set)
+    return singleProjection(
+      tokens,
+      unwrapped.start,
+      unwrapped.end,
+      known,
+      catalog,
+      inherited,
+    );
+  return reconcileSetProjection(
+    set.operands.map((operand) => {
+      const range = unwrapOperand(tokens, operand);
+      return projection(
+        tokens,
+        range.start,
+        range.end,
+        known,
+        catalog,
+        inherited,
+      );
+    }),
+  );
+}
+function singleProjection(
   tokens: readonly SqlToken[],
   start: number,
   end: number,
@@ -409,12 +616,13 @@ function projection(
   const bindings = new Map(sources.bindings);
   for (const [name, columns] of inherited ?? [])
     if (!bindings.has(name)) bindings.set(name, columns);
-  return segments(
+  const result: ColumnMetadata[] = [];
+  for (const part of segments(
     tokens,
     projectionStart(tokens, select, projectionEnd),
     projectionEnd,
-  ).flatMap((part, index) => {
-    if (!part.length) return [];
+  )) {
+    if (!part.length) continue;
     let alias: SqlToken | undefined;
     const as = part.findIndex((t) => t.normalized === "as");
     if (as >= 0 && ident(part[as + 1])) alias = part[as + 1];
@@ -428,7 +636,14 @@ function projection(
       const expanded = qualifier
         ? (bindings.get(normalizeName(qualifier)) ?? [])
         : sources.ordered.flat();
-      return expanded.map((c, i) => ({ ...c, ordinal: index + i + 1 }));
+      const ordinalStart = result.length;
+      result.push(
+        ...expanded.map((column, index) => ({
+          ...column,
+          ordinal: ordinalStart + index + 1,
+        })),
+      );
+      continue;
     }
     let base: ColumnMetadata | undefined;
     const directName =
@@ -452,8 +667,9 @@ function projection(
       if (matches.length) base = matches[0];
     }
     const name = alias?.text ?? directName;
-    return name ? [col(name, index + 1, base)] : [];
-  });
+    if (name) result.push(col(name, result.length + 1, base));
+  }
+  return result;
 }
 function derivedSources(
   tokens: readonly SqlToken[],
@@ -600,6 +816,15 @@ function queryScopeModel(
           ? Math.min(close + 1, statementTokenEnd)
           : statementTokenEnd;
     }
+    for (let i = select + 1; i < endToken; i++) {
+      if (
+        (depths[i] ?? 0) === selectDepth &&
+        ["union", "intersect", "except"].includes(tokens[i]?.normalized ?? "")
+      ) {
+        endToken = i;
+        break;
+      }
+    }
     const parent = [...mutable]
       .reverse()
       .find(
@@ -631,8 +856,7 @@ function queryScopeModel(
       startToken: select,
       endToken,
       range: {
-        start:
-          open >= 0 ? (tokens[open]?.start ?? 0) : (tokens[select]?.start ?? 0),
+        start: tokens[select]?.start ?? 0,
         end: tokens[endToken - 1]?.end ?? statementEndOffset,
       },
       ...(parent ? { parent } : {}),
@@ -909,6 +1133,13 @@ export function analyzeDocumentSemantics(
     rowSources,
     catalog,
   );
+  const setQueryExpressions = collectSetExpressions(
+    tokens,
+    batch,
+    statementEnd,
+    rowSources,
+    catalog,
+  );
   const aliases = new Map<string, RowSource>();
   for (const binding of queryModel.visible)
     aliases.set(normalizeName(binding.qualifier), binding.source);
@@ -961,6 +1192,7 @@ export function analyzeDocumentSemantics(
     queryScopes: queryModel.scopes,
     ...(queryModel.active ? { activeQueryScope: queryModel.active } : {}),
     visibleRowSources: queryModel.visible,
+    setQueryExpressions,
     orderByColumns: inOrderBy ? currentProjection : [],
   };
 }

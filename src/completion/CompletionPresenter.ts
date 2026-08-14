@@ -22,6 +22,7 @@ const kinds: Record<SqlObjectKind, vscode.CompletionItemKind> = {
   sequence: vscode.CompletionItemKind.Value,
   userType: vscode.CompletionItemKind.TypeParameter,
   column: vscode.CompletionItemKind.Field,
+  rowSourceAlias: vscode.CompletionItemKind.Reference,
   procedureParameter: vscode.CompletionItemKind.Variable,
   cte: vscode.CompletionItemKind.Struct,
   variable: vscode.CompletionItemKind.Variable,

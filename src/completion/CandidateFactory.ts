@@ -15,6 +15,10 @@ import { containsMatch } from "./ContainsMatcher.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
 import { sortCandidates, TYPE_ORDER } from "./CompletionSorter.js";
 import { analyzeDmlCompletion } from "../parser/DmlCallAnalyzer.js";
+import {
+  classifyCompletionContext,
+  completionDomainPolicy,
+} from "../parser/CompletionContextClassifier.js";
 
 export interface CompletionScope {
   readonly activeDatabase: string;
@@ -62,6 +66,12 @@ export function createCandidates(
   const semantics =
     semanticModel ??
     analyzeDocumentSemantics(context.sql, context.cursor, scope);
+  const clauseContext = classifyCompletionContext(
+    context.sql,
+    context.cursor,
+    semantics,
+  );
+  const policy = completionDomainPolicy(clauseContext);
   if (scope) {
     const dml = analyzeDmlCompletion(
       context.sql,
@@ -107,12 +117,23 @@ export function createCandidates(
   let sortKind = context.kind;
   if (context.kind === "unsupported") return [];
   if (context.kind === "member") {
+    if (clauseContext.finalSetOrderBy) return [];
     const alias = context.qualifier?.parts[0] ?? "";
-    const binding = resolveVisibleRowSource(semantics, alias);
+    const binding = clauseContext.join
+      ? clauseContext.join.visibleAtCursor.find(
+          (item) => normalizeName(item.qualifier) === normalizeName(alias),
+        )
+      : resolveVisibleRowSource(semantics, alias);
     if (binding) candidates = scopedColumnCandidates(binding.source, scope);
   } else if (context.kind === "qualified") {
     const parts = context.qualifier?.parts ?? [];
-    const binding = resolveVisibleRowSource(semantics, parts[0] ?? "");
+    if (parts.length === 2 && clauseContext.finalSetOrderBy) return [];
+    const binding = clauseContext.join
+      ? clauseContext.join.visibleAtCursor.find(
+          (item) =>
+            normalizeName(item.qualifier) === normalizeName(parts[0] ?? ""),
+        )
+      : resolveVisibleRowSource(semantics, parts[0] ?? "");
     if (parts.length === 2 && binding) {
       candidates = scopedColumnCandidates(binding.source, scope);
       sortKind = "member";
@@ -159,6 +180,7 @@ export function createCandidates(
           .map((object) => ({
             ...objectCandidate(object, activeIndex.metadata.database),
             ...(context.kind === "rowSource" ? { priority: 1 } : {}),
+            ...(context.kind === "expression" ? { priority: 100 } : {}),
           })),
       );
     }
@@ -177,25 +199,57 @@ export function createCandidates(
         })),
     );
     if (context.kind === "expression") {
-      for (const binding of semantics.visibleRowSources)
+      const fallbackVisible = semantics.activeQueryScope
+        ? semantics.visibleRowSources
+        : [...context.symbols.aliases.keys()].flatMap((qualifier) => {
+            const source = semantics.aliases.get(qualifier);
+            return source
+              ? [{ source, qualifier, scopeDistance: 0, outer: false }]
+              : [];
+          });
+      const visible = clauseContext.join
+        ? [
+            ...clauseContext.join.leftVisibleRowSources,
+            ...(clauseContext.join.currentRightRowSource
+              ? [clauseContext.join.currentRightRowSource]
+              : []),
+            ...clauseContext.join.outerRowSources,
+          ]
+        : fallbackVisible;
+      for (const binding of clauseContext.finalSetOrderBy ? [] : visible)
         candidates.push(
           ...localColumnCandidates(binding.source).map((candidate) => ({
             ...candidate,
             sourceQualifier: binding.qualifier,
             outerScope: binding.outer,
-            priority: binding.scopeDistance,
+            priority: clauseContext.allowProjectionAliases
+              ? binding.scopeDistance + 2
+              : binding.scopeDistance,
           })),
         );
-      candidates.push(
-        ...semantics.orderByColumns.map((column) => ({
-          name: column.name,
-          normalizedName: column.normalizedName,
-          kind: "column" as const,
-          sqlType: column.type,
-          nullable: column.nullable,
-          column,
-        })),
-      );
+      if (policy.allowProjectionAliases)
+        candidates.push(
+          ...semantics.orderByColumns.map((column) => ({
+            name: column.name,
+            normalizedName: column.normalizedName,
+            kind: "column" as const,
+            sqlType: column.type,
+            nullable: column.nullable,
+            column,
+            priority: 0,
+          })),
+        );
+      if (policy.allowRowSourceAliases)
+        candidates.push(
+          ...visible.map((binding) => ({
+            name: binding.qualifier,
+            normalizedName: normalizeName(binding.qualifier),
+            kind: "rowSourceAlias" as const,
+            sourceQualifier: binding.qualifier,
+            outerScope: binding.outer,
+            priority: binding.scopeDistance + 50,
+          })),
+        );
     }
     if (context.kind === "rowSource" && scope?.databaseNames)
       candidates.push(
@@ -212,6 +266,7 @@ export function createCandidates(
           name,
           normalizedName: normalizeName(name),
           kind: "keyword" as const,
+          priority: 100,
         })),
       );
   }

@@ -10,6 +10,7 @@ export type SqlObjectKind =
   | "sequence"
   | "userType"
   | "column"
+  | "rowSourceAlias"
   | "procedureParameter"
   | "cte"
   | "variable"
@@ -66,6 +67,7 @@ export interface DatabaseObject {
     | "database"
     | "schema"
     | "column"
+    | "rowSourceAlias"
     | "procedureParameter"
     | "cte"
     | "variable"
@@ -107,6 +109,7 @@ export const friendlyKind = (kind: SqlObjectKind): string =>
     sequence: "sequence",
     userType: "user-defined type",
     column: "column",
+    rowSourceAlias: "row-source alias",
     procedureParameter: "parameter",
     cte: "CTE",
     variable: "variable",

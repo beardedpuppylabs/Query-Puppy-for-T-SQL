@@ -23,6 +23,7 @@ export const TYPE_ORDER: Readonly<
   execute: ["procedureParameter", "procedure", "variable"],
   expression: [
     "column",
+    "rowSourceAlias",
     "procedureParameter",
     "variable",
     "scalarFunction",

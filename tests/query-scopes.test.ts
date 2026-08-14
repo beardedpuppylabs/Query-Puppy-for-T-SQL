@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createCandidates } from "../src/completion/CandidateFactory.js";
 import { DatabaseIndex } from "../src/metadata/DatabaseIndex.js";
-import { analyzeDocumentSemantics } from "../src/parser/DocumentSemanticAnalyzer.js";
+import {
+  analyzeDocumentSemantics,
+  resolveSelectWildcard,
+  wildcardColumnExpressions,
+} from "../src/parser/DocumentSemanticAnalyzer.js";
 import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
 
 const column = (name: string, ordinal: number) => ({
@@ -47,6 +51,17 @@ const database = (name: string) =>
         kind: "table" as const,
         parameters: [],
         columns: [column("CustomerAddressId", 1), column("AddressLabel", 2)],
+      },
+      {
+        schema: "billing",
+        name: "BillingAddresses",
+        normalizedName: "billingaddresses",
+        kind: "table" as const,
+        parameters: [],
+        columns: [
+          column("BillingAddressId", 1),
+          column("BillingEmailAddress", 2),
+        ],
       },
     ],
   });
@@ -321,4 +336,227 @@ test("CTE TOP projection preserves all selected columns", () => {
   const sql =
     "WITH X AS (SELECT TOP 1 CustomerOrderId, OrderNumber FROM sales.CustomerOrders) SELECT x. FROM X x";
   assert.deepEqual(at(sql, "x."), ["CustomerOrderId", "OrderNumber"]);
+});
+
+test("set operators use the first branch projection names by ordinal", () => {
+  for (const operator of ["UNION", "UNION ALL", "INTERSECT", "EXCEPT"]) {
+    const sql = `WITH X AS (SELECT c.CustomerId AS Id, c.CustomerCode AS Value FROM dbo.Customers c ${operator} SELECT o.CustomerOrderId AS WrongId, o.OrderNumber AS WrongValue FROM sales.CustomerOrders o) SELECT x. FROM X x`;
+    const model = analyzeDocumentSemantics(sql, sql.indexOf("x.") + 2, scope);
+    assert.deepEqual(
+      model.aliases.get("x")?.columns.map((item) => item.name),
+      ["Id", "Value"],
+    );
+    assert.deepEqual(at(sql, "x."), ["Id", "Value"]);
+  }
+});
+
+test("set projections preserve first shape through three, short, long, and incomplete branches", () => {
+  for (const tail of [
+    "SELECT o.CustomerOrderId FROM sales.CustomerOrders o",
+    "SELECT o.CustomerOrderId, o.OrderNumber, o.CustomerId FROM sales.CustomerOrders o",
+    "SELECT o.CustomerOrderId, FROM sales.CustomerOrders o",
+    "SELECT o.CustomerOrderId FROM sales.CustomerOrders o UNION ALL SELECT ca.CustomerAddressId FROM dbo.CustomerAddresses ca",
+  ]) {
+    const sql = `WITH X AS (SELECT c.CustomerId AS Id, c.CustomerCode AS Value FROM dbo.Customers c UNION ALL ${tail}) SELECT x. FROM X x`;
+    assert.deepEqual(
+      analyzeDocumentSemantics(sql, sql.indexOf("x.") + 2, scope)
+        .aliases.get("x")
+        ?.columns.map((item) => item.name),
+      ["Id", "Value"],
+    );
+  }
+});
+
+test("set projections support star, alias star, TOP, DISTINCT, and explicit CTE columns", () => {
+  for (const first of [
+    "SELECT c.* FROM dbo.Customers c",
+    "SELECT TOP (1) c.* FROM dbo.Customers c",
+    "SELECT DISTINCT c.* FROM dbo.Customers c",
+  ]) {
+    const sql = `WITH X AS (${first} UNION ALL SELECT c2.* FROM dbo.Customers c2) SELECT x. FROM X x`;
+    assert.deepEqual(at(sql, "x."), ["CustomerCode", "CustomerId"]);
+  }
+  const explicit =
+    "WITH X (EntityId, AddressValue) AS (SELECT c.CustomerId, c.CustomerCode FROM dbo.Customers c UNION SELECT o.CustomerOrderId, o.OrderNumber FROM sales.CustomerOrders o) SELECT x. FROM X x";
+  assert.deepEqual(at(explicit, "x."), ["AddressValue", "EntityId"]);
+});
+
+test("all set operators reconcile expanded stars before ordinal projection", () => {
+  for (const operator of ["UNION", "UNION ALL", "INTERSECT", "EXCEPT"]) {
+    const sql = `WITH X AS (SELECT c.* FROM Lab.dbo.Customers c ${operator} SELECT c2.* FROM Lab.dbo.Customers c2) SELECT x. FROM X x`;
+    assert.deepEqual(at(sql, "x."), ["CustomerCode", "CustomerId"]);
+    assert.deepEqual(
+      analyzeDocumentSemantics(
+        sql,
+        sql.indexOf("x.") + 2,
+        scope,
+      ).setQueryExpressions[0]?.projection.map((item) => item.name),
+      ["CustomerCode", "CustomerId"],
+    );
+  }
+});
+
+test("star set projections preserve first-branch names, duplicates, and three branches", () => {
+  const firstStar =
+    "WITH X AS (SELECT c.* FROM Lab.dbo.Customers c UNION SELECT o.CustomerOrderId, o.OrderNumber FROM sales.CustomerOrders o) SELECT x. FROM X x";
+  assert.deepEqual(at(firstStar, "x."), ["CustomerCode", "CustomerId"]);
+  const secondStar =
+    "WITH X AS (SELECT c.CustomerId AS Id, c.CustomerCode AS Value FROM dbo.Customers c UNION SELECT c2.* FROM dbo.Customers c2) SELECT x. FROM X x";
+  assert.deepEqual(at(secondStar, "x."), ["Id", "Value"]);
+  const threeStars =
+    "WITH X AS (SELECT c.* FROM dbo.Customers c UNION ALL SELECT c2.* FROM dbo.Customers c2 EXCEPT SELECT c3.* FROM dbo.Customers c3) SELECT x. FROM X x";
+  assert.deepEqual(at(threeStars, "x."), ["CustomerCode", "CustomerId"]);
+  const duplicate =
+    "WITH X AS (SELECT c.CustomerId, c.* FROM dbo.Customers c UNION ALL SELECT c2.CustomerId, c2.* FROM dbo.Customers c2) SELECT x. FROM X x";
+  assert.deepEqual(
+    analyzeDocumentSemantics(
+      duplicate,
+      duplicate.length,
+      scope,
+    ).setQueryExpressions[0]?.projection.map((item) => item.name),
+    ["CustomerId", "CustomerCode", "CustomerId"],
+  );
+});
+
+test("set-expression tree honors INTERSECT precedence and UNION/EXCEPT left associativity", () => {
+  const sql =
+    "SELECT c.CustomerId FROM dbo.Customers c UNION SELECT o.CustomerOrderId FROM sales.CustomerOrders o INTERSECT SELECT ca.CustomerAddressId FROM dbo.CustomerAddresses ca EXCEPT SELECT b.BillingAddressId FROM billing.BillingAddresses b";
+  const expression = analyzeDocumentSemantics(sql, sql.length, scope)
+    .setQueryExpressions[0];
+  assert.equal(expression?.kind, "set");
+  assert.equal(expression.operator, "except");
+  assert.equal(expression.left.kind, "set");
+  assert.equal(expression.left.operator, "union");
+  assert.equal(expression.left.right.kind, "set");
+  assert.equal(expression.left.right.operator, "intersect");
+});
+
+test("parentheses produce nested set expressions", () => {
+  const sql =
+    "SELECT c.CustomerId FROM dbo.Customers c UNION ALL (SELECT o.CustomerOrderId FROM sales.CustomerOrders o UNION SELECT ca.CustomerAddressId FROM dbo.CustomerAddresses ca)";
+  const expression = analyzeDocumentSemantics(sql, sql.length, scope)
+    .setQueryExpressions[0];
+  assert.equal(expression?.kind, "set");
+  assert.equal(expression.operator, "unionAll");
+  assert.equal(expression.right.kind, "set");
+  assert.equal(expression.right.operator, "union");
+});
+
+test("set branches isolate local aliases while retaining legal outer correlation", () => {
+  const isolated =
+    "SELECT c.CustomerId FROM dbo.Customers c UNION ALL SELECT b.BillingAddressId FROM billing.BillingAddresses b WHERE c.";
+  assert.deepEqual(at(isolated, "WHERE c."), []);
+  assert.deepEqual(at(isolated, "b."), [
+    "BillingAddressId",
+    "BillingEmailAddress",
+  ]);
+  const correlated =
+    "SELECT * FROM dbo.Customers c WHERE EXISTS (SELECT o.CustomerOrderId FROM sales.CustomerOrders o UNION ALL SELECT ca.CustomerAddressId FROM dbo.CustomerAddresses ca WHERE c. AND o.)";
+  assert.deepEqual(at(correlated, "WHERE c."), ["CustomerCode", "CustomerId"]);
+  assert.deepEqual(at(correlated, "ca."), [
+    "AddressLabel",
+    "CustomerAddressId",
+  ]);
+  assert.deepEqual(at(correlated, "AND o."), []);
+});
+
+test("fully qualified set branches resolve first, later, incomplete, and correlated members", () => {
+  const first = `SELECT c., b.
+FROM Lab.dbo.Customers AS c
+UNION ALL
+SELECT b.CustomerId FROM Lab.billing.BillingAddresses AS b`;
+  assert.deepEqual(at(first, "SELECT c."), ["CustomerCode", "CustomerId"]);
+  assert.deepEqual(at(first, ", b."), []);
+  for (const operator of ["UNION", "UNION ALL", "INTERSECT", "EXCEPT"]) {
+    const second = `SELECT c.CustomerId FROM Lab.dbo.Customers AS c
+${operator}
+SELECT b., c.
+FROM Lab.billing.BillingAddresses AS b`;
+    assert.deepEqual(at(second, "SELECT b."), [
+      "BillingAddressId",
+      "BillingEmailAddress",
+    ]);
+    assert.deepEqual(at(second, "c.", 1), []);
+  }
+  const third = `SELECT c.CustomerId FROM dbo.Customers c
+UNION SELECT b.CustomerId FROM billing.BillingAddresses b
+UNION ALL SELECT o. FROM sales.CustomerOrders o`;
+  assert.deepEqual(at(third, "SELECT o."), ["CustomerOrderId", "OrderNumber"]);
+  const parenthesized = `SELECT c.CustomerId FROM dbo.Customers c
+UNION ALL (SELECT b. FROM billing.BillingAddresses b
+INTERSECT SELECT o.CustomerOrderId FROM sales.CustomerOrders o)`;
+  assert.deepEqual(at(parenthesized, "SELECT b."), [
+    "BillingAddressId",
+    "BillingEmailAddress",
+  ]);
+  const correlated = `SELECT * FROM Lab.dbo.Customers c WHERE EXISTS
+  (SELECT o.CustomerOrderId FROM Lab.sales.CustomerOrders o WHERE c.
+   UNION ALL SELECT ca.CustomerAddressId FROM Lab.dbo.CustomerAddresses ca WHERE c.
+   EXCEPT SELECT b.BillingAddressId FROM Lab.billing.BillingAddresses b WHERE c.)`;
+  for (let occurrence = 0; occurrence < 3; occurrence++)
+    assert.deepEqual(at(correlated, "c.", occurrence), [
+      "CustomerCode",
+      "CustomerId",
+    ]);
+});
+
+test("set results flow through derived tables and APPLY", () => {
+  const derived =
+    "SELECT x. FROM (SELECT c.CustomerId AS Id, c.CustomerCode AS Code FROM dbo.Customers c UNION ALL SELECT o.CustomerOrderId, o.OrderNumber FROM sales.CustomerOrders o) x";
+  assert.deepEqual(at(derived, "x."), ["Code", "Id"]);
+  const apply =
+    "SELECT x. FROM dbo.Customers c CROSS APPLY (SELECT o.CustomerOrderId AS Id, o.OrderNumber AS Value FROM sales.CustomerOrders o UNION ALL SELECT ca.CustomerAddressId, ca.AddressLabel FROM dbo.CustomerAddresses ca) x";
+  assert.deepEqual(at(apply, "x."), ["Id", "Value"]);
+});
+
+test("set-result CTEs and derived tables support SELECT star expansion", () => {
+  const cte =
+    "WITH X AS (SELECT c.CustomerId AS Id, c.CustomerCode AS Value FROM dbo.Customers c UNION ALL SELECT o.CustomerOrderId, o.OrderNumber FROM sales.CustomerOrders o) SELECT * FROM X";
+  const cteExpansion = resolveSelectWildcard(
+    cte,
+    cte.lastIndexOf("*") + 1,
+    scope,
+  );
+  assert.ok(cteExpansion);
+  assert.deepEqual(wildcardColumnExpressions(cteExpansion), ["Id", "Value"]);
+  const derived =
+    "SELECT x.* FROM (SELECT c.CustomerId AS Id, c.CustomerCode AS Value FROM dbo.Customers c UNION SELECT b.BillingAddressId, b.BillingEmailAddress FROM billing.BillingAddresses b) x";
+  const derivedExpansion = resolveSelectWildcard(
+    derived,
+    derived.indexOf("*") + 1,
+    scope,
+  );
+  assert.ok(derivedExpansion);
+  assert.deepEqual(wildcardColumnExpressions(derivedExpansion), [
+    "x.Id",
+    "x.Value",
+  ]);
+});
+
+test("cross-database set branches retain local source identity", () => {
+  const sql =
+    "SELECT c.CustomerId AS Id FROM Lab.dbo.Customers c UNION ALL SELECT r. FROM Reporting.dbo.Customers r";
+  const candidates = createCandidates(
+    resolveSqlContext(sql, sql.indexOf("r.") + 2),
+    scope,
+  );
+  assert.deepEqual(
+    candidates.map((candidate) => candidate.name),
+    ["CustomerId", "ReportingCustomerId"],
+  );
+  assert.ok(
+    candidates.every((candidate) => candidate.database === "Reporting"),
+  );
+});
+
+test("strings and comments do not create set expressions", () => {
+  for (const sql of [
+    "SELECT 'UNION SELECT fake'",
+    "SELECT 1 -- UNION SELECT fake",
+    "SELECT 1 /* EXCEPT SELECT fake */",
+  ])
+    assert.deepEqual(
+      analyzeDocumentSemantics(sql, sql.length, scope).setQueryExpressions,
+      [],
+    );
 });

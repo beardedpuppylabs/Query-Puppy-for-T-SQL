@@ -30,6 +30,8 @@ Matching is contiguous and case-insensitive: `addr` can occur anywhere in a name
 - Schemas, tables, views, synonyms, table-valued functions, scalar functions, and stored procedures
 - Column-aware CTEs, temporary tables, table variables, and derived tables
 - Nested query completion with correlated outer-alias resolution, lexical shadowing, and scope isolation
+- Set-operation intelligence for `UNION`, `UNION ALL`, `INTERSECT`, and `EXCEPT`
+- Clause-aware expression completion for SELECT, WHERE, JOIN ON, GROUP BY, HAVING, ORDER BY, and function arguments
 - `SELECT INTO`, `VALUES`, `CROSS APPLY`, and `OUTER APPLY` row-source inference
 - Column detail with datatype and `NULL`/`NOT NULL`
 - Scalar-function signatures and return types, and stored-procedure signatures
@@ -90,6 +92,38 @@ WHERE EXISTS
       AND o.
 )
 ```
+
+### Set operations
+
+Set results use the first query branch's column names and ordinal shape, matching SQL Server behavior. Each branch keeps its own aliases; eligible outer aliases remain available in correlated subqueries.
+
+```sql
+WITH CustomerValues AS
+(
+    SELECT c.CustomerId AS Id, c.EmailAddress AS Value
+    FROM dbo.Customers AS c
+    UNION ALL
+    SELECT b.BillingAddressId, b.BillingEmailAddress
+    FROM billing.BillingAddresses AS b
+)
+SELECT x.
+FROM CustomerValues AS x
+```
+
+Here `x.` completes `Id` and `Value`. Set-result CTEs, derived tables, and APPLY sources also support SELECT wildcard expansion.
+
+### Clause-aware expressions
+
+Expression positions suggest visible columns, aliases, scalar functions, and the existing expression keywords instead of unrelated tables, schemas, databases, TVFs, or procedures.
+
+```sql
+SELECT c.EmailAddress AS Contact
+FROM dbo.Customers AS c
+WHERE c.EmailAddress IS NOT NULL
+ORDER BY Contact
+```
+
+Projection aliases such as `Contact` are visible in ORDER BY, but not in peer SELECT expressions, GROUP BY, or HAVING. Final ORDER BY completion after a set operation uses the composed set-result names.
 
 ### DML and callable objects
 
