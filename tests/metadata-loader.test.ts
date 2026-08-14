@@ -4,6 +4,7 @@ import {
   DEVELOPER_SYS_VIEWS,
   METADATA_QUERY,
   MetadataLoader,
+  RELATIONSHIP_QUERY,
 } from "../src/mssql/MetadataLoader.js";
 import type { ConnectionService } from "../src/mssql/ConnectionService.js";
 import type { DbCellValue } from "../src/mssql/SimpleExecuteResult.js";
@@ -234,4 +235,171 @@ test("column writability flags are retained from catalog metadata", async () => 
   assert.equal(object.columns[1]?.computed, true);
   assert.equal(object.columns[2]?.generatedAlways, true);
   assert.equal(object.columns[2].hidden, true);
+});
+
+test("keys and foreign keys are assembled set-wise without duplicate constraint indexes", async () => {
+  const catalog = [
+    row("O", "1", "reltest", "OrderHeaders", "table"),
+    row("O", "2", "reltest", "OrderLines", "table"),
+  ];
+  const relationships = [
+    row(
+      "K",
+      "1",
+      "PK_OrderHeaders",
+      "primaryKey",
+      "1",
+      "reltest",
+      "OrderHeaders",
+      "1",
+      "CompanyId",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "1",
+    ),
+    row(
+      "K",
+      "1",
+      "PK_OrderHeaders",
+      "primaryKey",
+      "1",
+      "reltest",
+      "OrderHeaders",
+      "2",
+      "OrderId",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "2",
+    ),
+    row(
+      "K",
+      "2",
+      "UX_OrderHeaders_Number",
+      "uniqueIndex",
+      "1",
+      "reltest",
+      "OrderHeaders",
+      "3",
+      "OrderNumber",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "1",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "[OrderNumber] IS NOT NULL",
+    ),
+    row(
+      "F",
+      "20",
+      "FK_OrderLines_OrderHeaders",
+      undefined,
+      "2",
+      "reltest",
+      "OrderLines",
+      "1",
+      "CompanyId",
+      "1",
+      "reltest",
+      "OrderHeaders",
+      "1",
+      "CompanyId",
+      "1",
+      "CASCADE",
+      "NO_ACTION",
+      "1",
+      "1",
+    ),
+    row(
+      "F",
+      "20",
+      "FK_OrderLines_OrderHeaders",
+      undefined,
+      "2",
+      "reltest",
+      "OrderLines",
+      "2",
+      "OrderId",
+      "1",
+      "reltest",
+      "OrderHeaders",
+      "2",
+      "OrderId",
+      "2",
+      "CASCADE",
+      "NO_ACTION",
+      "1",
+      "1",
+    ),
+  ];
+  let queryCount = 0;
+  const connections = {
+    query: async (_connection: unknown, sql: string) => {
+      queryCount++;
+      const rows = sql.includes("FROM sys.foreign_keys")
+        ? relationships
+        : catalog;
+      return { rowCount: rows.length, rows };
+    },
+  } as unknown as ConnectionService;
+  const index = await new MetadataLoader(connections).load({
+    connectionId: "c",
+    database: "IntelliSenseLab",
+  });
+  assert.equal(queryCount, 2);
+  const keys = index.metadata.keys;
+  const foreignKeys = index.metadata.foreignKeys;
+  assert.ok(keys);
+  assert.ok(foreignKeys);
+  assert.equal(keys.length, 2);
+  assert.deepEqual(
+    keys[0]?.columns.map((item) => item.columnName),
+    ["CompanyId", "OrderId"],
+  );
+  assert.equal(keys[1]?.filtered, true);
+  assert.equal(foreignKeys.length, 1);
+  assert.equal(foreignKeys[0]?.columns.length, 2);
+  assert.equal(foreignKeys[0].disabled, true);
+  assert.equal(foreignKeys[0].notTrusted, true);
+  assert.match(
+    RELATIONSHIP_QUERY,
+    /ic\.key_ordinal > 0 AND ic\.is_included_column=0/,
+  );
+  assert.match(RELATIONSHIP_QUERY, /LEFT JOIN sys\.key_constraints/);
+});
+
+test("Schema Intelligence runtime initialization is catalog-read-only", async () => {
+  const statements: string[] = [];
+  const connections = {
+    query: async (_connection: unknown, sql: string) => {
+      statements.push(sql);
+      return { rowCount: 0, rows: [] };
+    },
+  } as unknown as ConnectionService;
+  await new MetadataLoader(connections).load({
+    connectionId: "restricted-metadata-login",
+    database: "IntelliSenseLab",
+  });
+  assert.equal(statements.length, 2);
+  for (const sql of statements) {
+    assert.match(
+      sql,
+      /^USE \[IntelliSenseLab\];\n\s*SET NOCOUNT ON;\s*SELECT/i,
+    );
+    assert.doesNotMatch(
+      sql,
+      /\b(?:CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|MERGE|TRUNCATE)\b/i,
+      "runtime metadata loading must never contain DDL or DML",
+    );
+  }
 });

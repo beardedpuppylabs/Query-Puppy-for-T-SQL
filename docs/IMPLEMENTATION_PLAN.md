@@ -314,3 +314,18 @@ Clause classification performs no metadata access. Candidate policies select sem
 - [x] Add direct-provider, unit, and live-fixture regressions for both repairs.
 
 No foreign completion items are inspected or modified. The fixes affect only Improved SQL IntelliSense semantic candidates and retain incomplete RowSource Contains completion before smart-alias takeover.
+
+## 0.8.0 Schema Intelligence
+
+- [x] Model primary, unique-constraint, standalone/filtered unique-index, and foreign-key metadata as first-class composite objects.
+- [x] Build bidirectional object/column relationship indexes plus `relationshipsBetween` and `relatedObjects` APIs.
+- [x] Add cached PK/UQ/FK completion roles and full key/FK documentation without changing matching or sorting.
+- [x] Align physical-column completion details with bounded per-candidate-set widths while preserving every behavioral completion field.
+- [x] Add idempotent persistent `reltest`/`relref` fixture and unit/provider/integration coverage.
+- [x] Run final live Schema Intelligence acceptance using only the restricted metadata login after administrator-owned fixture provisioning.
+
+The loader uses two constant, set-based queries per database refresh: the existing object/member catalog query and one relationship query. Completion performs no catalog queries. JOIN predicate suggestions and relationship ranking are reserved for the next release.
+
+Security boundary: production initialization and completion are catalog-read-only and are regression-tested to contain no DDL/DML statements. The persistent fixture SQL is administrator-owned integration infrastructure; missing objects cause a clear integration-test prerequisite failure and are never provisioned by the extension.
+
+Final live acceptance: the restricted login loads 8 PKs, 7 unique constraints/indexes, and 8 FKs across `reltest`/`relref`. It proves INCLUDE-column exclusion, filtered-index preservation, composite ordinals/mappings, three independent Customers-to-Addresses relationships, cross-schema direction, CASCADE, disabled/untrusted state, reverse graph lookup, and database isolation. Live fixture discovery and completion perform no writes.

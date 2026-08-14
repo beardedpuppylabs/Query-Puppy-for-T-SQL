@@ -1,6 +1,8 @@
 import type {
   ColumnMetadata,
   DatabaseObject,
+  ForeignKeyMetadata,
+  KeyMetadata,
   ParameterMetadata,
   SqlObjectKind,
   SqlType,
@@ -19,6 +21,9 @@ export interface CompletionCandidate {
   readonly returnType?: SqlType;
   readonly sourceObject?: DatabaseObject;
   readonly column?: ColumnMetadata;
+  readonly keyRoles?: readonly ("PK" | "UQ" | "FK")[];
+  readonly keys?: readonly KeyMetadata[];
+  readonly foreignKeys?: readonly ForeignKeyMetadata[];
   readonly baseObjectName?: string;
   readonly insertText?: string;
   /** Continue schema qualification after this candidate is accepted. */

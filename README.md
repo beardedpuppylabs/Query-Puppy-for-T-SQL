@@ -233,3 +233,13 @@ Contributor guidance is maintained in `docs/DEVELOPMENT.md` and `docs/PUBLISHING
 ## License
 
 Improved SQL IntelliSense is released under the MIT License. See the root `LICENSE` file for the full terms.
+
+## Schema Intelligence
+
+Version 0.8.0 loads SQL Server primary keys, unique constraints and indexes, and foreign-key relationships into the per-connection/per-database metadata cache. Physical table-column suggestions retain their datatype and nullability and add compact role markers such as `· PK · UQ · FK`; documentation shows complete composite keys and foreign-key mappings. Metadata refresh uses two set-based catalog queries per database, never a query per table, column, key, or keystroke.
+
+The extension runtime is metadata-read-only. It never provisions fixtures or executes schema/data-modifying statements; a restricted login with access to the relevant catalog metadata is sufficient. Missing integration fixtures are reported as test prerequisites.
+
+When several physical table columns are suggested together, their datatype, nullability, and key-role fields are aligned in the native VS Code/VSCodium completion widget. Widths are derived from the current result set and capped to keep unusually long ERP identifiers from widening the widget excessively. Display alignment does not change filtering, ranking, replacement ranges, or inserted SQL.
+
+The persistent manual/integration fixture is `tests/fixtures/create-schema-intelligence-fixture.sql`. An administrator runs this separate test-infrastructure script once; it is never loaded or executed by extension runtime code. The restricted `intellisense_test` login only needs `VIEW DEFINITION` afterward.

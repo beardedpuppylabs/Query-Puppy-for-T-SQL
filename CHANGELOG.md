@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0
+
+- Load primary keys, unique constraints/indexes, filtered unique indexes, and foreign keys with a constant number of set-based catalog queries.
+- Preserve composite key/FK order, relationship direction, cross-schema targets, referential actions, and disabled/untrusted state in bidirectional indexes.
+- Annotate physical table-column completions with compact `PK`, `UQ`, and `FK` roles while retaining SQL type/nullability and rich relationship documentation.
+- Keep incoming references available to the graph/documentation without incorrectly tagging principal columns as foreign-key columns, and retain same-named objects from different schemas in database-wide completion.
+- Align physical-column datatype, nullability, and PK/UQ/FK role fields within each native completion set using bounded candidate-derived widths; insertion, matching, sorting, and replacement behavior are unchanged.
+- Add the persistent idempotent `reltest`/`relref` Schema Intelligence fixture. JOIN predicate generation and relationship-based ranking remain intentionally out of scope.
+
 ## 0.7.7
 
 - Fixed JOIN-condition completion leaking aliases from later JOIN clauses.

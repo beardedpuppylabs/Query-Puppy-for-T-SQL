@@ -9,6 +9,7 @@ import {
 } from "../metadata/MetadataModels.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
 import { presentationModel } from "./PresentationModel.js";
+import type { ColumnPresentationLayout } from "./PresentationModel.js";
 
 const kinds: Record<SqlObjectKind, vscode.CompletionItemKind> = {
   database: vscode.CompletionItemKind.Module,
@@ -40,8 +41,9 @@ export function presentCandidate(
   search: string,
   mixed: boolean,
   rank: number,
+  columnLayout?: ColumnPresentationLayout,
 ): vscode.CompletionItem {
-  const model = presentationModel(candidate, mixed);
+  const model = presentationModel(candidate, mixed, columnLayout);
   const label: vscode.CompletionItemLabel = {
     label: candidate.name,
     ...(model.detail ? { detail: model.detail } : {}),
@@ -88,6 +90,28 @@ export function documentation(
     md.appendMarkdown(
       `Type: \`${formatSqlType(candidate.sqlType)}\`  \nNullability: **${candidate.nullable ? "NULL" : "NOT NULL"}**\n`,
     );
+  for (const key of candidate.keys ?? []) {
+    const label =
+      key.kind === "primaryKey"
+        ? "Primary key"
+        : key.kind === "uniqueConstraint"
+          ? "Unique constraint"
+          : "Unique index";
+    md.appendMarkdown(
+      `\n${label}: **${key.name}** (${key.columns.map((column) => `\`${column.columnName}\``).join(", ")})${key.filtered ? `  \nFilter: \`${key.filterDefinition ?? "filtered"}\`` : ""}\n`,
+    );
+  }
+  for (const foreignKey of candidate.foreignKeys ?? []) {
+    const outgoing = foreignKey.parentObjectId === candidate.sourceObject?.id;
+    const mappings = foreignKey.columns.map((column) =>
+      outgoing
+        ? `${column.parentColumnName} → ${foreignKey.referencedSchema}.${foreignKey.referencedObjectName}.${column.referencedColumnName}`
+        : `${foreignKey.parentSchema}.${foreignKey.parentObjectName}.${column.parentColumnName} → ${column.referencedColumnName}`,
+    );
+    md.appendMarkdown(
+      `\n${outgoing ? "Foreign key" : "Referenced by"}: **${foreignKey.name}**  \n${mappings.map((mapping) => `- \`${mapping}\``).join("\n")}  \nActions: ON DELETE ${foreignKey.deleteAction}; ON UPDATE ${foreignKey.updateAction}${foreignKey.disabled ? "; disabled" : ""}${foreignKey.notTrusted ? "; not trusted" : ""}\n`,
+    );
+  }
   if (candidate.parameters?.length) {
     md.appendMarkdown("Parameters:\n");
     for (const parameter of candidate.parameters)

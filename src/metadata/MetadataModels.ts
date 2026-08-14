@@ -57,6 +57,47 @@ export interface ParameterMetadata {
   readonly ordinal: number;
 }
 
+export type KeyKind = "primaryKey" | "uniqueConstraint" | "uniqueIndex";
+export interface KeyColumnMetadata {
+  readonly columnId: number;
+  readonly columnName: string;
+  readonly ordinal: number;
+}
+export interface KeyMetadata {
+  readonly database: string;
+  readonly objectId: number;
+  readonly schema: string;
+  readonly objectName: string;
+  readonly name: string;
+  readonly kind: KeyKind;
+  readonly columns: readonly KeyColumnMetadata[];
+  readonly filtered: boolean;
+  readonly filterDefinition?: string;
+}
+export interface ForeignKeyColumnMetadata {
+  readonly parentColumnId: number;
+  readonly parentColumnName: string;
+  readonly referencedColumnId: number;
+  readonly referencedColumnName: string;
+  readonly ordinal: number;
+}
+export interface ForeignKeyMetadata {
+  readonly database: string;
+  readonly id: number;
+  readonly name: string;
+  readonly parentObjectId: number;
+  readonly parentSchema: string;
+  readonly parentObjectName: string;
+  readonly referencedObjectId: number;
+  readonly referencedSchema: string;
+  readonly referencedObjectName: string;
+  readonly columns: readonly ForeignKeyColumnMetadata[];
+  readonly deleteAction: string;
+  readonly updateAction: string;
+  readonly disabled: boolean;
+  readonly notTrusted: boolean;
+}
+
 export interface DatabaseObject {
   readonly id?: number;
   readonly schema: string;
@@ -90,6 +131,8 @@ export interface DatabaseMetadata {
   readonly database: string;
   readonly schemas: readonly string[];
   readonly objects: readonly DatabaseObject[];
+  readonly keys?: readonly KeyMetadata[];
+  readonly foreignKeys?: readonly ForeignKeyMetadata[];
   readonly loadedAt: number;
 }
 

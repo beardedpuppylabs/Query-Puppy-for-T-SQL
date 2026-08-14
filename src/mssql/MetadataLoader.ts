@@ -2,6 +2,8 @@ import { DatabaseIndex } from "../metadata/DatabaseIndex.js";
 import type {
   ColumnMetadata,
   DatabaseObject,
+  ForeignKeyMetadata,
+  KeyMetadata,
   ParameterMetadata,
   SqlType,
 } from "../metadata/MetadataModels.js";
@@ -96,6 +98,41 @@ FROM (
  WHERE o.is_ms_shipped=0 AND o.type IN ('P','FN','FS','IF','TF','FT')
 ) metadata ORDER BY record_kind, schema_name, object_name, ordinal;`;
 
+/** One set-based relationship query per database; row count never affects query count. */
+export const RELATIONSHIP_QUERY = String.raw`
+SET NOCOUNT ON;
+SELECT record_kind, relationship_id, relationship_name, relationship_kind,
+       parent_object_id, parent_schema, parent_object, parent_column_id, parent_column,
+       referenced_object_id, referenced_schema, referenced_object, referenced_column_id, referenced_column,
+       ordinal, delete_action, update_action, is_disabled, is_not_trusted, filter_definition
+FROM (
+ SELECT 'K' record_kind, i.index_id relationship_id, i.name relationship_name,
+        CASE kc.type WHEN 'PK' THEN 'primaryKey' WHEN 'UQ' THEN 'uniqueConstraint' ELSE 'uniqueIndex' END relationship_kind,
+        o.object_id parent_object_id, s.name parent_schema, o.name parent_object,
+        c.column_id parent_column_id, c.name parent_column,
+        NULL referenced_object_id,NULL referenced_schema,NULL referenced_object,NULL referenced_column_id,NULL referenced_column,
+        ic.key_ordinal ordinal,NULL delete_action,NULL update_action,NULL is_disabled,NULL is_not_trusted,i.filter_definition
+ FROM sys.indexes i
+ JOIN sys.tables o ON o.object_id=i.object_id
+ JOIN sys.schemas s ON s.schema_id=o.schema_id
+ JOIN sys.index_columns ic ON ic.object_id=i.object_id AND ic.index_id=i.index_id AND ic.key_ordinal > 0 AND ic.is_included_column=0
+ JOIN sys.columns c ON c.object_id=ic.object_id AND c.column_id=ic.column_id
+ LEFT JOIN sys.key_constraints kc ON kc.parent_object_id=i.object_id AND kc.unique_index_id=i.index_id
+ WHERE i.is_unique=1 AND i.is_hypothetical=0
+ UNION ALL
+ SELECT 'F',fk.object_id,fk.name,NULL,po.object_id,ps.name,po.name,pc.column_id,pc.name,
+        ro.object_id,rs.name,ro.name,rc.column_id,rc.name,fkc.constraint_column_id,
+        fk.delete_referential_action_desc,fk.update_referential_action_desc,fk.is_disabled,fk.is_not_trusted,NULL
+ FROM sys.foreign_keys fk
+ JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id=fk.object_id
+ JOIN sys.tables po ON po.object_id=fk.parent_object_id
+ JOIN sys.schemas ps ON ps.schema_id=po.schema_id
+ JOIN sys.columns pc ON pc.object_id=po.object_id AND pc.column_id=fkc.parent_column_id
+ JOIN sys.tables ro ON ro.object_id=fk.referenced_object_id
+ JOIN sys.schemas rs ON rs.schema_id=ro.schema_id
+ JOIN sys.columns rc ON rc.object_id=ro.object_id AND rc.column_id=fkc.referenced_column_id
+) relationships ORDER BY record_kind,parent_schema,parent_object,relationship_name,ordinal;`;
+
 const value = (
   row: readonly DbCellValue[],
   index: number,
@@ -140,6 +177,10 @@ export class MetadataLoader {
     const result = await this.connections.query(
       connection,
       `USE ${quoteDatabaseIdentifier(connection.database)};\n${METADATA_QUERY}`,
+    );
+    const relationshipResult = await this.connections.query(
+      connection,
+      `USE ${quoteDatabaseIdentifier(connection.database)};\n${RELATIONSHIP_QUERY}`,
     );
     this.log(
       `Metadata query returned ${String(result.rows.length)} mapped rows (reported rowCount ${String(result.rowCount)}).`,
@@ -240,6 +281,11 @@ export class MetadataLoader {
       columns: item.columns,
       parameters: item.parameters,
     }));
+    const keys = assembleKeys(connection.database, relationshipResult.rows);
+    const foreignKeys = assembleForeignKeys(
+      connection.database,
+      relationshipResult.rows,
+    );
     this.log(
       `Metadata context: expected database ${connection.database}; actual database ${actualDatabase ?? "unknown"}; sys.objects count ${catalogObjectCount === undefined ? "unknown" : String(catalogObjectCount)}; indexed objects ${String(objects.length)}.`,
     );
@@ -258,7 +304,134 @@ export class MetadataLoader {
       database: connection.database,
       schemas,
       objects,
+      keys,
+      foreignKeys,
       loadedAt: Date.now(),
     });
   }
+}
+
+function assembleKeys(
+  database: string,
+  rows: readonly (readonly DbCellValue[])[],
+): KeyMetadata[] {
+  const groups = new Map<
+    string,
+    KeyMetadata & {
+      columns: KeyMetadata["columns"] extends readonly (infer C)[]
+        ? C[]
+        : never;
+    }
+  >();
+  for (const row of rows) {
+    if (value(row, 0) !== "K") continue;
+    const objectId = number(row, 4);
+    const schema = value(row, 5);
+    const objectName = value(row, 6);
+    const columnId = number(row, 7);
+    const columnName = value(row, 8);
+    const name = value(row, 2);
+    const kind = value(row, 3) as KeyMetadata["kind"] | undefined;
+    if (
+      objectId === undefined ||
+      columnId === undefined ||
+      !schema ||
+      !objectName ||
+      !columnName ||
+      !name ||
+      !kind
+    )
+      continue;
+    const id = `${String(objectId)}:${value(row, 1) ?? name}`;
+    let key = groups.get(id);
+    if (!key) {
+      const filterDefinition = value(row, 19);
+      key = {
+        database,
+        objectId,
+        schema,
+        objectName,
+        name,
+        kind,
+        columns: [],
+        filtered: filterDefinition !== undefined,
+        ...(filterDefinition ? { filterDefinition } : {}),
+      };
+      groups.set(id, key);
+    }
+    key.columns.push({ columnId, columnName, ordinal: number(row, 14) ?? 0 });
+  }
+  return [...groups.values()];
+}
+
+function assembleForeignKeys(
+  database: string,
+  rows: readonly (readonly DbCellValue[])[],
+): ForeignKeyMetadata[] {
+  const groups = new Map<
+    number,
+    ForeignKeyMetadata & {
+      columns: ForeignKeyMetadata["columns"] extends readonly (infer C)[]
+        ? C[]
+        : never;
+    }
+  >();
+  for (const row of rows) {
+    if (value(row, 0) !== "F") continue;
+    const id = number(row, 1),
+      parentObjectId = number(row, 4),
+      parentColumnId = number(row, 7),
+      referencedObjectId = number(row, 9),
+      referencedColumnId = number(row, 12);
+    const name = value(row, 2),
+      parentSchema = value(row, 5),
+      parentObjectName = value(row, 6),
+      parentColumnName = value(row, 8),
+      referencedSchema = value(row, 10),
+      referencedObjectName = value(row, 11),
+      referencedColumnName = value(row, 13);
+    if (
+      id === undefined ||
+      parentObjectId === undefined ||
+      parentColumnId === undefined ||
+      referencedObjectId === undefined ||
+      referencedColumnId === undefined ||
+      !name ||
+      !parentSchema ||
+      !parentObjectName ||
+      !parentColumnName ||
+      !referencedSchema ||
+      !referencedObjectName ||
+      !referencedColumnName
+    )
+      continue;
+    let foreignKey = groups.get(id);
+    if (!foreignKey) {
+      foreignKey = {
+        database,
+        id,
+        name,
+        parentObjectId,
+        parentSchema,
+        parentObjectName,
+        referencedObjectId,
+        referencedSchema,
+        referencedObjectName,
+        columns: [],
+        deleteAction: value(row, 15) ?? "NO_ACTION",
+        updateAction: value(row, 16) ?? "NO_ACTION",
+        disabled: bool(row, 17),
+        notTrusted: bool(row, 18),
+      };
+      groups.set(id, foreignKey);
+    }
+    foreignKey.columns.push({
+      parentColumnId,
+      parentColumnName,
+      referencedColumnId,
+      referencedColumnName,
+      ordinal: number(row, 14) ?? 0,
+    });
+  }
+  return [...groups.values()];
 }

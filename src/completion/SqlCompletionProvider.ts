@@ -6,6 +6,7 @@ import { resolveSqlContext } from "../parser/SqlContextResolver.js";
 import { createCandidates, type CompletionScope } from "./CandidateFactory.js";
 import { CompletionScopeResolver } from "./CompletionScopeResolver.js";
 import { presentCandidate } from "./CompletionPresenter.js";
+import { columnPresentationLayout } from "./PresentationModel.js";
 import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
 import { resolveSmartAliasContext } from "../parser/SmartAlias.js";
 import { resolveVisibleRowSource } from "../parser/DocumentSemanticAnalyzer.js";
@@ -197,6 +198,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     const types = new Set(candidates.map((candidate) => candidate.kind));
     const start = document.positionAt(context.replacementStart);
     const range = new vscode.Range(start, position);
+    const columnLayout = columnPresentationLayout(candidates);
     return new vscode.CompletionList(
       candidates.map((candidate, rank) =>
         presentCandidate(
@@ -205,6 +207,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
           context.search,
           types.size > 1,
           rank,
+          columnLayout,
         ),
       ),
       true,

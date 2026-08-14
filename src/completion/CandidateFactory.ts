@@ -218,7 +218,7 @@ export function createCandidates(
         : fallbackVisible;
       for (const binding of clauseContext.finalSetOrderBy ? [] : visible)
         candidates.push(
-          ...localColumnCandidates(binding.source).map((candidate) => ({
+          ...scopedColumnCandidates(binding.source, scope).map((candidate) => ({
             ...candidate,
             sourceQualifier: binding.qualifier,
             outerScope: binding.outer,
@@ -288,7 +288,7 @@ export function createCandidates(
   const unique = new Map<string, CompletionCandidate>();
   for (const candidate of candidates)
     unique.set(
-      `${candidate.kind}:${candidate.normalizedName}:${candidate.sourceQualifier ?? ""}`,
+      `${candidate.kind}:${candidate.database ?? ""}:${candidate.schema ?? ""}:${candidate.normalizedName}:${candidate.sourceQualifier ?? ""}`,
       candidate,
     );
   return sortCandidates(
@@ -300,7 +300,10 @@ export function createCandidates(
   );
 }
 
-function localColumnCandidates(source: RowSource): CompletionCandidate[] {
+function localColumnCandidates(
+  source: RowSource,
+  index?: DatabaseIndex,
+): CompletionCandidate[] {
   return source.columns.map((column) => ({
     name: column.name,
     normalizedName: column.normalizedName,
@@ -311,6 +314,7 @@ function localColumnCandidates(source: RowSource): CompletionCandidate[] {
     ...(source.database ? { database: source.database } : {}),
     ...(source.schema ? { schema: source.schema } : {}),
     ...(source.sourceObject ? { sourceObject: source.sourceObject } : {}),
+    ...relationshipProperties(index, source.sourceObject, column.name),
   }));
 }
 
@@ -318,9 +322,10 @@ function scopedColumnCandidates(
   source: RowSource,
   scope?: CompletionScope,
 ): CompletionCandidate[] {
-  if (source.columns.length || !scope) return localColumnCandidates(source);
-  const database = source.database ?? scope.activeDatabase;
-  const index = scope.indexes.get(normalizedDatabase(database));
+  const database = source.database ?? scope?.activeDatabase ?? "";
+  const index = scope?.indexes.get(normalizedDatabase(database));
+  if (source.columns.length || !scope)
+    return localColumnCandidates(source, index);
   const object =
     source.sourceObject ??
     (source.schema ? index?.findObject(source.schema, source.name) : undefined);
@@ -335,7 +340,31 @@ function scopedColumnCandidates(
     nullable: column.nullable,
     sourceObject: object,
     column,
+    ...relationshipProperties(index, object, column.name),
   }));
+}
+
+function relationshipProperties(
+  index: DatabaseIndex | undefined,
+  object: DatabaseObject | undefined,
+  columnName: string,
+): Pick<CompletionCandidate, "keyRoles" | "keys" | "foreignKeys"> {
+  if (!index || !object || object.kind !== "table") return {};
+  const keys = index.keysForColumn(object, columnName);
+  const foreignKeys = index.foreignKeysForColumn(object, columnName);
+  const outgoingForeignKeys = index.outgoingForeignKeysForColumn(
+    object,
+    columnName,
+  );
+  const roles: ("PK" | "UQ" | "FK")[] = [];
+  if (keys.some((key) => key.kind === "primaryKey")) roles.push("PK");
+  if (keys.some((key) => key.kind !== "primaryKey")) roles.push("UQ");
+  if (outgoingForeignKeys.length) roles.push("FK");
+  return {
+    ...(roles.length ? { keyRoles: roles } : {}),
+    ...(keys.length ? { keys } : {}),
+    ...(foreignKeys.length ? { foreignKeys } : {}),
+  };
 }
 
 function objectsAcrossSchemas(index: DatabaseIndex): CompletionCandidate[] {

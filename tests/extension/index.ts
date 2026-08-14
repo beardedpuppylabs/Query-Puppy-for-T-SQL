@@ -5,10 +5,11 @@ import { DatabaseIndex } from "../../src/metadata/DatabaseIndex.js";
 const database = "IntelliSenseLab";
 const index = new DatabaseIndex({
   database,
-  schemas: ["billing", "reporting", "dbo", "sales"],
+  schemas: ["billing", "reporting", "dbo", "sales", "reltest"],
   loadedAt: 0,
   objects: [
     {
+      id: 1,
       schema: "dbo",
       name: "Customers",
       normalizedName: "customers",
@@ -32,6 +33,7 @@ const index = new DatabaseIndex({
       ],
     },
     {
+      id: 2,
       schema: "sales",
       name: "CustomerOrders",
       normalizedName: "customerorders",
@@ -78,6 +80,7 @@ const index = new DatabaseIndex({
       ],
     },
     {
+      id: 4,
       schema: "billing",
       name: "BillingAddresses",
       normalizedName: "billingaddresses",
@@ -136,6 +139,195 @@ const index = new DatabaseIndex({
           ordinal: 1,
         },
       ],
+    },
+    {
+      id: 11,
+      schema: "reltest",
+      name: "Customers",
+      normalizedName: "customers",
+      kind: "table",
+      parameters: [],
+      columns: [
+        {
+          name: "CustomerId",
+          normalizedName: "customerid",
+          type: { name: "bigint" },
+          nullable: false,
+          ordinal: 1,
+        },
+        {
+          name: "CustomerCode",
+          normalizedName: "customercode",
+          type: { name: "varchar", maxLength: 50 },
+          nullable: false,
+          ordinal: 2,
+        },
+        {
+          name: "ExternalKey",
+          normalizedName: "externalkey",
+          type: { name: "uniqueidentifier" },
+          nullable: true,
+          ordinal: 3,
+        },
+        {
+          name: "BillingAddressId",
+          normalizedName: "billingaddressid",
+          type: { name: "bigint" },
+          nullable: true,
+          ordinal: 4,
+        },
+      ],
+    },
+    {
+      id: 12,
+      schema: "reltest",
+      name: "OrderLines",
+      normalizedName: "orderlines",
+      kind: "table",
+      parameters: [],
+      columns: [
+        {
+          name: "CompanyId",
+          normalizedName: "companyid",
+          type: { name: "int" },
+          nullable: false,
+          ordinal: 1,
+        },
+        {
+          name: "OrderId",
+          normalizedName: "orderid",
+          type: { name: "bigint" },
+          nullable: false,
+          ordinal: 2,
+        },
+      ],
+    },
+    {
+      id: 13,
+      schema: "reltest",
+      name: "OrderHeaders",
+      normalizedName: "orderheaders",
+      kind: "table",
+      parameters: [],
+      columns: [
+        {
+          name: "CompanyId",
+          normalizedName: "companyid",
+          type: { name: "int" },
+          nullable: false,
+          ordinal: 1,
+        },
+        {
+          name: "OrderId",
+          normalizedName: "orderid",
+          type: { name: "bigint" },
+          nullable: false,
+          ordinal: 2,
+        },
+      ],
+    },
+  ],
+  keys: [
+    {
+      database,
+      objectId: 11,
+      schema: "reltest",
+      objectName: "Customers",
+      name: "PK_Customers",
+      kind: "primaryKey",
+      filtered: false,
+      columns: [{ columnId: 1, columnName: "CustomerId", ordinal: 1 }],
+    },
+    {
+      database,
+      objectId: 11,
+      schema: "reltest",
+      objectName: "Customers",
+      name: "UQ_Customers_CustomerCode",
+      kind: "uniqueConstraint",
+      filtered: false,
+      columns: [{ columnId: 2, columnName: "CustomerCode", ordinal: 1 }],
+    },
+    {
+      database,
+      objectId: 11,
+      schema: "reltest",
+      objectName: "Customers",
+      name: "UX_Customers_ExternalKey",
+      kind: "uniqueIndex",
+      filtered: true,
+      filterDefinition: "ExternalKey IS NOT NULL",
+      columns: [{ columnId: 3, columnName: "ExternalKey", ordinal: 1 }],
+    },
+    {
+      database,
+      objectId: 12,
+      schema: "reltest",
+      objectName: "OrderLines",
+      name: "PK_OrderLines",
+      kind: "primaryKey",
+      filtered: false,
+      columns: [
+        { columnId: 1, columnName: "CompanyId", ordinal: 1 },
+        { columnId: 2, columnName: "OrderId", ordinal: 2 },
+      ],
+    },
+  ],
+  foreignKeys: [
+    {
+      database,
+      id: 10,
+      name: "FK_Customers_BillingAddress",
+      parentObjectId: 11,
+      parentSchema: "reltest",
+      parentObjectName: "Customers",
+      referencedObjectId: 4,
+      referencedSchema: "billing",
+      referencedObjectName: "BillingAddresses",
+      columns: [
+        {
+          parentColumnId: 4,
+          parentColumnName: "BillingAddressId",
+          referencedColumnId: 1,
+          referencedColumnName: "BillingAddressId",
+          ordinal: 1,
+        },
+      ],
+      deleteAction: "NO_ACTION",
+      updateAction: "NO_ACTION",
+      disabled: false,
+      notTrusted: false,
+    },
+    {
+      database,
+      id: 11,
+      name: "FK_OrderLines_OrderHeaders",
+      parentObjectId: 12,
+      parentSchema: "reltest",
+      parentObjectName: "OrderLines",
+      referencedObjectId: 13,
+      referencedSchema: "reltest",
+      referencedObjectName: "OrderHeaders",
+      columns: [
+        {
+          parentColumnId: 1,
+          parentColumnName: "CompanyId",
+          referencedColumnId: 1,
+          referencedColumnName: "CompanyId",
+          ordinal: 1,
+        },
+        {
+          parentColumnId: 2,
+          parentColumnName: "OrderId",
+          referencedColumnId: 2,
+          referencedColumnName: "OrderId",
+          ordinal: 2,
+        },
+      ],
+      deleteAction: "NO_ACTION",
+      updateAction: "NO_ACTION",
+      disabled: false,
+      notTrusted: false,
     },
   ],
 });
@@ -312,6 +504,69 @@ export async function run(): Promise<void> {
     },
   );
 
+  for (const expectation of [
+    ["SELECT c.customer FROM reltest.Customers c", "CustomerId", "PK"],
+    ["SELECT c.customer FROM reltest.Customers c", "CustomerCode", "UQ"],
+    ["SELECT c.billing FROM reltest.Customers c", "BillingAddressId", "FK"],
+    ["SELECT c.external FROM reltest.Customers c", "ExternalKey", "UQ"],
+    ["SELECT ol.company FROM reltest.OrderLines ol", "CompanyId", "PK · FK"],
+  ] as const) {
+    const sql = expectation[0];
+    const cursor = sql.indexOf(" FROM");
+    const item = (await semanticCompletion(sql, cursor)).find(
+      (candidate) =>
+        (typeof candidate.label === "string"
+          ? candidate.label
+          : candidate.label.label) === expectation[1],
+    );
+    assert.ok(item, `missing schema-intelligence candidate ${expectation[1]}`);
+    assert.ok(
+      typeof item.label !== "string" &&
+        item.label.detail?.includes(expectation[2]),
+    );
+    assert.equal(item.insertText, expectation[1]);
+    assert.equal(
+      item.filterText,
+      `${expectation[0].slice("SELECT ".length, expectation[0].indexOf(" FROM")).split(".")[1]} ${expectation[1]}`,
+    );
+    assert.match(item.sortText ?? "", /^\d{8}$/);
+    assert.ok(item.range instanceof vscode.Range);
+    if (expectation[2] === "FK") {
+      const documentation = item.documentation;
+      assert.ok(documentation instanceof vscode.MarkdownString);
+      assert.match(documentation.value, /FK_Customers_BillingAddress/);
+      assert.match(
+        documentation.value,
+        /billing\.BillingAddresses\.BillingAddressId/,
+      );
+    }
+    if (expectation[1] === "ExternalKey") {
+      const documentation = item.documentation;
+      assert.ok(documentation instanceof vscode.MarkdownString);
+      assert.match(documentation.value, /UX_Customers_ExternalKey/);
+      assert.match(documentation.value, /ExternalKey IS NOT NULL/);
+    }
+  }
+  const compositeSql = "SELECT ol.order FROM reltest.OrderLines ol";
+  const compositeItem = (
+    await semanticCompletion(compositeSql, compositeSql.indexOf(" FROM"))
+  ).find(
+    (item) =>
+      (typeof item.label === "string" ? item.label : item.label.label) ===
+      "OrderId",
+  );
+  assert.ok(compositeItem);
+  assert.ok(compositeItem.documentation instanceof vscode.MarkdownString);
+  assert.match(compositeItem.documentation.value, /FK_OrderLines_OrderHeaders/);
+  assert.match(
+    compositeItem.documentation.value,
+    /CompanyId.*OrderHeaders\.CompanyId/s,
+  );
+  assert.match(
+    compositeItem.documentation.value,
+    /OrderId.*OrderHeaders\.OrderId/s,
+  );
+
   const nestedSql = `SELECT * FROM dbo.Customers c WHERE EXISTS (SELECT 1 FROM sales.CustomerOrders o WHERE o.`;
   assert.deepEqual(
     (await completion(nestedSql)).filter((name) =>
@@ -450,9 +705,14 @@ CROSS APPLY
   );
   for (const sql of [closedExists, closedApply, outerApply]) {
     const items = await semanticCompletion(sql, sql.indexOf("c.") + 2);
-    assert.deepEqual(labels(items), ["CustomerCode", "CustomerId"]);
+    const coreItems = items.filter((item) =>
+      ["CustomerCode", "CustomerId"].includes(
+        typeof item.label === "string" ? item.label : item.label.label,
+      ),
+    );
+    assert.deepEqual(labels(coreItems), ["CustomerCode", "CustomerId"]);
     assert.ok(
-      items.every(
+      coreItems.every(
         (item) =>
           item.kind === vscode.CompletionItemKind.Field &&
           item.data?.semanticKind === "column" &&

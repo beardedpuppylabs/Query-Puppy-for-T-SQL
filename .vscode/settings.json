@@ -1,3 +1,4 @@
 {
-  "mssql.intelliSense.enableSuggestions": false
+  "mssql.intelliSense.enableSuggestions": false,
+  "FSharp.suggestGitignore": false
 }

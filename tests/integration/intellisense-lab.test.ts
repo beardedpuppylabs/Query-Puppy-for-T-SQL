@@ -61,6 +61,177 @@ test(
       index.objects.some((object) => object.kind === "tableValuedFunction"),
     );
     assert.ok(index.objects.some((object) => object.kind === "procedure"));
+    const relationshipCustomers = index.findObject("reltest", "Customers");
+    const relationshipAddresses = index.findObject("reltest", "Addresses");
+    const orderHeaders = index.findObject("reltest", "OrderHeaders");
+    const orderLines = index.findObject("reltest", "OrderLines");
+    assert.ok(
+      relationshipCustomers,
+      "install tests/fixtures/create-schema-intelligence-fixture.sql as an administrator",
+    );
+    assert.ok(relationshipAddresses);
+    assert.ok(orderHeaders);
+    assert.ok(orderLines);
+    const fixtureObjects = index.objects.filter((object) =>
+      ["reltest", "relref"].includes(object.schema),
+    );
+    const fixtureObjectIds = new Set(
+      fixtureObjects.flatMap((object) =>
+        object.id === undefined ? [] : [object.id],
+      ),
+    );
+    const fixtureKeys = (index.metadata.keys ?? []).filter((key) =>
+      fixtureObjectIds.has(key.objectId),
+    );
+    const fixtureForeignKeys = (index.metadata.foreignKeys ?? []).filter((fk) =>
+      fixtureObjectIds.has(fk.parentObjectId),
+    );
+    assert.equal(
+      fixtureKeys.filter((key) => key.kind === "primaryKey").length,
+      8,
+    );
+    assert.equal(
+      fixtureKeys.filter((key) => key.kind !== "primaryKey").length,
+      7,
+    );
+    assert.equal(fixtureForeignKeys.length, 8);
+    const addressRelationships = index.relationshipsBetween(
+      relationshipCustomers,
+      relationshipAddresses,
+    );
+    assert.deepEqual(addressRelationships.map((fk) => fk.name).sort(), [
+      "FK_reltest_Customers_BillingAddress",
+      "FK_reltest_Customers_PrimaryAddress",
+      "FK_reltest_Customers_ShippingAddress",
+    ]);
+    assert.deepEqual(
+      index
+        .relationshipsBetween(relationshipAddresses, relationshipCustomers)
+        .map((fk) => fk.name)
+        .sort(),
+      addressRelationships.map((fk) => fk.name).sort(),
+    );
+    assert.equal(
+      index.relationshipsBetween(orderHeaders, orderLines).length,
+      1,
+    );
+    assert.deepEqual(
+      index
+        .keysForObject(orderHeaders)[0]
+        ?.columns.map((item) => item.columnName),
+      ["CompanyId", "OrderId"],
+    );
+    const compositeForeignKey = index.relationshipsBetween(
+      orderHeaders,
+      orderLines,
+    )[0];
+    assert.ok(compositeForeignKey);
+    assert.equal(
+      compositeForeignKey.name,
+      "FK_reltest_OrderLines_OrderHeaders",
+    );
+    assert.deepEqual(
+      compositeForeignKey.columns.map((mapping) => [
+        mapping.ordinal,
+        mapping.parentColumnName,
+        mapping.referencedColumnName,
+      ]),
+      [
+        [1, "CompanyId", "CompanyId"],
+        [2, "OrderId", "OrderId"],
+      ],
+    );
+    const relatedCustomerObjects = index
+      .relatedObjects(relationshipCustomers)
+      .map((object) => `${object.schema}.${object.name}`);
+    for (const expected of [
+      "reltest.Addresses",
+      "reltest.OrderHeaders",
+      "reltest.CustomerAliases",
+      "relref.Regions",
+    ])
+      assert.ok(relatedCustomerObjects.includes(expected), expected);
+    const relationshipScope = {
+      activeDatabase: process.env["MSSQL_TEST_DATABASE"] ?? "",
+      indexes: new Map([
+        [(process.env["MSSQL_TEST_DATABASE"] ?? "").toLowerCase(), index],
+      ]),
+    };
+    const role = (sql: string, name: string) =>
+      createCandidates(
+        resolveSqlContext(sql, sql.indexOf(" FROM")),
+        relationshipScope,
+      ).find((candidate) => candidate.name === name)?.keyRoles;
+    assert.deepEqual(
+      role("SELECT c.customer FROM reltest.Customers c", "CustomerId"),
+      ["PK"],
+    );
+    assert.deepEqual(
+      role("SELECT c.billing FROM reltest.Customers c", "BillingAddressId"),
+      ["FK"],
+    );
+    assert.deepEqual(
+      role("SELECT c.external FROM reltest.Customers c", "ExternalKey"),
+      ["UQ"],
+    );
+    assert.deepEqual(
+      role("SELECT ol.company FROM reltest.OrderLines ol", "CompanyId"),
+      ["PK", "FK"],
+    );
+    assert.deepEqual(
+      role("SELECT ol.order FROM reltest.OrderLines ol", "OrderId"),
+      ["PK", "FK"],
+    );
+    assert.deepEqual(
+      role("SELECT ol.line FROM reltest.OrderLines ol", "LineNo"),
+      ["PK"],
+    );
+    assert.deepEqual(
+      role("SELECT ca.customer FROM reltest.CustomerAliases ca", "CustomerId"),
+      ["UQ", "FK"],
+    );
+    assert.deepEqual(
+      role("SELECT p.product FROM reltest.Products p", "ProductId"),
+      ["PK"],
+    );
+    assert.deepEqual(
+      role("SELECT p.product FROM reltest.Products p", "ProductCode"),
+      ["UQ"],
+    );
+    assert.equal(
+      role("SELECT p.product FROM reltest.Products p", "ProductName"),
+      undefined,
+    );
+    assert.equal(
+      role("SELECT p.category FROM reltest.Products p", "CategoryCode"),
+      undefined,
+    );
+    const filteredKey = fixtureKeys.find(
+      (key) => key.name === "UX_reltest_Customers_ExternalKey",
+    );
+    assert.equal(filteredKey?.kind, "uniqueIndex");
+    assert.equal(filteredKey.filtered, true);
+    assert.match(
+      filteredKey.filterDefinition ?? "",
+      /ExternalKey.*IS NOT NULL/i,
+    );
+    const cascade = fixtureForeignKeys.find(
+      (fk) => fk.name === "FK_reltest_CustomerAliases_Customer",
+    );
+    assert.equal(cascade?.deleteAction, "CASCADE");
+    const disabled = fixtureForeignKeys.find(
+      (fk) => fk.name === "FK_reltest_LegacyCustomerLinks_Customer",
+    );
+    assert.equal(disabled?.disabled, true);
+    assert.equal(disabled.notTrusted, true);
+    const region = fixtureForeignKeys.find(
+      (fk) => fk.name === "FK_reltest_Customers_Region",
+    );
+    assert.equal(region?.parentSchema, "reltest");
+    assert.equal(region.referencedSchema, "relref");
+    context.diagnostic(
+      `Schema Intelligence fixture verified: PK=8, UQ=7, FK=8, filtered=${filteredKey.name}, composite=${compositeForeignKey.name}.`,
+    );
     const customers = index.findObject("dbo", "Customers");
     assert.ok(
       customers?.columns.some((column) => column.name === "CustomerId"),
