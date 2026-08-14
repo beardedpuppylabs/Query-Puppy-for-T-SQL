@@ -2,6 +2,7 @@ import { DatabaseIndex } from "../metadata/DatabaseIndex.js";
 import {
   normalizeName,
   type DatabaseObject,
+  type ForeignKeyMetadata,
 } from "../metadata/MetadataModels.js";
 import { quoteIdentifier } from "../metadata/SqlTypeFormatter.js";
 import type { SqlCompletionContext } from "../parser/SqlContextResolver.js";
@@ -10,7 +11,9 @@ import {
   resolveVisibleRowSource,
   type DocumentSemanticModel,
   type RowSource,
+  type ScopedRowSource,
 } from "../parser/DocumentSemanticAnalyzer.js";
+import { tokenizeSql } from "../parser/SqlTokenizer.js";
 import { containsMatch } from "./ContainsMatcher.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
 import { sortCandidates, TYPE_ORDER } from "./CompletionSorter.js";
@@ -270,6 +273,28 @@ export function createCandidates(
         })),
       );
   }
+  if (clauseContext.join && scope)
+    candidates.push(
+      ...joinPredicateCandidates(
+        clauseContext.join.currentRightRowSource,
+        clauseContext.join.leftVisibleRowSources,
+        scope,
+      ),
+    );
+  if (
+    context.baseKind === "rowSource" &&
+    scope &&
+    isJoinSourcePosition(context.sql, context.cursor)
+  )
+    candidates = rankRelatedRowSources(
+      candidates,
+      semantics.visibleRowSources.filter(
+        (binding) =>
+          binding.scopeDistance === 0 &&
+          binding.source.origin.start < context.replacementStart,
+      ),
+      scope,
+    );
   const aliasable = new Set([
     "table",
     "view",
@@ -293,11 +318,141 @@ export function createCandidates(
     );
   return sortCandidates(
     [...unique.values()].filter((candidate) =>
-      containsMatch(candidate.normalizedName, context.search),
+      containsMatch(
+        candidate.searchText ?? candidate.normalizedName,
+        context.search,
+      ),
     ),
     context.search,
     sortKind,
   );
+}
+
+function physicalBinding(
+  binding: ScopedRowSource,
+  scope: CompletionScope,
+):
+  | { readonly object: DatabaseObject; readonly index: DatabaseIndex }
+  | undefined {
+  const database = binding.source.database ?? scope.activeDatabase;
+  const index = scope.indexes.get(normalizedDatabase(database));
+  const object =
+    binding.source.sourceObject ??
+    (binding.source.schema
+      ? index?.findObject(binding.source.schema, binding.source.name)
+      : undefined);
+  return index && object?.kind === "table" ? { object, index } : undefined;
+}
+
+function renderJoinPredicate(
+  foreignKey: ForeignKeyMetadata,
+  right: ScopedRowSource,
+  left: ScopedRowSource,
+  rightObject: DatabaseObject,
+): string {
+  const rightIsParent = rightObject.id === foreignKey.parentObjectId;
+  return foreignKey.columns
+    .map((mapping) => {
+      const rightColumn = rightIsParent
+        ? mapping.parentColumnName
+        : mapping.referencedColumnName;
+      const leftColumn = rightIsParent
+        ? mapping.referencedColumnName
+        : mapping.parentColumnName;
+      return `${quoteIdentifier(right.qualifier)}.${quoteIdentifier(rightColumn)} = ${quoteIdentifier(left.qualifier)}.${quoteIdentifier(leftColumn)}`;
+    })
+    .join(" AND ");
+}
+
+function joinPredicateCandidates(
+  right: ScopedRowSource | undefined,
+  leftSources: readonly ScopedRowSource[],
+  scope: CompletionScope,
+): CompletionCandidate[] {
+  if (!right) return [];
+  const resolvedRight = physicalBinding(right, scope);
+  if (!resolvedRight) return [];
+  const rightDatabase = normalizeName(
+    right.source.database ?? scope.activeDatabase,
+  );
+  return leftSources.flatMap((left) => {
+    if (
+      normalizeName(left.source.database ?? scope.activeDatabase) !==
+      rightDatabase
+    )
+      return [];
+    const resolvedLeft = physicalBinding(left, scope);
+    if (!resolvedLeft || resolvedLeft.index !== resolvedRight.index) return [];
+    return resolvedRight.index
+      .relationshipsBetween(resolvedRight.object, resolvedLeft.object)
+      .filter((foreignKey) => !foreignKey.disabled)
+      .map((foreignKey) => {
+        const predicate = renderJoinPredicate(
+          foreignKey,
+          right,
+          left,
+          resolvedRight.object,
+        );
+        return {
+          name: predicate,
+          normalizedName: normalizeName(predicate),
+          searchText: normalizeName(
+            `${predicate} ${foreignKey.name} ${foreignKey.columns.flatMap((mapping) => [mapping.parentColumnName, mapping.referencedColumnName]).join(" ")}`,
+          ),
+          kind: "joinPredicate" as const,
+          database: foreignKey.database,
+          insertText: predicate,
+          foreignKey,
+          priority: -100,
+        };
+      });
+  });
+}
+
+function isJoinSourcePosition(sql: string, cursor: number): boolean {
+  const tokens = tokenizeSql(sql).filter((token) => token.start < cursor);
+  for (let index = tokens.length - 1; index >= 0; index--) {
+    const word = tokens[index]?.normalized;
+    if (word === "join") return true;
+    if (
+      ["from", "on", "where", "group", "having", "order"].includes(word ?? "")
+    )
+      return false;
+  }
+  return false;
+}
+
+function rankRelatedRowSources(
+  candidates: readonly CompletionCandidate[],
+  leftSources: readonly ScopedRowSource[],
+  scope: CompletionScope,
+): CompletionCandidate[] {
+  const left = leftSources.flatMap((binding) => {
+    const resolved = physicalBinding(binding, scope);
+    return resolved ? [{ binding, ...resolved }] : [];
+  });
+  return candidates.map((candidate) => {
+    const object = candidate.sourceObject;
+    if (!object || object.kind !== "table" || object.id === undefined)
+      return candidate;
+    const database = normalizeName(candidate.database ?? scope.activeDatabase);
+    const index = scope.indexes.get(database);
+    if (!index) return candidate;
+    const relationships = left.flatMap((source) =>
+      source.index === index
+        ? index
+            .relationshipsBetween(source.object, object)
+            .filter((foreignKey) => !foreignKey.disabled)
+        : [],
+    );
+    return relationships.length
+      ? {
+          ...candidate,
+          priority: -10,
+          relatedRelationshipCount: relationships.length,
+        }
+      : candidate;
+  });
 }
 
 function localColumnCandidates(

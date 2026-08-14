@@ -23,6 +23,7 @@ const kinds: Record<SqlObjectKind, vscode.CompletionItemKind> = {
   sequence: vscode.CompletionItemKind.Value,
   userType: vscode.CompletionItemKind.TypeParameter,
   column: vscode.CompletionItemKind.Field,
+  joinPredicate: vscode.CompletionItemKind.Operator,
   rowSourceAlias: vscode.CompletionItemKind.Reference,
   procedureParameter: vscode.CompletionItemKind.Variable,
   cte: vscode.CompletionItemKind.Struct,
@@ -42,6 +43,7 @@ export function presentCandidate(
   mixed: boolean,
   rank: number,
   columnLayout?: ColumnPresentationLayout,
+  separatorCharacter?: string,
 ): vscode.CompletionItem {
   const model = presentationModel(candidate, mixed, columnLayout);
   const label: vscode.CompletionItemLabel = {
@@ -56,9 +58,21 @@ export function presentCandidate(
   };
   item.range = replacement;
   item.insertText = candidate.insertText ?? quoteIdentifier(candidate.name);
-  // VS Code filters the replacement prefix against filterText. Prefixing with the user's
-  // fragment preserves every contains match without changing insertion or ranking.
-  item.filterText = search ? `${search} ${candidate.name}` : candidate.name;
+  if (candidate.kind === "joinPredicate" && separatorCharacter)
+    item.additionalTextEdits = [
+      vscode.TextEdit.replace(
+        new vscode.Range(replacement.start.translate(0, -1), replacement.start),
+        `${separatorCharacter} `,
+      ),
+    ];
+  // Physical column identity stays exact; semantic contains matching has already selected
+  // the candidate set. Other candidate kinds retain the prefix compatibility workaround.
+  item.filterText =
+    candidate.kind === "column"
+      ? candidate.name
+      : search
+        ? `${search} ${candidate.name}`
+        : candidate.name;
   item.sortText = rank.toString().padStart(8, "0");
   item.documentation = documentation(candidate);
   if (candidate.triggerSuggest)
@@ -79,6 +93,14 @@ export function documentation(
 ): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.supportHtml = false;
+  if (candidate.foreignKey) {
+    const foreignKey = candidate.foreignKey;
+    md.appendMarkdown(`**${foreignKey.name}**\n\n`);
+    md.appendMarkdown(
+      `Foreign key: \`${foreignKey.parentSchema}.${foreignKey.parentObjectName} (${foreignKey.columns.map((column) => column.parentColumnName).join(", ")})\`  \n→ \`${foreignKey.referencedSchema}.${foreignKey.referencedObjectName} (${foreignKey.columns.map((column) => column.referencedColumnName).join(", ")})\`\n`,
+    );
+    return md;
+  }
   if (candidate.sourceObject)
     md.appendMarkdown(
       `**${candidate.database ? `${candidate.database}.` : ""}${candidate.sourceObject.schema}.${candidate.sourceObject.name}**\n\n`,
@@ -88,7 +110,7 @@ export function documentation(
   md.appendMarkdown(`${friendlyKind(candidate.kind)}\n\n`);
   if (candidate.sqlType)
     md.appendMarkdown(
-      `Type: \`${formatSqlType(candidate.sqlType)}\`  \nNullability: **${candidate.nullable ? "NULL" : "NOT NULL"}**\n`,
+      `Type: \`${formatSqlType(candidate.sqlType)}\`  \nNullability: **${candidate.nullable ? "NULL" : "NOT NULL"}**${candidate.keyRoles?.length ? `  \nRoles: **${candidate.keyRoles.join(" · ")}**` : ""}\n`,
     );
   for (const key of candidate.keys ?? []) {
     const label =

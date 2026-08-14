@@ -68,6 +68,27 @@ CREATE TABLE reltest.CustomerAliases (
  CONSTRAINT FK_reltest_CustomerAliases_Customer FOREIGN KEY (CustomerId) REFERENCES reltest.Customers(CustomerId)
 );
 GO
+IF OBJECT_ID(N'reltest.Products', N'U') IS NULL
+BEGIN
+ CREATE TABLE reltest.Products (
+  ProductId bigint NOT NULL CONSTRAINT PK_reltest_Products PRIMARY KEY,
+  ProductCode varchar(50) NOT NULL,
+  ProductName nvarchar(200) NULL,
+  CategoryCode varchar(50) NULL
+ );
+ CREATE UNIQUE INDEX UX_reltest_Products_ProductCode ON reltest.Products(ProductCode) INCLUDE(ProductName, CategoryCode);
+END;
+GO
+IF OBJECT_ID(N'reltest.LegacyCustomerLinks', N'U') IS NULL
+BEGIN
+ CREATE TABLE reltest.LegacyCustomerLinks (
+  LegacyLinkId bigint NOT NULL CONSTRAINT PK_reltest_LegacyCustomerLinks PRIMARY KEY,
+  CustomerId bigint NOT NULL
+ );
+ ALTER TABLE reltest.LegacyCustomerLinks WITH NOCHECK ADD CONSTRAINT FK_reltest_LegacyCustomerLinks_Customer FOREIGN KEY(CustomerId) REFERENCES reltest.Customers(CustomerId);
+ ALTER TABLE reltest.LegacyCustomerLinks NOCHECK CONSTRAINT FK_reltest_LegacyCustomerLinks_Customer;
+END;
+GO
 IF DATABASE_PRINCIPAL_ID(N'intellisense_test') IS NOT NULL
 BEGIN
  GRANT CONNECT TO [intellisense_test];

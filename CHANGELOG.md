@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.3
+
+- Reworked physical-column completion presentation into one bounded, table-like metadata layout with stable name, role, datatype, and nullability columns.
+- Preserved complete PK/UQ/FK, datatype, and nullability information without altering filtering, sorting, or inserted identifiers.
+
+## 0.8.2
+
+- Fixed missing whitespace when accepting an FK JOIN predicate directly after `ON` while preserving existing spaces, newlines, indentation, and partial-predicate replacement.
+- Moved compact PK/UQ/FK roles ahead of datatype and nullability so Schema Intelligence metadata remains visible in native completion lists.
+
+## 0.8.1
+
+- Added FK-aware JOIN predicate completion using real cached SQL Server relationships, including reverse query order, composite keys, cross-schema targets, and multiple relationships between the same tables.
+- Added relationship-aware JOIN table ranking in both FK directions while excluding disabled relationships and preserving Contains filtering.
+- Improved bounded visual alignment of physical-column datatype, nullability, and PK/UQ/FK metadata in native completion lists.
+
 ## 0.8.0
 
 - Load primary keys, unique constraints/indexes, filtered unique indexes, and foreign keys with a constant number of set-based catalog queries.

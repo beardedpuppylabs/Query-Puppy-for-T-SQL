@@ -24,6 +24,10 @@ export interface CompletionCandidate {
   readonly keyRoles?: readonly ("PK" | "UQ" | "FK")[];
   readonly keys?: readonly KeyMetadata[];
   readonly foreignKeys?: readonly ForeignKeyMetadata[];
+  readonly foreignKey?: ForeignKeyMetadata;
+  /** Additional normalized text used only for contiguous Contains filtering. */
+  readonly searchText?: string;
+  readonly relatedRelationshipCount?: number;
   readonly baseObjectName?: string;
   readonly insertText?: string;
   /** Continue schema qualification after this candidate is accepted. */

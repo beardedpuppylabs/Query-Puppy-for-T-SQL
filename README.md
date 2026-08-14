@@ -1,5 +1,11 @@
 # Improved SQL IntelliSense
 
+## JOIN Intelligence
+
+Version 0.8.1 uses cached SQL Server foreign-key metadata to suggest complete predicates after `JOIN … ON`. For example, joining `Customers AS c` to `CustomerOrders AS o` can suggest `o.CustomerId = c.CustomerId`. The current-right alias is always rendered first, multiple real relationships remain separate choices, and composite foreign keys produce one complete ordinal `AND` predicate.
+
+JOIN source completion ranks tables connected to any legally visible left source by an enabled FK in either direction. Typed fragments still use case-insensitive contiguous Contains before relationship ranking. No name/type guessing is performed, disabled FKs are excluded, and completion performs no database queries.
+
 Improved SQL IntelliSense is a SQL Server completion provider designed for fast navigation of large databases. It uses case-insensitive Contains matching, so a fragment can match anywhere in an object name, while reusing the active Microsoft mssql connection. No second connection or duplicate credentials are required.
 
 Typing `addr` may find:
@@ -240,6 +246,8 @@ Version 0.8.0 loads SQL Server primary keys, unique constraints and indexes, and
 
 The extension runtime is metadata-read-only. It never provisions fixtures or executes schema/data-modifying statements; a restricted login with access to the relevant catalog metadata is sufficient. Missing integration fixtures are reported as test prerequisites.
 
-When several physical table columns are suggested together, their datatype, nullability, and key-role fields are aligned in the native VS Code/VSCodium completion widget. Widths are derived from the current result set and capped to keep unusually long ERP identifiers from widening the widget excessively. Display alignment does not change filtering, ranking, replacement ranges, or inserted SQL.
+When a suggestion set contains only physical table columns, the exact identifier remains the native completion label and one coherent detail string aligns key roles, datatype, and nullability. Widths are derived from that result set and capped at 32 characters for names, 8 for roles, and 18 for datatypes, so unusually long ERP identifiers do not widen every row. Display alignment does not change filtering, ranking, replacement ranges, or inserted SQL; mixed completion domains retain their normal native presentation.
+
+The compact one-line order is column name, PK/UQ/FK roles, datatype, then nullability. This keeps the novel relationship metadata close to the identifier instead of placing it at the widget's most easily clipped edge; complete metadata remains available in documentation.
 
 The persistent manual/integration fixture is `tests/fixtures/create-schema-intelligence-fixture.sql`. An administrator runs this separate test-infrastructure script once; it is never loaded or executed by extension runtime code. The restricted `intellisense_test` login only needs `VIEW DEFINITION` afterward.

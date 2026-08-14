@@ -796,7 +796,8 @@ function queryScopeModel(
   const depths = tokenDepths(tokens);
   const mutable: MutableQueryScope[] = [];
   const statementEndOffset =
-    tokens[statementTokenEnd]?.start ?? tokens.at(-1)?.end ?? cursor;
+    tokens[statementTokenEnd]?.start ??
+    Math.max(tokens.at(-1)?.end ?? cursor, cursor);
   for (let select = statementTokenStart; select < statementTokenEnd; select++) {
     if (tokens[select]?.normalized !== "select") continue;
     const selectDepth = depths[select] ?? 0;
@@ -857,7 +858,10 @@ function queryScopeModel(
       endToken,
       range: {
         start: tokens[select]?.start ?? 0,
-        end: tokens[endToken - 1]?.end ?? statementEndOffset,
+        end:
+          endToken === statementTokenEnd
+            ? statementEndOffset
+            : (tokens[endToken - 1]?.end ?? statementEndOffset),
       },
       ...(parent ? { parent } : {}),
       local: [],

@@ -10,6 +10,7 @@ export type SqlObjectKind =
   | "sequence"
   | "userType"
   | "column"
+  | "joinPredicate"
   | "rowSourceAlias"
   | "procedureParameter"
   | "cte"
@@ -108,6 +109,7 @@ export interface DatabaseObject {
     | "database"
     | "schema"
     | "column"
+    | "joinPredicate"
     | "rowSourceAlias"
     | "procedureParameter"
     | "cte"
@@ -152,6 +154,7 @@ export const friendlyKind = (kind: SqlObjectKind): string =>
     sequence: "sequence",
     userType: "user-defined type",
     column: "column",
+    joinPredicate: "FK JOIN",
     rowSourceAlias: "row-source alias",
     procedureParameter: "parameter",
     cte: "CTE",

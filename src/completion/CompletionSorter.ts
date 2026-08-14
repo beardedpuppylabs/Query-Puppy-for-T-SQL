@@ -22,6 +22,7 @@ export const TYPE_ORDER: Readonly<
   ],
   execute: ["procedureParameter", "procedure", "variable"],
   expression: [
+    "joinPredicate",
     "column",
     "rowSourceAlias",
     "procedureParameter",

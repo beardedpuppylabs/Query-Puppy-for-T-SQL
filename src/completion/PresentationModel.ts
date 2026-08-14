@@ -8,11 +8,13 @@ export interface PresentationModel {
 }
 export interface ColumnPresentationLayout {
   readonly nameWidth: number;
+  readonly roleWidth: number;
   readonly typeWidth: number;
 }
 
 const NAME_WIDTH_CAP = 32;
-const TYPE_WIDTH_CAP = 24;
+const ROLE_WIDTH_CAP = 8;
+const TYPE_WIDTH_CAP = 18;
 const boundedWidth = (values: readonly string[], cap: number): number =>
   Math.min(cap, Math.max(...values.map((value) => value.length)));
 
@@ -25,11 +27,16 @@ export function columnPresentationLayout(
       candidate.sourceObject?.kind === "table" &&
       candidate.sqlType,
   );
-  if (physical.length < 2) return undefined;
+  if (physical.length < 1 || physical.length !== candidates.length)
+    return undefined;
   return {
     nameWidth: boundedWidth(
       physical.map((candidate) => candidate.name),
       NAME_WIDTH_CAP,
+    ),
+    roleWidth: boundedWidth(
+      physical.map((candidate) => candidate.keyRoles?.join("·") ?? ""),
+      ROLE_WIDTH_CAP,
     ),
     typeWidth: boundedWidth(
       physical.flatMap((candidate) =>
@@ -62,10 +69,10 @@ export function presentationModel(
     if (candidate.kind === "column" && columnLayout) {
       const type = formatSqlType(candidate.sqlType);
       const nullability = candidate.nullable ? "NULL" : "NOT NULL";
-      detail =
-        `${paddingAfter(candidate.name, columnLayout.nameWidth)}${type}${paddingAfter(type, columnLayout.typeWidth)}${nullability.padEnd(10)}${candidate.keyRoles?.join(" · ") ?? ""}`.trimEnd();
+      const roles = candidate.keyRoles?.join("·") ?? "";
+      detail = `${paddingAfter(candidate.name, columnLayout.nameWidth)}${roles}${paddingAfter(roles, columnLayout.roleWidth)}${type}${paddingAfter(type, columnLayout.typeWidth)}${nullability}`;
     } else
-      detail = ` ${formatSqlType(candidate.sqlType)} ${candidate.nullable ? "NULL" : "NOT NULL"}${candidate.keyRoles?.length ? ` · ${candidate.keyRoles.join(" · ")}` : ""}`;
+      detail = ` ${candidate.keyRoles?.length ? `${candidate.keyRoles.join("·")} ` : ""}${formatSqlType(candidate.sqlType)} ${candidate.nullable ? "NULL" : "NOT NULL"}`;
   if (candidate.kind === "procedureParameter" && candidate.sqlType)
     detail = ` ${formatSqlType(candidate.sqlType)}${candidate.parameterOutput ? " OUTPUT" : ""}`;
   else if (candidate.kind === "scalarFunction")
@@ -74,6 +81,9 @@ export function presentationModel(
     detail = `(${params}) → table`;
   else if (candidate.kind === "procedure")
     detail = `(${params})${candidate.sourceObject?.columns.length ? ` → ${String(candidate.sourceObject.columns.length)} columns` : ""}`;
+  else if (candidate.kind === "joinPredicate") detail = " FK JOIN";
+  else if (candidate.relatedRelationshipCount)
+    detail = ` related via ${String(candidate.relatedRelationshipCount)} FK${candidate.relatedRelationshipCount === 1 ? "" : "s"}`;
   return {
     detail,
     ...(candidate.sourceQualifier

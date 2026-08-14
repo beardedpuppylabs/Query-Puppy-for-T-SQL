@@ -138,11 +138,14 @@ export class DatabaseIndex {
     const leftId = typeof left === "number" ? left : left.id;
     const rightId = typeof right === "number" ? right : right.id;
     if (leftId === undefined || rightId === undefined) return [];
-    return (this.metadata.foreignKeys ?? []).filter(
-      (fk) =>
-        (fk.parentObjectId === leftId && fk.referencedObjectId === rightId) ||
-        (fk.parentObjectId === rightId && fk.referencedObjectId === leftId),
-    );
+    return [
+      ...(this.outgoing.get(leftId) ?? []).filter(
+        (fk) => fk.referencedObjectId === rightId,
+      ),
+      ...(this.outgoing.get(rightId) ?? []).filter(
+        (fk) => fk.referencedObjectId === leftId,
+      ),
+    ];
   }
   relatedObjects(object: DatabaseObject | number): readonly DatabaseObject[] {
     const id = typeof object === "number" ? object : object.id;

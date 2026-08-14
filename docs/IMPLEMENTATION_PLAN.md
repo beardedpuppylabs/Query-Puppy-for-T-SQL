@@ -18,7 +18,7 @@
 
 ## Design decisions
 
-One combined catalog query minimizes round trips and is cached by connection ID plus database. Procedure result-set discovery is deliberately deferred rather than risking failure of the base catalog; no schema is fabricated. Completion items use the typed fragment as both their replacement range and `filterText`; because the filter text begins with that fragment, VS Code retains every item already accepted by contains matching while `insertText` remains the real identifier.
+One combined catalog query minimizes round trips and is cached by connection ID plus database. Procedure result-set discovery is deliberately deferred rather than risking failure of the base catalog; no schema is fabricated. Semantic Contains matching determines the candidate domain. Physical columns retain their exact identifier as `filterText`; other candidate kinds use a typed-fragment compatibility prefix where the native widget needs it, without changing insertion or ranking.
 
 ## Final verification
 
@@ -329,3 +329,31 @@ The loader uses two constant, set-based queries per database refresh: the existi
 Security boundary: production initialization and completion are catalog-read-only and are regression-tested to contain no DDL/DML statements. The persistent fixture SQL is administrator-owned integration infrastructure; missing objects cause a clear integration-test prerequisite failure and are never provisioned by the extension.
 
 Final live acceptance: the restricted login loads 8 PKs, 7 unique constraints/indexes, and 8 FKs across `reltest`/`relref`. It proves INCLUDE-column exclusion, filtered-index preservation, composite ordinals/mappings, three independent Customers-to-Addresses relationships, cross-schema direction, CASCADE, disabled/untrusted state, reverse graph lookup, and database isolation. Live fixture discovery and completion perform no writes.
+
+## 0.8.1 Relationship-aware JOIN Intelligence
+
+- [x] Generate current-right-first predicates from indexed, enabled FK metadata in positional JOIN scope.
+- [x] Preserve multiple relationships and composite mapping ordinals; support reverse query order and cross-schema relationships.
+- [x] Exclude disabled, unrelated, future, and cross-database relationships without suppressing normal expression completion.
+- [x] Rank enabled directly related physical tables at JOIN source positions after Contains filtering, without duplicates.
+- [x] Retain bounded native physical-column alignment and behavioral field invariants.
+- [x] Add pure, provider, Extension Host, and live fixture coverage.
+
+JOIN completion reads only per-database cache indexes. Relationship lookup is proportional to the participating objects' adjacency lists, and no catalog query occurs per keystroke. There is no heuristic name/type matching, automatic mutation, custom UI, hover provider, or runtime fixture provisioning.
+
+## 0.8.2 JOIN insertion and compact role visibility
+
+- [x] Use a context-aware predicate TextEdit to add one separator only when `ON` directly touches the cursor.
+- [x] Preserve existing whitespace, indentation, partial predicate replacement, and semantic insert/filter text.
+- [x] Replace name-first padding with compact roles-first physical-column details and complete documentation.
+- [x] Cover actual provider TextEdits and CompletionItem label/filter/insert/sort fields.
+
+## 0.8.3 Completion Metadata Layout Fix
+
+- [x] Keep the exact physical-column identifier in `CompletionItemLabel.label`.
+- [x] Render roles, datatype, and nullability as one coherent `detail` string, preceded by bounded name compensation.
+- [x] Derive widths from physical-column-only candidate sets; cap names at 32, roles at 8, and datatypes at 18 visible characters.
+- [x] Preserve exact filter/insert text, semantic sorting, Contains matching, rich documentation, and the 0.8.2 JOIN insertion repair.
+- [x] Leave mixed completion domains on their existing unpadded presentation path.
+
+The 0.8.2 field allocation aligned roles and types inside each detail string but let native label widths move the start of that string independently on every row. The 0.8.3 layout compensates for normal label widths while allowing identifiers longer than 32 characters to overflow naturally with only the minimum separator; they do not impose unbounded padding on other rows.

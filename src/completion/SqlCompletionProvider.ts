@@ -198,16 +198,32 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     const types = new Set(candidates.map((candidate) => candidate.kind));
     const start = document.positionAt(context.replacementStart);
     const range = new vscode.Range(start, position);
+    const joinFragment = /\bon\s+([^\s]*)$/i.exec(
+      context.sql.slice(0, context.cursor),
+    )?.[1];
+    const joinRange =
+      joinFragment === undefined
+        ? range
+        : new vscode.Range(
+            document.positionAt(context.cursor - joinFragment.length),
+            position,
+          );
     const columnLayout = columnPresentationLayout(candidates);
     return new vscode.CompletionList(
       candidates.map((candidate, rank) =>
         presentCandidate(
           candidate,
-          range,
+          candidate.kind === "joinPredicate" ? joinRange : range,
           context.search,
           types.size > 1,
           rank,
           columnLayout,
+          candidate.kind === "joinPredicate" &&
+            context.search.length === 0 &&
+            context.replacementStart > 0 &&
+            !/\s/.test(context.sql[context.replacementStart - 1] ?? "")
+            ? context.sql[context.replacementStart - 1]
+            : undefined,
         ),
       ),
       true,

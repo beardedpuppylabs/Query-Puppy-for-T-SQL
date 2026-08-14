@@ -202,7 +202,7 @@ test("physical columns derive multiple roles without changing ranking", () => {
   assert.deepEqual(candidates[0]?.keyRoles, ["PK", "FK"]);
   assert.equal(
     presentationModel(candidates[0]!, false).detail,
-    " int NOT NULL · PK · FK",
+    " PK·FK int NOT NULL",
   );
   const principalSql = "SELECT oh.company FROM reltest.OrderHeaders oh";
   assert.deepEqual(

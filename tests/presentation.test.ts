@@ -78,7 +78,7 @@ test("database candidates use the database semantic description only in mixed re
   });
 });
 
-test("column presentation appends all key roles after type and nullability", () => {
+test("column presentation puts compact key roles before type and nullability", () => {
   assert.equal(
     presentationModel(
       {
@@ -91,7 +91,7 @@ test("column presentation appends all key roles after type and nullability", () 
       },
       false,
     ).detail,
-    " int NOT NULL · PK · UQ · FK",
+    " PK·UQ·FK int NOT NULL",
   );
 });
 
@@ -134,27 +134,25 @@ test("physical column sets align bounded type, nullability, and role fields", ()
     },
   ];
   const layout = columnPresentationLayout(candidates);
-  assert.deepEqual(layout, { nameWidth: 16, typeWidth: 13 });
+  assert.deepEqual(layout, { nameWidth: 16, roleWidth: 2, typeWidth: 13 });
   const details = candidates.map(
     (candidate) => presentationModel(candidate, false, layout).detail,
   );
   assert.deepEqual(details, [
-    "        bigint         NOT NULL  PK",
-    "  varchar(50)    NULL      FK",
-    "             decimal(18,4)  NULL",
+    "        PK  bigint         NOT NULL",
+    "  FK  varchar(50)    NULL",
+    "                 decimal(18,4)  NULL",
   ]);
   const first = details[0];
   const second = details[1];
-  const firstCandidate = candidates[0];
-  const secondCandidate = candidates[1];
-  assert.ok(first && second && firstCandidate && secondCandidate);
+  assert.ok(first && second);
   assert.equal(
-    firstCandidate.name.length + first.indexOf("bigint"),
-    secondCandidate.name.length + second.indexOf("varchar"),
+    candidates[0]!.name.length + first.indexOf("PK"),
+    candidates[1]!.name.length + second.indexOf("FK"),
   );
   assert.equal(
-    firstCandidate.name.length + first.indexOf("NOT NULL"),
-    secondCandidate.name.length + second.indexOf("NULL"),
+    candidates[0]!.name.length + first.indexOf("NOT NULL"),
+    candidates[1]!.name.length + second.indexOf("NULL"),
   );
 });
 
@@ -187,6 +185,119 @@ test("column alignment caps pathological names and types", () => {
   ];
   assert.deepEqual(columnPresentationLayout(candidates), {
     nameWidth: 32,
+    roleWidth: 0,
     typeWidth: 13,
   });
+});
+
+test("roles-first layout keeps complete multi-role metadata near the label", () => {
+  const sourceObject = {
+    schema: "dbo",
+    name: "T",
+    normalizedName: "t",
+    kind: "table" as const,
+    parameters: [],
+    columns: [],
+  };
+  const candidates: CompletionCandidate[] = [
+    {
+      name: "CompanyId",
+      normalizedName: "companyid",
+      kind: "column",
+      sqlType: { name: "int" },
+      nullable: false,
+      keyRoles: ["PK", "FK"],
+      sourceObject,
+    },
+    {
+      name: "CustomerId",
+      normalizedName: "customerid",
+      kind: "column",
+      sqlType: { name: "bigint" },
+      nullable: false,
+      keyRoles: ["UQ", "FK"],
+      sourceObject,
+    },
+  ];
+  const layout = columnPresentationLayout(candidates);
+  const company = candidates[0];
+  const customer = candidates[1];
+  assert.ok(company && customer);
+  assert.deepEqual(layout, { nameWidth: 10, roleWidth: 5, typeWidth: 6 });
+  assert.equal(
+    presentationModel(company, false, layout).detail,
+    "   PK·FK  int     NOT NULL",
+  );
+  assert.equal(
+    presentationModel(customer, false, layout).detail,
+    "  UQ·FK  bigint  NOT NULL",
+  );
+});
+
+test("CompletionLayoutStress keeps complete metadata and bounded name padding", () => {
+  const sourceObject = {
+    schema: "reltest",
+    name: "CompletionLayoutStress",
+    normalizedName: "completionlayoutstress",
+    kind: "table" as const,
+    parameters: [],
+    columns: [],
+  };
+  const specs = [
+    ["Amount", { name: "decimal", precision: 38, scale: 18 }, false, []],
+    ["BinaryPayload", { name: "varbinary", maxLength: -1 }, true, []],
+    ["Code", { name: "varchar", maxLength: 20 }, false, []],
+    ["CustomerId", { name: "bigint" }, false, ["FK"]],
+    ["DisplayName", { name: "nvarchar", maxLength: 400 }, true, []],
+    ["ExternalReference", { name: "uniqueidentifier" }, true, ["UQ"]],
+    ["Id", { name: "bigint" }, false, ["PK"]],
+    ["OccurredAt", { name: "datetimeoffset", scale: 7 }, false, []],
+    ["Payload", { name: "nvarchar", maxLength: -1 }, true, []],
+    ["UniqueCustomerId", { name: "bigint" }, false, ["UQ", "FK"]],
+    [
+      "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
+      { name: "nvarchar", maxLength: 200 },
+      true,
+      [],
+    ],
+  ] as const;
+  const candidates: CompletionCandidate[] = specs.map(
+    ([name, sqlType, nullable, keyRoles]) => ({
+      name,
+      normalizedName: name.toLocaleLowerCase("en-US"),
+      kind: "column",
+      sqlType,
+      nullable,
+      keyRoles,
+      sourceObject,
+    }),
+  );
+  const layout = columnPresentationLayout(candidates);
+  assert.deepEqual(layout, { nameWidth: 32, roleWidth: 5, typeWidth: 17 });
+  const rows = candidates.map(
+    (candidate) =>
+      `${candidate.name}${presentationModel(candidate, false, layout).detail}`,
+  );
+  for (const value of [
+    "decimal(38,18)",
+    "varbinary(max)",
+    "varchar(20)",
+    "nvarchar(200)",
+    "uniqueidentifier",
+    "bigint",
+    "datetimeoffset(7)",
+    "nvarchar(max)",
+    "PK",
+    "FK",
+    "UQ",
+    "UQ·FK",
+    "NULL",
+    "NOT NULL",
+  ])
+    assert.ok(
+      rows.some((row) => row.includes(value)),
+      `missing ${value}`,
+    );
+  assert.match(rows[9] ?? "", /UQ·FK\s+bigint\s+NOT NULL$/);
+  assert.equal(layout.nameWidth, 32);
 });

@@ -76,6 +76,22 @@ export function resolveSqlContext(
   const replacementStart = hasSearch && last ? last.start : cursor;
   const common = { search, replacementStart, symbols, sql, cursor };
 
+  // A completed ON keyword starts an expression even before trailing whitespace is typed.
+  // It is syntax, never a replacement/filter fragment.
+  if (
+    last?.normalized === "on" &&
+    sql.slice(last.end, cursor).trim().length === 0
+  )
+    return {
+      kind: "expression",
+      baseKind: "expression",
+      search: "",
+      replacementStart: cursor,
+      symbols,
+      sql,
+      cursor,
+    };
+
   let tailStart = tokens.length;
   while (tailStart > 0 && isReferenceToken(tokens[tailStart - 1])) {
     const previous = tokens[tailStart - 1];

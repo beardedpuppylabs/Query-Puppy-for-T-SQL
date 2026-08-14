@@ -176,6 +176,20 @@ const index = new DatabaseIndex({
           nullable: true,
           ordinal: 4,
         },
+        {
+          name: "PrimaryAddressId",
+          normalizedName: "primaryaddressid",
+          type: { name: "bigint" },
+          nullable: true,
+          ordinal: 5,
+        },
+        {
+          name: "ShippingAddressId",
+          normalizedName: "shippingaddressid",
+          type: { name: "bigint" },
+          nullable: true,
+          ordinal: 6,
+        },
       ],
     },
     {
@@ -223,6 +237,47 @@ const index = new DatabaseIndex({
           type: { name: "bigint" },
           nullable: false,
           ordinal: 2,
+        },
+        {
+          name: "CustomerId",
+          normalizedName: "customerid",
+          type: { name: "bigint" },
+          nullable: false,
+          ordinal: 3,
+        },
+      ],
+    },
+    {
+      id: 14,
+      schema: "reltest",
+      name: "Addresses",
+      normalizedName: "addresses",
+      kind: "table",
+      parameters: [],
+      columns: [
+        {
+          name: "AddressId",
+          normalizedName: "addressid",
+          type: { name: "bigint" },
+          nullable: false,
+          ordinal: 1,
+        },
+      ],
+    },
+    {
+      id: 15,
+      schema: "reltest",
+      name: "Products",
+      normalizedName: "products",
+      kind: "table",
+      parameters: [],
+      columns: [
+        {
+          name: "ProductId",
+          normalizedName: "productid",
+          type: { name: "bigint" },
+          nullable: false,
+          ordinal: 1,
         },
       ],
     },
@@ -277,19 +332,91 @@ const index = new DatabaseIndex({
     {
       database,
       id: 10,
-      name: "FK_Customers_BillingAddress",
+      name: "FK_reltest_Customers_BillingAddress",
       parentObjectId: 11,
       parentSchema: "reltest",
       parentObjectName: "Customers",
-      referencedObjectId: 4,
-      referencedSchema: "billing",
-      referencedObjectName: "BillingAddresses",
+      referencedObjectId: 14,
+      referencedSchema: "reltest",
+      referencedObjectName: "Addresses",
       columns: [
         {
           parentColumnId: 4,
           parentColumnName: "BillingAddressId",
           referencedColumnId: 1,
-          referencedColumnName: "BillingAddressId",
+          referencedColumnName: "AddressId",
+          ordinal: 1,
+        },
+      ],
+      deleteAction: "NO_ACTION",
+      updateAction: "NO_ACTION",
+      disabled: false,
+      notTrusted: false,
+    },
+    {
+      database,
+      id: 12,
+      name: "FK_reltest_Customers_PrimaryAddress",
+      parentObjectId: 11,
+      parentSchema: "reltest",
+      parentObjectName: "Customers",
+      referencedObjectId: 14,
+      referencedSchema: "reltest",
+      referencedObjectName: "Addresses",
+      columns: [
+        {
+          parentColumnId: 5,
+          parentColumnName: "PrimaryAddressId",
+          referencedColumnId: 1,
+          referencedColumnName: "AddressId",
+          ordinal: 1,
+        },
+      ],
+      deleteAction: "NO_ACTION",
+      updateAction: "NO_ACTION",
+      disabled: false,
+      notTrusted: false,
+    },
+    {
+      database,
+      id: 13,
+      name: "FK_reltest_Customers_ShippingAddress",
+      parentObjectId: 11,
+      parentSchema: "reltest",
+      parentObjectName: "Customers",
+      referencedObjectId: 14,
+      referencedSchema: "reltest",
+      referencedObjectName: "Addresses",
+      columns: [
+        {
+          parentColumnId: 6,
+          parentColumnName: "ShippingAddressId",
+          referencedColumnId: 1,
+          referencedColumnName: "AddressId",
+          ordinal: 1,
+        },
+      ],
+      deleteAction: "NO_ACTION",
+      updateAction: "NO_ACTION",
+      disabled: false,
+      notTrusted: false,
+    },
+    {
+      database,
+      id: 14,
+      name: "FK_reltest_OrderHeaders_Customer",
+      parentObjectId: 13,
+      parentSchema: "reltest",
+      parentObjectName: "OrderHeaders",
+      referencedObjectId: 11,
+      referencedSchema: "reltest",
+      referencedObjectName: "Customers",
+      columns: [
+        {
+          parentColumnId: 3,
+          parentColumnName: "CustomerId",
+          referencedColumnId: 1,
+          referencedColumnName: "CustomerId",
           ordinal: 1,
         },
       ],
@@ -509,7 +636,7 @@ export async function run(): Promise<void> {
     ["SELECT c.customer FROM reltest.Customers c", "CustomerCode", "UQ"],
     ["SELECT c.billing FROM reltest.Customers c", "BillingAddressId", "FK"],
     ["SELECT c.external FROM reltest.Customers c", "ExternalKey", "UQ"],
-    ["SELECT ol.company FROM reltest.OrderLines ol", "CompanyId", "PK · FK"],
+    ["SELECT ol.company FROM reltest.OrderLines ol", "CompanyId", "PK·FK"],
   ] as const) {
     const sql = expectation[0];
     const cursor = sql.indexOf(" FROM");
@@ -524,21 +651,19 @@ export async function run(): Promise<void> {
       typeof item.label !== "string" &&
         item.label.detail?.includes(expectation[2]),
     );
+    if (typeof item.label !== "string") {
+      const detail = item.label.detail ?? "";
+      assert.ok(detail.indexOf(expectation[2]) < detail.indexOf("NULL"));
+    }
     assert.equal(item.insertText, expectation[1]);
-    assert.equal(
-      item.filterText,
-      `${expectation[0].slice("SELECT ".length, expectation[0].indexOf(" FROM")).split(".")[1]} ${expectation[1]}`,
-    );
+    assert.equal(item.filterText, expectation[1]);
     assert.match(item.sortText ?? "", /^\d{8}$/);
     assert.ok(item.range instanceof vscode.Range);
     if (expectation[2] === "FK") {
       const documentation = item.documentation;
       assert.ok(documentation instanceof vscode.MarkdownString);
-      assert.match(documentation.value, /FK_Customers_BillingAddress/);
-      assert.match(
-        documentation.value,
-        /billing\.BillingAddresses\.BillingAddressId/,
-      );
+      assert.match(documentation.value, /FK_reltest_Customers_BillingAddress/);
+      assert.match(documentation.value, /reltest\.Addresses\.AddressId/);
     }
     if (expectation[1] === "ExternalKey") {
       const documentation = item.documentation;
@@ -565,6 +690,135 @@ export async function run(): Promise<void> {
   assert.match(
     compositeItem.documentation.value,
     /OrderId.*OrderHeaders\.OrderId/s,
+  );
+
+  const joinPredicates = async (sql: string) =>
+    (await semanticCompletion(sql)).filter(
+      (item) => item.data?.semanticKind === "joinPredicate",
+    );
+  const predicateLabels = (items: readonly vscode.CompletionItem[]) =>
+    labels(items);
+  const offsetAt = (sql: string, position: vscode.Position) => {
+    const lines = sql.split("\n");
+    return (
+      lines
+        .slice(0, position.line)
+        .reduce((sum, line) => sum + line.length + 1, 0) + position.character
+    );
+  };
+  const accept = (sql: string, item: vscode.CompletionItem): string => {
+    const range = item.range;
+    assert.ok(range instanceof vscode.Range);
+    const text =
+      typeof item.insertText === "string"
+        ? item.insertText
+        : item.insertText?.value;
+    assert.ok(text !== undefined);
+    const edits = [
+      ...(item.additionalTextEdits ?? []),
+      vscode.TextEdit.replace(range, text),
+    ].sort(
+      (left, right) =>
+        offsetAt(sql, right.range.start) - offsetAt(sql, left.range.start),
+    );
+    return edits.reduce(
+      (result, edit) =>
+        `${result.slice(0, offsetAt(sql, edit.range.start))}${edit.newText}${result.slice(offsetAt(sql, edit.range.end))}`,
+      sql,
+    );
+  };
+  const forwardJoin = await joinPredicates(
+    "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON",
+  );
+  assert.deepEqual(predicateLabels(forwardJoin), [
+    "oh.CustomerId = c.CustomerId",
+  ]);
+  assert.equal(forwardJoin[0]?.insertText, "oh.CustomerId = c.CustomerId");
+  assert.ok(forwardJoin[0].documentation instanceof vscode.MarkdownString);
+  assert.match(
+    forwardJoin[0].documentation.value,
+    /FK_reltest_OrderHeaders_Customer/,
+  );
+  assert.equal(
+    accept(
+      "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON",
+      forwardJoin[0],
+    ),
+    "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON oh.CustomerId = c.CustomerId",
+  );
+  for (const whitespace of [" ", "     ", "\n        "]) {
+    const sql = `SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON${whitespace}`;
+    const item = (await joinPredicates(sql))[0];
+    assert.ok(
+      item,
+      `missing JOIN predicate after whitespace ${JSON.stringify(whitespace)}`,
+    );
+    assert.equal(accept(sql, item), `${sql}oh.CustomerId = c.CustomerId`);
+  }
+  const partialSql =
+    "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON oh.cust";
+  const partialItem = (await joinPredicates(partialSql))[0];
+  assert.ok(partialItem);
+  assert.equal(
+    accept(partialSql, partialItem),
+    "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON oh.CustomerId = c.CustomerId",
+  );
+  assert.deepEqual(
+    predicateLabels(
+      await joinPredicates(
+        "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.Customers c ON",
+      ),
+    ),
+    ["c.CustomerId = oh.CustomerId"],
+  );
+  const compositeDirect =
+    "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.OrderLines ol ON";
+  const compositeDirectItem = (await joinPredicates(compositeDirect))[0];
+  assert.ok(compositeDirectItem);
+  assert.equal(
+    accept(compositeDirect, compositeDirectItem),
+    `${compositeDirect} ol.CompanyId = oh.CompanyId AND ol.OrderId = oh.OrderId`,
+  );
+  assert.equal(
+    (
+      await joinPredicates(
+        "SELECT * FROM reltest.Customers c JOIN reltest.Addresses a ON",
+      )
+    ).length,
+    3,
+  );
+  assert.deepEqual(
+    predicateLabels(
+      await joinPredicates(
+        "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.OrderLines ol ON",
+      ),
+    ),
+    ["ol.CompanyId = oh.CompanyId AND ol.OrderId = oh.OrderId"],
+  );
+  assert.equal(
+    (
+      await joinPredicates(
+        "SELECT * FROM reltest.Customers c JOIN reltest.Products p ON",
+      )
+    ).length,
+    0,
+  );
+  const rankedTables = await semanticCompletion(
+    "SELECT * FROM reltest.Customers c JOIN reltest.",
+  );
+  const rankedLabels = labels(rankedTables);
+  assert.ok(
+    rankedLabels.indexOf("Addresses") < rankedLabels.indexOf("Products"),
+  );
+  const addressesItem = rankedTables.find(
+    (item) =>
+      (typeof item.label === "string" ? item.label : item.label.label) ===
+      "Addresses",
+  );
+  assert.ok(addressesItem);
+  assert.ok(
+    typeof addressesItem.label !== "string" &&
+      addressesItem.label.detail?.includes("related via 3 FKs"),
   );
 
   const nestedSql = `SELECT * FROM dbo.Customers c WHERE EXISTS (SELECT 1 FROM sales.CustomerOrders o WHERE o.`;

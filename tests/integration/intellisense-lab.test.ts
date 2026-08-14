@@ -162,6 +162,63 @@ test(
         resolveSqlContext(sql, sql.indexOf(" FROM")),
         relationshipScope,
       ).find((candidate) => candidate.name === name)?.keyRoles;
+    const joinPredicates = (sql: string) =>
+      createCandidates(resolveSqlContext(sql), relationshipScope)
+        .filter((candidate) => candidate.kind === "joinPredicate")
+        .map((candidate) => candidate.name);
+    assert.deepEqual(
+      joinPredicates(
+        "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON",
+      ),
+      ["oh.CustomerId = c.CustomerId"],
+    );
+    assert.deepEqual(
+      joinPredicates(
+        "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.Customers c ON",
+      ),
+      ["c.CustomerId = oh.CustomerId"],
+    );
+    assert.equal(
+      joinPredicates(
+        "SELECT * FROM reltest.Customers c JOIN reltest.Addresses a ON",
+      ).length,
+      3,
+    );
+    assert.deepEqual(
+      joinPredicates(
+        "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.OrderLines ol ON",
+      ),
+      ["ol.CompanyId = oh.CompanyId AND ol.OrderId = oh.OrderId"],
+    );
+    assert.deepEqual(
+      joinPredicates(
+        "SELECT * FROM reltest.Customers c JOIN relref.Regions r ON",
+      ),
+      ["r.RegionId = c.RegionId"],
+    );
+    assert.equal(
+      joinPredicates(
+        "SELECT * FROM reltest.Customers c JOIN reltest.Products p ON",
+      ).length,
+      0,
+    );
+    assert.equal(
+      joinPredicates(
+        "SELECT * FROM reltest.Customers c JOIN reltest.LegacyCustomerLinks l ON",
+      ).length,
+      0,
+    );
+    const rankedJoinTables = createCandidates(
+      resolveSqlContext(
+        "SELECT * FROM reltest.Customers c JOIN IntelliSenseLab.reltest.",
+      ),
+      relationshipScope,
+    ).filter((candidate) => candidate.kind === "table");
+    const rankedNames = rankedJoinTables.map((candidate) => candidate.name);
+    assert.ok(
+      rankedNames.indexOf("Addresses") < rankedNames.indexOf("Products"),
+    );
+    assert.equal(rankedNames.filter((name) => name === "Addresses").length, 1);
     assert.deepEqual(
       role("SELECT c.customer FROM reltest.Customers c", "CustomerId"),
       ["PK"],
@@ -231,6 +288,9 @@ test(
     assert.equal(region.referencedSchema, "relref");
     context.diagnostic(
       `Schema Intelligence fixture verified: PK=8, UQ=7, FK=8, filtered=${filteredKey.name}, composite=${compositeForeignKey.name}.`,
+    );
+    context.diagnostic(
+      "JOIN Intelligence verified: forward/reverse, 3 alternatives, composite, cross-schema, disabled exclusion, and related-table ranking.",
     );
     const customers = index.findObject("dbo", "Customers");
     assert.ok(
@@ -1189,6 +1249,7 @@ function createTestPool(database: string): sql.ConnectionPool {
     user: process.env["MSSQL_TEST_USER"] ?? "",
     password: process.env["MSSQL_TEST_PASSWORD"] ?? "",
     ...(port ? { port } : {}),
+    requestTimeout: 60_000,
     options: { encrypt: false, trustServerCertificate: true },
   });
 }
