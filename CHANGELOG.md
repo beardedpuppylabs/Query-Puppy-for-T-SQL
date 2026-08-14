@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.5
+
+- Reworked the Marketplace overview around context-aware completion for large SQL Server schemas.
+- Documented Schema Intelligence, FK-aware JOIN predicates, query-local scope handling, connection reuse, caching, and read-only metadata access.
+- Replaced outdated limitations and refreshed commands, settings, installation, privacy, and public package metadata.
+
 ## 0.8.3
 
 - Reworked physical-column completion presentation into one bounded, table-like metadata layout with stable name, role, datatype, and nullability columns.

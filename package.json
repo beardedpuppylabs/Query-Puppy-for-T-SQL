@@ -1,11 +1,12 @@
 {
   "name": "improved-sql-intellisense",
   "displayName": "Improved SQL IntelliSense",
-  "description": "SQL Server IntelliSense with Contains search, context-aware completion, cross-database resolution, and rich metadata.",
-  "version": "0.8.3",
+  "description": "Context-aware SQL Server IntelliSense for large schemas with Contains search, PK/FK metadata, and relationship-aware JOIN completion.",
+  "version": "0.8.5",
   "publisher": "Bismarck",
   "author": "Bismarck",
   "license": "MIT",
+  "homepage": "https://marketplace.visualstudio.com/items?itemName=Bismarck.improved-sql-intellisense",
   "icon": "images/logo.png",
   "galleryBanner": {
     "color": "#0B1F33",
@@ -29,7 +30,10 @@
     "autocomplete",
     "completion",
     "database",
-    "contains-search"
+    "contains-search",
+    "foreign-key",
+    "schema",
+    "join"
   ],
   "extensionDependencies": [
     "ms-mssql.mssql"
@@ -105,7 +109,7 @@
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
     "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run test:extension && npm run build",
-    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.8.3.vsix",
+    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.8.5.vsix",
     "publish:marketplace": "vsce publish"
   },
   "devDependencies": {

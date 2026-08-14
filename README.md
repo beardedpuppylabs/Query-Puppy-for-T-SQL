@@ -1,203 +1,112 @@
 # Improved SQL IntelliSense
 
-## JOIN Intelligence
+Improved SQL IntelliSense is context-aware SQL Server IntelliSense for databases where memorizing every table, column, function, and relationship is unrealistic. It combines case-insensitive Contains discovery with query-scope analysis and real SQL Server schema metadata.
 
-Version 0.8.1 uses cached SQL Server foreign-key metadata to suggest complete predicates after `JOIN … ON`. For example, joining `Customers AS c` to `CustomerOrders AS o` can suggest `o.CustomerId = c.CustomerId`. The current-right alias is always rendered first, multiple real relationships remain separate choices, and composite foreign keys produce one complete ordinal `AND` predicate.
+In a schema with hundreds or thousands of objects, remembering part of a name should be enough to find it. Once tables are joined, actual foreign-key metadata can help construct the `ON` predicate. The extension provides its own completion provider while reusing the active Microsoft SQL Server (`mssql`) connection—there is no second login or separate connection configuration.
 
-JOIN source completion ranks tables connected to any legally visible left source by an enabled FK in either direction. Typed fragments still use case-insensitive contiguous Contains before relationship ranking. No name/type guessing is performed, disabled FKs are excluded, and completion performs no database queries.
+## Highlights
 
-Improved SQL IntelliSense is a SQL Server completion provider designed for fast navigation of large databases. It uses case-insensitive Contains matching, so a fragment can match anywhere in an object name, while reusing the active Microsoft mssql connection. No second connection or duplicate credentials are required.
+- Contains-based discovery across large SQL Server catalogs
+- Context-aware completion for clauses, expressions, aliases, and query-local sources
+- PK, UQ, and FK metadata on physical columns
+- JOIN predicates generated from actual foreign-key relationships
+- Query-local scope intelligence for CTEs, temp tables, derived tables, and more
+- Scalar-function and table-valued-function Signature Help
+- Same-server cross-database completion
+- Active `mssql` connection reuse with cached metadata
 
-Typing `addr` may find:
+## Find objects by what you remember
+
+Type a fragment:
+
+```text
+addr
+```
+
+and find names such as:
 
 ```text
 Addresses
+BillingAddresses
 CustomerAddresses
-BillingAddress
-ShippingAddress
+ShippingAddresses
 ```
 
-> [!IMPORTANT]
-> **Disable Microsoft mssql suggestions when using this extension.**
->
-> Improved SQL IntelliSense replaces the suggestion provider from `ms-mssql.mssql`. Running both providers can produce duplicate or inconsistent completion results.
->
-> Choose **Disable globally** when prompted on first use, or run **Improved SQL IntelliSense: Disable Microsoft SQL Suggestions** from the Command Palette.
->
-> mssql Quick Info and SQL error checking remain available.
+Matching is contiguous, case-insensitive Contains—not fuzzy search and not only StartsWith. Exact names may rank first; otherwise results use deterministic semantic groups and alphabetical order within equivalent tiers.
 
-## Why Contains?
-
-Matching is contiguous and case-insensitive: `addr` can occur anywhere in a name. An exact match may be prioritized; otherwise results are grouped by semantic type and sorted alphabetically.
-
-## Features
-
-- Case-insensitive Contains completion
-- Schemas, tables, views, synonyms, table-valued functions, scalar functions, and stored procedures
-- Column-aware CTEs, temporary tables, table variables, and derived tables
-- Nested query completion with correlated outer-alias resolution, lexical shadowing, and scope isolation
-- Set-operation intelligence for `UNION`, `UNION ALL`, `INTERSECT`, and `EXCEPT`
-- Clause-aware expression completion for SELECT, WHERE, JOIN ON, GROUP BY, HAVING, ORDER BY, and function arguments
-- `SELECT INTO`, `VALUES`, `CROSS APPLY`, and `OUTER APPLY` row-source inference
-- Column detail with datatype and `NULL`/`NOT NULL`
-- Scalar-function signatures and return types, and stored-procedure signatures
-- INSERT/UPDATE writable-column and EXEC named-parameter completion
-- Automatic function Signature Help while typing, with active-parameter tracking; use `Ctrl+Shift+Space` to reopen it manually
-- DML OUTPUT completion through `inserted` and `deleted`
-- Tab-only expansion of `SELECT *` and `alias.*` into ordered, qualified columns
-- Smart editable `AS` alias suggestions after row sources
-- Alias member completion such as `c.addr`
-- `Schema.Object`, `Database.Schema.Object`, and `Database..Object` navigation
-- Same-server cross-database completion and database-wide cross-schema search
-- `sys` and `INFORMATION_SCHEMA` completion
-- In-memory metadata caching
-- **Refresh IntelliSense Metadata** after DDL changes
-- **Show Improved SQL IntelliSense Status** plus an optional diagnostic output channel
-- **Diagnose Query Scope** for cursor scope, visible RowSources, correlation, and semantic candidate details
-
-## Usage
-
-### Expand SELECT wildcards
-
-Place the cursor directly after `*` in a SELECT projection and press Tab. The extension replaces only that wildcard with columns already available from catalog or document-local metadata. Enter always retains its normal editor behavior, and Tab behaves normally outside a resolvable projection wildcard.
-
-For `alias.*`, only that alias is expanded. A plain `*` includes visible row sources in source order; it stays unqualified for one unaliased source and uses deterministic qualifiers for aliased or multiple sources.
-
-### Smart aliases
-
-After completing or manually typing a resolvable row source in FROM, JOIN, or APPLY, accept the top `AS` snippet to insert a short editable alias such as `AS co` for `CustomerOrders`. Disable this with `improvedSqlIntellisense.smartAliases.enabled` if desired.
-
-### Contains
+Then let a real SQL Server foreign key complete the join:
 
 ```sql
-SELECT *
-FROM addr
+FROM dbo.Customers AS c
+JOIN sales.CustomerOrders AS o
+    ON
 ```
 
-This can suggest any table, view, or table-valued function whose name contains `addr`, regardless of case.
+can suggest:
 
-### Alias
+```sql
+o.CustomerId = c.CustomerId
+```
+
+## Context-aware completion
+
+Completion follows the SQL position instead of showing every catalog object everywhere:
 
 ```sql
 SELECT c.addr
 FROM dbo.Customers AS c
+WHERE c.
+ORDER BY c.
 ```
 
-### Nested and correlated queries
+- `FROM`, `JOIN`, and `APPLY` offer row sources such as tables, views, synonyms, TVFs, and visible local sources.
+- `alias.` offers columns projected by that row source.
+- `SELECT`, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, and function arguments offer meaningful expression candidates rather than databases, procedures, and tables.
+- Projection aliases are available where SQL Server permits them, including `ORDER BY`.
 
-Aliases are resolved from the innermost query outward. Expression subqueries can use eligible outer aliases, while inner and sibling aliases remain private. Ordinary derived tables do not correlate; the right side of `CROSS APPLY` and `OUTER APPLY` can see left-side row sources.
+Contains filtering remains active inside these semantic domains. For example, `c.addr` can find every visible column containing `addr`.
+
+## Schema Intelligence
+
+Improved SQL IntelliSense reads SQL Server catalog metadata for primary keys, unique constraints and indexes, and foreign keys. It understands composite keys, composite foreign keys, filtered unique indexes, and cross-schema relationships within a database.
+
+Physical-column suggestions use a compact roles-first presentation:
+
+```text
+CustomerId         PK      bigint          NOT NULL
+CustomerCode       UQ      varchar(50)     NOT NULL
+BillingAddressId   FK      bigint          NULL
+DisplayName                nvarchar(200)   NULL
+```
+
+Multiple roles appear compactly, for example `PK·FK`. Completion documentation retains full constraint names, composite columns, FK mappings, referential actions, datatype, and nullability. The native VS Code/VSCodium Suggest Widget controls available width, so narrow widgets may truncate detail text.
+
+## FK-aware JOIN Intelligence
+
+After a joined row source, `ON` can offer a complete predicate from the actual enabled SQL Server foreign key:
 
 ```sql
-SELECT *
 FROM dbo.Customers AS c
-WHERE EXISTS
-(
-    SELECT 1
-    FROM sales.CustomerOrders AS o
-    WHERE o.CustomerId = c.CustomerId
-      AND o.
-)
-```
-
-### Set operations
-
-Set results use the first query branch's column names and ordinal shape, matching SQL Server behavior. Each branch keeps its own aliases; eligible outer aliases remain available in correlated subqueries.
-
-```sql
-WITH CustomerValues AS
-(
-    SELECT c.CustomerId AS Id, c.EmailAddress AS Value
-    FROM dbo.Customers AS c
-    UNION ALL
-    SELECT b.BillingAddressId, b.BillingEmailAddress
-    FROM billing.BillingAddresses AS b
-)
-SELECT x.
-FROM CustomerValues AS x
-```
-
-Here `x.` completes `Id` and `Value`. Set-result CTEs, derived tables, and APPLY sources also support SELECT wildcard expansion.
-
-### Clause-aware expressions
-
-Expression positions suggest visible columns, aliases, scalar functions, and the existing expression keywords instead of unrelated tables, schemas, databases, TVFs, or procedures.
-
-```sql
-SELECT c.EmailAddress AS Contact
-FROM dbo.Customers AS c
-WHERE c.EmailAddress IS NOT NULL
-ORDER BY Contact
-```
-
-Projection aliases such as `Contact` are visible in ORDER BY, but not in peer SELECT expressions, GROUP BY, or HAVING. Final ORDER BY completion after a set operation uses the composed set-result names.
-
-### DML and callable objects
-
-```sql
-INSERT INTO dbo.Customers (CustomerCode, EmailAddress)
-
-UPDATE c SET BillingAddressId = a.AddressId
-FROM dbo.Customers AS c
-JOIN dbo.Addresses AS a ON a.CustomerId = c.CustomerId
-
-EXEC dbo.FindCustomerAddress @Search = N'Berlin', @MaxRows = 10
-
-SELECT billing.CalculateBillingTotal(NetAmount, TaxRate)
-```
-
-INSERT and UPDATE target completion omits server-maintained columns. EXEC named parameters remain in declaration order and disappear after assignment. Function calls show their parameter list and return type while the cursor moves between arguments.
-
-### Schema
-
-```sql
-SELECT *
-FROM reporting.cust
-```
-
-### Cross database
-
-Same-server database completion uses databases available through the active mssql connection.
-
-```sql
-SELECT
-    c.CustomerId,
-    o.OrderNumber
-FROM CRM.dbo.Customers AS c
-JOIN Reporting.sales.Orders AS o
+JOIN sales.CustomerOrders AS o
     ON o.CustomerId = c.CustomerId
 ```
 
-### Database-wide editing shortcut
+The relationship is not guessed from similar column names. The currently joined right-side alias is rendered first, and disabled foreign keys are not used as normal relationship suggestions.
 
-Normal navigation works as follows:
+When several foreign keys connect the same tables, each valid relationship remains a separate choice. A customer-to-address join can therefore distinguish primary, billing, and shipping address relationships instead of choosing one heuristically.
 
-```text
-Database.                 -> schemas
-Database.Schema.          -> objects from that schema
-Database.fragment         -> schema matches first, then objects across schemas
-```
-
-If `ReportingDb.addr` finds `CustomerAddresses` in schema `sales`, accepting it inserts:
+Composite foreign keys are offered as one ordered predicate:
 
 ```sql
-ReportingDb.sales.CustomerAddresses
+ol.CompanyId = oh.CompanyId
+AND ol.OrderId = oh.OrderId
 ```
 
-The shortcut inserts a valid `Database.Schema.Object` name; it is not new SQL Server syntax.
+At a `JOIN` source position, objects connected to a legally visible left source by an enabled FK receive a semantic ranking boost. Contains filtering still applies, and unrelated matching objects remain available.
 
-System targets work normally, including:
+## Query-local intelligence
 
-```sql
-INFORMATION_SCHEMA.TABLES
-INFORMATION_SCHEMA.COLUMNS
-sys.tables
-sys.columns
-sys.objects
-```
-
-### Document-local row sources
-
-Projected columns, aliases, types, and nullability are inferred where reliable:
+Document-local row sources participate in the same completion model as catalog objects:
 
 ```sql
 WITH CustomerData AS
@@ -206,48 +115,127 @@ WITH CustomerData AS
     FROM dbo.Customers
 )
 SELECT c.
-FROM CustomerData c
+FROM CustomerData AS c
 ```
 
-Temporary tables created with `CREATE TABLE` or `SELECT INTO`, table variables, derived tables, `VALUES`, and APPLY sources participate in the same alias-member completion.
+Supported sources include CTEs, `CREATE TABLE` and `SELECT INTO` temp tables, table variables, derived tables, `VALUES`, and `CROSS APPLY`/`OUTER APPLY`. Projected columns, aliases, types, and nullability are retained where they can be inferred reliably.
 
-Use **Refresh IntelliSense Metadata** after schema changes and **Show Improved SQL IntelliSense Status** for connection, cache, and completion-provider diagnostics.
+Nested scopes resolve aliases from the innermost query outward. Eligible correlated outer references remain visible, while inner aliases, sibling scopes, and shadowed names stay isolated. Ordinary derived tables do not correlate; the right side of `APPLY` can see eligible left-side sources.
 
-## Requirements
+Set operations—`UNION`, `UNION ALL`, `INTERSECT`, and `EXCEPT`—compose result columns by ordinal using the first branch's names. Their results work through CTEs, derived tables, `APPLY`, alias completion, and wildcard expansion.
 
-- VS Code 1.105 or later
-- [Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql)
-- An active mssql SQL Server connection
+## Functions, procedures, and DML
 
-## Privacy
+Scalar functions and TVFs provide VS Code Signature Help with active-argument tracking. Signature Help opens automatically after `(`, follows commas, and can be reopened with the editor's **Trigger Parameter Hints** command.
 
-Improved SQL IntelliSense has no telemetry. It does not transmit query text to an external service, store SQL credentials, or open an independent SQL connection. SQL Server catalog access is performed only through the installed Microsoft mssql extension and its active editor connection.
+Additional context-aware support includes:
+
+- writable-column completion for `INSERT`
+- `UPDATE` target and right-hand expression awareness
+- statement-correct `inserted` and `deleted` columns in `OUTPUT`
+- named `EXEC` parameters in declaration order, excluding parameters already assigned
+- stored-procedure parameter signatures
+
+Server-maintained identity, computed, generated, and rowversion columns are excluded from writable-column suggestions.
+
+## SELECT wildcard expansion
+
+Place the cursor directly after a semantic `*` or `alias.*` in a SELECT projection and press Tab to replace that wildcard with known columns. Source and column order are preserved.
+
+- One unaliased source produces unqualified columns.
+- One explicitly aliased source uses that alias.
+- Multiple visible sources use their aliases or shortest deterministic qualifiers.
+- An explicit `alias.*` always preserves that qualifier.
+
+Enter never expands a wildcard. This keeps an ordinary `SELECT *` safe on very wide tables. Tab behaves normally when the wildcard cannot be resolved.
+
+## Smart aliases
+
+After a row source in `FROM`, `JOIN`, or `APPLY`, the extension can suggest an editable alias:
+
+```text
+Customers       -> AS c
+CustomerOrders  -> AS co
+```
+
+Aliases are suggestions, not forced rewrites. They can be disabled with `improvedSqlIntellisense.smartAliases.enabled`.
+
+## Cross-database completion
+
+Database, schema, and object qualification work across databases available through the same active SQL Server connection:
+
+```text
+Database.                 -> schemas
+Database.Schema.          -> objects in that schema
+Database.fragment         -> schema matches, then objects across schemas
+Database..Object          -> dbo object
+```
+
+Secondary-database metadata is loaded only after explicit qualification. Ordinary unqualified `FROM` completion remains restricted to the active database. Linked Servers and four-part names are not supported.
+
+## How it works with mssql
+
+[Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql) is a required dependency because it owns SQL Server connections. Improved SQL IntelliSense uses the extension's supported connection-sharing API to identify the active connection/database, list same-server databases, and execute catalog queries.
+
+Improved SQL IntelliSense does not consume or filter Microsoft's completion output; it registers its own completion provider. Running both providers can produce duplicate suggestions. On first use, Improved SQL IntelliSense can offer to disable `mssql.intelliSense.enableSuggestions` globally, or you can run **Improved SQL IntelliSense: Disable Microsoft SQL Suggestions**. It never changes that setting silently. Other `mssql` services, including connection handling, remain available.
+
+## Performance and caching
+
+Catalog metadata is loaded with set-based queries and cached in memory per connection and database. Secondary databases load lazily after qualification. Completion and FK relationship lookup use cached indexes—there is no metadata query per keystroke.
+
+Run **Improved SQL IntelliSense: Refresh IntelliSense Metadata** after DDL changes.
+
+## Privacy and database permissions
+
+- No extension-specific database credentials are requested or stored.
+- The active `mssql` connection is reused; no independent SQL connection is opened.
+- Schema metadata discovery is read-only and does not require DDL or DML privileges.
+- Catalog metadata is cached locally in memory for IntelliSense.
+- The extension contains no telemetry and does not upload query text or database content to an external service.
+
+The connected login still needs permission to read the relevant SQL Server catalog metadata.
+
+## Installation and getting started
+
+1. Install [Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql).
+2. Install [Improved SQL IntelliSense from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=Bismarck.improved-sql-intellisense), or install a release VSIX in VSCodium.
+3. Open a SQL document and connect it with `mssql`.
+4. If duplicate completion lists appear, disable Microsoft SQL suggestions when prompted or with the provided command.
+
+Requires VS Code 1.105 or a compatible VSCodium release.
+
+## Commands
+
+- **Improved SQL IntelliSense: Expand SELECT \* to Columns**
+- **Improved SQL IntelliSense: Refresh IntelliSense Metadata**
+- **Improved SQL IntelliSense: Show Improved SQL IntelliSense Status**
+- **Improved SQL IntelliSense: Disable Microsoft SQL Suggestions**
+- **Improved SQL IntelliSense: Diagnose Signature Help**
+- **Improved SQL IntelliSense: Diagnose Query Scope**
+
+The diagnostic commands report connection, cache, scope, visible-row-source, correlation, and provider information through VS Code/VSCodium UI and the extension output channel.
+
+## Settings
+
+- `improvedSqlIntellisense.enabled`: enable or disable Improved SQL IntelliSense completion.
+- `improvedSqlIntellisense.debugLogging`: write detailed diagnostics to the **Improved SQL IntelliSense** output channel.
+- `improvedSqlIntellisense.smartAliases.enabled`: enable or disable smart alias suggestions.
 
 ## Known limitations
 
-- The defensive tokenizer is not a complete T-SQL compiler. Deeply nested queries or unusual grammar can reduce context accuracy.
-- Unaliased computed projections without a reliable SQL output name are omitted.
-- Recursive CTE and UNION branch type reconciliation is best-effort.
-- Stored-procedure first-result-set discovery is not performed; no result schema is fabricated.
+- SQL Server is the only supported database engine.
+- Linked Servers and four-part object names are out of scope. Cross-database support is limited to databases on the active SQL Server connection.
+- The defensive parser is not a complete T-SQL compiler; unusually exotic or incomplete grammar can reduce context accuracy.
+- Type inference is conservative. Unnamed computed projections may be omitted, and recursive CTE/set-branch type reconciliation is best-effort.
+- Stored-procedure result-set discovery is not performed, so the extension does not fabricate procedure result columns.
+- JOIN predicates require real, enabled FK metadata. The extension does not infer relationships from naming conventions or similar datatypes.
 - Metadata refresh after DDL is explicit.
-- Cross-database completion is limited to databases on the active SQL Server connection. Linked Servers and four-part names are out of scope.
+- Completion detail width is controlled by the native Suggest Widget and may be truncated in narrow layouts.
 
 ## Development and support
 
-Contributor guidance is maintained in `docs/DEVELOPMENT.md` and `docs/PUBLISHING.md`; support guidance is in `SUPPORT.md` in the source repository.
+Contributor guidance is in `docs/DEVELOPMENT.md`, publishing guidance is in `docs/PUBLISHING.md`, and support information is in `SUPPORT.md` in the source repository.
 
 ## License
 
-Improved SQL IntelliSense is released under the MIT License. See the root `LICENSE` file for the full terms.
-
-## Schema Intelligence
-
-Version 0.8.0 loads SQL Server primary keys, unique constraints and indexes, and foreign-key relationships into the per-connection/per-database metadata cache. Physical table-column suggestions retain their datatype and nullability and add compact role markers such as `· PK · UQ · FK`; documentation shows complete composite keys and foreign-key mappings. Metadata refresh uses two set-based catalog queries per database, never a query per table, column, key, or keystroke.
-
-The extension runtime is metadata-read-only. It never provisions fixtures or executes schema/data-modifying statements; a restricted login with access to the relevant catalog metadata is sufficient. Missing integration fixtures are reported as test prerequisites.
-
-When a suggestion set contains only physical table columns, the exact identifier remains the native completion label and one coherent detail string aligns key roles, datatype, and nullability. Widths are derived from that result set and capped at 32 characters for names, 8 for roles, and 18 for datatypes, so unusually long ERP identifiers do not widen every row. Display alignment does not change filtering, ranking, replacement ranges, or inserted SQL; mixed completion domains retain their normal native presentation.
-
-The compact one-line order is column name, PK/UQ/FK roles, datatype, then nullability. This keeps the novel relationship metadata close to the identifier instead of placing it at the widget's most easily clipped edge; complete metadata remains available in documentation.
-
-The persistent manual/integration fixture is `tests/fixtures/create-schema-intelligence-fixture.sql`. An administrator runs this separate test-infrastructure script once; it is never loaded or executed by extension runtime code. The restricted `intellisense_test` login only needs `VIEW DEFINITION` afterward.
+Improved SQL IntelliSense is open-source software released under the MIT License. See `LICENSE` in the source repository for the full terms.
