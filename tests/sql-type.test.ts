@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   formatSqlType,
+  formatSqlTypeDescriptorForDisplay,
   quoteDatabaseIdentifier,
   quoteIdentifier,
 } from "../src/metadata/SqlTypeFormatter.js";
+import { describeSqlType } from "../src/metadata/SqlTypeDescriptor.js";
 test("formats SQL Server catalog types", () => {
   const cases = [
     [{ name: "int" }, "int"],
@@ -25,6 +27,22 @@ test("formats SQL Server catalog types", () => {
   assert.equal(quoteIdentifier("Order Detail"), "[Order Detail]");
   assert.equal(quoteIdentifier("Customer"), "Customer");
   assert.equal(quoteDatabaseIdentifier("ERP]Lab"), "[ERP]]Lab]");
+});
+
+test("formats inferred descriptors with canonical SQL declaration facets", () => {
+  const cases = [
+    [{ name: "uniqueidentifier", maxLength: 16 }, "uniqueidentifier"],
+    [{ name: "bigint", precision: 19, scale: 0 }, "bigint"],
+    [{ name: "varchar", maxLength: 50 }, "varchar(50)"],
+    [{ name: "nvarchar", maxLength: 400 }, "nvarchar(200)"],
+    [{ name: "decimal", precision: 38, scale: 18 }, "decimal(38,18)"],
+    [{ name: "datetime2", scale: 3 }, "datetime2(3)"],
+  ] as const;
+  for (const [type, expected] of cases)
+    assert.equal(
+      formatSqlTypeDescriptorForDisplay(describeSqlType(type)),
+      expected,
+    );
 });
 
 test("preserves valid temporary and variable identifiers", () => {

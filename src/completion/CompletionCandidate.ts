@@ -7,6 +7,10 @@ import type {
   SqlObjectKind,
   SqlType,
 } from "../metadata/MetadataModels.js";
+import type {
+  SqlTypeDescriptor,
+  TypeCompatibility,
+} from "../metadata/SqlTypeDescriptor.js";
 
 export interface CompletionCandidate {
   readonly name: string;
@@ -21,6 +25,8 @@ export interface CompletionCandidate {
   readonly returnType?: SqlType;
   readonly sourceObject?: DatabaseObject;
   readonly column?: ColumnMetadata;
+  /** True when this column is rebound to a canonical physical table object. */
+  readonly physicalColumn?: boolean;
   readonly keyRoles?: readonly ("PK" | "UQ" | "FK")[];
   readonly keys?: readonly KeyMetadata[];
   readonly foreignKeys?: readonly ForeignKeyMetadata[];
@@ -40,4 +46,8 @@ export interface CompletionCandidate {
   readonly sourceQualifier?: string;
   /** True when the semantic origin is an eligible correlated parent scope. */
   readonly outerScope?: boolean;
+  /** Expected-expression compatibility used only as a deterministic sort tier. */
+  readonly typeCompatibility?: TypeCompatibility;
+  /** Known expected expression type. Absent means type ranking is bypassed. */
+  readonly expectedType?: SqlTypeDescriptor;
 }

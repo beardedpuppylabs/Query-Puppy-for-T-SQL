@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.0
+
+- Added expected-type-aware expression completion and conservative compatibility ranking for comparisons, function arguments, UPDATE assignments, INSERT expressions, LIKE, and arithmetic operands.
+- Added a reusable normalized SQL type model and expression inference for catalog/query-local columns, literals, CAST/CONVERT, scalar UDF returns, arithmetic, and CASE.
+- Preserved Contains matching, explicit qualifier scope, and incompatible visible candidates instead of turning type intelligence into a hard filter.
+- Added visible `Type match`, compatible-family, and other-column groups when a known expected type changes completion order.
+- Fixed UPDATE RHS inference through target aliases with a depth-aware positional assignment model, including incomplete and later SET right-hand sides.
+- Restored exact alphabetical member ordering when no expected type is available.
+- Stabilized physical-column presentation with a fixed 32-character visible identifier cap and wrapped complete documentation while preserving filtering, insertion, identity, and ordering.
+- Rebound inferred physical RowSources to canonical catalog objects before type grouping so PK/UQ/FK roles and constraint documentation are retained.
+- Rendered physical columns through one canonical factory as a deterministic 32/8/20-slot visible row and migrated the public extension identity to `BeardedPuppyLabs.improved-sql-intellisense`.
+- Fixed identity-less forward member aliases in multi-group UPDATE completion by rebinding them to cached canonical table metadata before materialization.
+- Ordered type groups before CompletionItem construction so every group member uses the ordinary physical-column factory exactly once.
+
 ## 0.8.5
 
 - Reworked the Marketplace overview around context-aware completion for large SQL Server schemas.

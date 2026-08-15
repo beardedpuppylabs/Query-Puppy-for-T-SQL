@@ -8,8 +8,13 @@ import {
   type SqlObjectKind,
 } from "../metadata/MetadataModels.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
-import { presentationModel } from "./PresentationModel.js";
-import type { ColumnPresentationLayout } from "./PresentationModel.js";
+import { completionSortText } from "./CompletionSorter.js";
+import {
+  presentationModel,
+  physicalColumnDisplayRow,
+  formatColumnRoles,
+  visibleCandidateName,
+} from "./PresentationModel.js";
 
 const kinds: Record<SqlObjectKind, vscode.CompletionItemKind> = {
   database: vscode.CompletionItemKind.Module,
@@ -42,22 +47,23 @@ export function presentCandidate(
   search: string,
   mixed: boolean,
   rank: number,
-  columnLayout?: ColumnPresentationLayout,
   separatorCharacter?: string,
 ): vscode.CompletionItem {
-  const model = presentationModel(candidate, mixed, columnLayout);
+  const model = presentationModel(candidate, mixed);
+  const physical = createPhysicalColumnCompletionItem(
+    candidate,
+    replacement,
+    search,
+    rank,
+  );
+  if (physical) return physical;
   const label: vscode.CompletionItemLabel = {
-    label: candidate.name,
+    label: visibleCandidateName(candidate),
     ...(model.detail ? { detail: model.detail } : {}),
     ...(model.description ? { description: model.description } : {}),
   };
   const item = new vscode.CompletionItem(label, kinds[candidate.kind]);
-  (item as vscode.CompletionItem & { data?: unknown }).data = {
-    provider: "improved-sql-intellisense",
-    semanticKind: candidate.kind,
-  };
-  item.range = replacement;
-  item.insertText = candidate.insertText ?? quoteIdentifier(candidate.name);
+  configureCandidateItem(item, candidate, replacement, search, rank);
   if (candidate.kind === "joinPredicate" && separatorCharacter)
     item.additionalTextEdits = [
       vscode.TextEdit.replace(
@@ -65,6 +71,35 @@ export function presentCandidate(
         `${separatorCharacter} `,
       ),
     ];
+  return item;
+}
+
+export function createPhysicalColumnCompletionItem(
+  candidate: CompletionCandidate,
+  replacement: vscode.Range,
+  search: string,
+  rank: number,
+): vscode.CompletionItem | undefined {
+  const row = physicalColumnDisplayRow(candidate);
+  if (!row) return undefined;
+  const item = new vscode.CompletionItem(row, vscode.CompletionItemKind.Field);
+  configureCandidateItem(item, candidate, replacement, search, rank);
+  return item;
+}
+
+function configureCandidateItem(
+  item: vscode.CompletionItem,
+  candidate: CompletionCandidate,
+  replacement: vscode.Range,
+  search: string,
+  rank: number,
+): void {
+  (item as vscode.CompletionItem & { data?: unknown }).data = {
+    provider: "improved-sql-intellisense",
+    semanticKind: candidate.kind,
+  };
+  item.range = replacement;
+  item.insertText = candidate.insertText ?? quoteIdentifier(candidate.name);
   // Physical column identity stays exact; semantic contains matching has already selected
   // the candidate set. Other candidate kinds retain the prefix compatibility workaround.
   item.filterText =
@@ -73,7 +108,7 @@ export function presentCandidate(
       : search
         ? `${search} ${candidate.name}`
         : candidate.name;
-  item.sortText = rank.toString().padStart(8, "0");
+  item.sortText = completionSortText(rank);
   item.documentation = documentation(candidate);
   if (candidate.triggerSuggest)
     item.command = {
@@ -85,7 +120,6 @@ export function presentCandidate(
       command: "improvedSqlIntellisense.triggerAliasSuggest",
       title: "Suggest row-source alias",
     };
-  return item;
 }
 
 export function documentation(
@@ -109,9 +143,12 @@ export function documentation(
     md.appendMarkdown(`Database: **${candidate.database}**\n\n`);
   md.appendMarkdown(`${friendlyKind(candidate.kind)}\n\n`);
   if (candidate.sqlType)
-    md.appendMarkdown(
-      `Type: \`${formatSqlType(candidate.sqlType)}\`  \nNullability: **${candidate.nullable ? "NULL" : "NOT NULL"}**${candidate.keyRoles?.length ? `  \nRoles: **${candidate.keyRoles.join(" · ")}**` : ""}\n`,
-    );
+    if (candidate.kind === "column")
+      appendPhysicalColumnDocumentation(md, candidate);
+    else
+      md.appendMarkdown(
+        `Type: \`${formatSqlType(candidate.sqlType)}\`  \nNullability: **${candidate.nullable ? "NULL" : "NOT NULL"}**${formatColumnRoles(candidate.keyRoles) ? `  \nRoles: **${formatColumnRoles(candidate.keyRoles).replaceAll("·", " · ")}**` : ""}\n`,
+      );
   for (const key of candidate.keys ?? []) {
     const label =
       key.kind === "primaryKey"
@@ -150,4 +187,44 @@ export function documentation(
   if (candidate.baseObjectName)
     md.appendMarkdown(`\nBase object: \`${candidate.baseObjectName}\`\n`);
   return md;
+}
+
+function appendPhysicalColumnDocumentation(
+  markdown: vscode.MarkdownString,
+  candidate: CompletionCandidate,
+): void {
+  if (!candidate.sqlType) return;
+  const roles = formatColumnRoles(candidate.keyRoles);
+  markdown.appendMarkdown(
+    `**Column**\n\n${wrapIdentifierForDocumentation(candidate.name)}\n\n**Type:** \`${formatSqlType(candidate.sqlType)}\`\n\n**Nullability:** \`${candidate.nullable ? "NULL" : "NOT NULL"}\`\n\n**Roles:** ${roles ? roles.replaceAll("·", " · ") : "none"}\n`,
+  );
+}
+
+export function wrapIdentifierForDocumentation(
+  identifier: string,
+  maxLineLength = 40,
+): string {
+  if (identifier.length <= maxLineLength) return identifier;
+  const parts = identifier.match(
+    /[A-Z]+(?=[A-Z][a-z]|\d|$)|[A-Z]?[a-z]+|\d+|[^A-Za-z\d]+/g,
+  ) ?? [identifier];
+  const lines: string[] = [];
+  let line = "";
+  for (let part of parts) {
+    if (line && line.length + part.length > maxLineLength) {
+      lines.push(line);
+      line = "";
+    }
+    while (part.length > maxLineLength) {
+      if (line) {
+        lines.push(line);
+        line = "";
+      }
+      lines.push(part.slice(0, maxLineLength));
+      part = part.slice(maxLineLength);
+    }
+    line += part;
+  }
+  if (line) lines.push(line);
+  return lines.join("  \n");
 }

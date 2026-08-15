@@ -6,7 +6,12 @@ import { resolveSqlContext } from "../parser/SqlContextResolver.js";
 import { createCandidates, type CompletionScope } from "./CandidateFactory.js";
 import { CompletionScopeResolver } from "./CompletionScopeResolver.js";
 import { presentCandidate } from "./CompletionPresenter.js";
-import { columnPresentationLayout } from "./PresentationModel.js";
+import {
+  typeDisplayGroup,
+  typeDisplayGroupLabel,
+  type TypeDisplayGroup,
+} from "./TypeCompatibilityGrouping.js";
+import { completionSortText } from "./CompletionSorter.js";
 import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
 import { resolveSmartAliasContext } from "../parser/SmartAlias.js";
 import { resolveVisibleRowSource } from "../parser/DocumentSemanticAnalyzer.js";
@@ -208,26 +213,58 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
             document.positionAt(context.cursor - joinFragment.length),
             position,
           );
-    const columnLayout = columnPresentationLayout(candidates);
-    return new vscode.CompletionList(
-      candidates.map((candidate, rank) =>
-        presentCandidate(
-          candidate,
-          candidate.kind === "joinPredicate" ? joinRange : range,
-          context.search,
-          types.size > 1,
-          rank,
-          columnLayout,
-          candidate.kind === "joinPredicate" &&
-            context.search.length === 0 &&
-            context.replacementStart > 0 &&
-            !/\s/.test(context.sql[context.replacementStart - 1] ?? "")
-            ? context.sql[context.replacementStart - 1]
-            : undefined,
-        ),
-      ),
-      true,
+    const materialize = (
+      candidate: (typeof candidates)[number],
+      rank: number,
+    ) =>
+      presentCandidate(
+        candidate,
+        candidate.kind === "joinPredicate" ? joinRange : range,
+        context.search,
+        types.size > 1,
+        rank,
+        candidate.kind === "joinPredicate" &&
+          context.search.length === 0 &&
+          context.replacementStart > 0 &&
+          !/\s/.test(context.sql[context.replacementStart - 1] ?? "")
+          ? context.sql[context.replacementStart - 1]
+          : undefined,
+      );
+    const visibleGroups = new Set(
+      candidates.flatMap((candidate) => {
+        const group = typeDisplayGroup(candidate);
+        return group ? [group] : [];
+      }),
     );
+    if (visibleGroups.size <= 1)
+      return new vscode.CompletionList(candidates.map(materialize), true);
+    const items: vscode.CompletionItem[] = [];
+    const added = new Set<TypeDisplayGroup>();
+    let sortRank = 0;
+    for (const candidate of candidates) {
+      const group = typeDisplayGroup(candidate);
+      if (group && !added.has(group)) {
+        added.add(group);
+        const header = new vscode.CompletionItem(
+          `──────── ${typeDisplayGroupLabel(group, candidate)} ────────`,
+          vscode.CompletionItemKind.Text,
+        );
+        (header as vscode.CompletionItem & { data?: unknown }).data = {
+          provider: "improved-sql-intellisense",
+          decorative: "typeGroupHeader",
+        };
+        header.filterText = context.search || candidate.name;
+        header.preselect = false;
+        header.insertText = "";
+        header.range = new vscode.Range(position, position);
+        header.sortText = completionSortText(sortRank++);
+        items.push(header);
+      }
+      const item = materialize(candidate, sortRank++);
+      if (items.length === 1) item.preselect = true;
+      items.push(item);
+    }
+    return new vscode.CompletionList(items, true);
   }
 
   closeDocument(uri: vscode.Uri): void {

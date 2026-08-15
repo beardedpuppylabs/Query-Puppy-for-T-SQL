@@ -2,11 +2,11 @@
   "name": "improved-sql-intellisense",
   "displayName": "Improved SQL IntelliSense",
   "description": "Context-aware SQL Server IntelliSense for large schemas with Contains search, PK/FK metadata, and relationship-aware JOIN completion.",
-  "version": "0.8.5",
-  "publisher": "Bismarck",
-  "author": "Bismarck",
+  "version": "0.9.0",
+  "publisher": "BeardedPuppyLabs",
+  "author": "Bearded Puppy Labs",
   "license": "MIT",
-  "homepage": "https://marketplace.visualstudio.com/items?itemName=Bismarck.improved-sql-intellisense",
+  "homepage": "https://marketplace.visualstudio.com/items?itemName=BeardedPuppyLabs.improved-sql-intellisense",
   "icon": "images/logo.png",
   "galleryBanner": {
     "color": "#0B1F33",
@@ -109,7 +109,7 @@
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
     "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run test:extension && npm run build",
-    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.8.5.vsix",
+    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.9.0.vsix",
     "publish:marketplace": "vsce publish"
   },
   "devDependencies": {

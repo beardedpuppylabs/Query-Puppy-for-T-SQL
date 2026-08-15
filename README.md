@@ -66,11 +66,38 @@ ORDER BY c.
 
 Contains filtering remains active inside these semantic domains. For example, `c.addr` can find every visible column containing `addr`.
 
+## Type-aware completion
+
+Improved SQL IntelliSense can infer the type expected at common expression positions and rank compatible expressions higher. For example:
+
+```sql
+WHERE oh.CustomerId = c.
+```
+
+If `oh.CustomerId` is `bigint`, the native suggestion list explains the ranking with compact groups:
+
+```text
+─ Type match · bigint
+  BillingAddressId
+  CustomerId
+─ Compatible numeric
+  RegionId
+─ Other visible columns
+  CustomerCode
+  DisplayName
+```
+
+Only non-empty groups are shown, and a one-group result remains uncluttered. Within a group candidates are alphabetical. Visible string, GUID, and other columns remain selectable—type-aware completion ranks rather than hides visible candidates. With no known expected type there are no type groups and the previous semantic/alphabetical order is preserved exactly.
+
+The same reusable type model supports comparisons in `WHERE` and `JOIN`, catalog-backed scalar UDF/TVF arguments, `UPDATE` right-hand sides, explicit-column `INSERT ... VALUES` and `INSERT ... SELECT`, `LIKE`, and simple arithmetic. For example, inside a parameter declared as `decimal(18,2)`, decimal candidates rank above unrelated types.
+
+The resulting sort key is deterministic: exact typed-name match, real FK JOIN priority where applicable, type compatibility (exact facets, same base type, compatible family, unknown, incompatible), existing semantic/scope priority, semantic kind, then alphabetical name/schema order.
+
 ## Schema Intelligence
 
 Improved SQL IntelliSense reads SQL Server catalog metadata for primary keys, unique constraints and indexes, and foreign keys. It understands composite keys, composite foreign keys, filtered unique indexes, and cross-schema relationships within a database.
 
-Physical-column suggestions use a compact roles-first presentation:
+Physical-column suggestions use one deterministic visible row with fixed name, role, type, and nullability slots:
 
 ```text
 CustomerId         PK      bigint          NOT NULL
@@ -79,7 +106,7 @@ BillingAddressId   FK      bigint          NULL
 DisplayName                nvarchar(200)   NULL
 ```
 
-Multiple roles appear compactly, for example `PK·FK`. Completion documentation retains full constraint names, composite columns, FK mappings, referential actions, datatype, and nullability. The native VS Code/VSCodium Suggest Widget controls available width, so narrow widgets may truncate detail text.
+Multiple roles appear compactly, for example `PK·FK`. The row uses fixed 32/8/20-character name, role, and type slots before nullability. A shortened visible name still filters, sorts, and inserts using the complete identifier. Completion documentation wraps long identifiers at approximately 40 characters and retains the complete column name, constraint names, composite columns, FK mappings, referential actions, datatype, and nullability.
 
 ## FK-aware JOIN Intelligence
 
@@ -198,7 +225,7 @@ The connected login still needs permission to read the relevant SQL Server catal
 ## Installation and getting started
 
 1. Install [Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql).
-2. Install [Improved SQL IntelliSense from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=Bismarck.improved-sql-intellisense), or install a release VSIX in VSCodium.
+2. Install [Improved SQL IntelliSense from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=BeardedPuppyLabs.improved-sql-intellisense), or install a release VSIX in VSCodium.
 3. Open a SQL document and connect it with `mssql`.
 4. If duplicate completion lists appear, disable Microsoft SQL suggestions when prompted or with the provided command.
 
@@ -227,6 +254,7 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 - Linked Servers and four-part object names are out of scope. Cross-database support is limited to databases on the active SQL Server connection.
 - The defensive parser is not a complete T-SQL compiler; unusually exotic or incomplete grammar can reduce context accuracy.
 - Type inference is conservative. Unnamed computed projections may be omitted, and recursive CTE/set-branch type reconciliation is best-effort.
+- Type-aware ranking does not implement SQL Server's complete conversion and datatype-precedence engine. Built-in function parameter typing remains limited to constructs with reliable metadata; a full built-in signature catalog is not included.
 - Stored-procedure result-set discovery is not performed, so the extension does not fabricate procedure result columns.
 - JOIN predicates require real, enabled FK metadata. The extension does not infer relationships from naming conventions or similar datatypes.
 - Metadata refresh after DDL is explicit.

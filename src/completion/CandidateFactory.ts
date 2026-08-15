@@ -14,6 +14,7 @@ import {
   type ScopedRowSource,
 } from "../parser/DocumentSemanticAnalyzer.js";
 import { tokenizeSql } from "../parser/SqlTokenizer.js";
+import { resolveDocumentSymbols } from "../parser/DocumentSymbols.js";
 import { containsMatch } from "./ContainsMatcher.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
 import { sortCandidates, TYPE_ORDER } from "./CompletionSorter.js";
@@ -22,6 +23,11 @@ import {
   classifyCompletionContext,
   completionDomainPolicy,
 } from "../parser/CompletionContextClassifier.js";
+import { inferExpectedTypeAtCursor } from "../parser/SqlTypeInference.js";
+import {
+  compareSqlTypes,
+  describeSqlType,
+} from "../metadata/SqlTypeDescriptor.js";
 
 export interface CompletionScope {
   readonly activeDatabase: string;
@@ -75,6 +81,9 @@ export function createCandidates(
     semantics,
   );
   const policy = completionDomainPolicy(clauseContext);
+  const expected = scope
+    ? inferExpectedTypeAtCursor(context.sql, context.cursor, scope, semantics)
+    : undefined;
   if (scope) {
     const dml = analyzeDmlCompletion(
       context.sql,
@@ -85,19 +94,20 @@ export function createCandidates(
     if (dml?.kind === "none") return [];
     if (dml?.kind === "columns" || dml?.kind === "pseudo") {
       const columns = dml.kind === "pseudo" ? dml.source.columns : dml.columns;
+      const dmlCandidates = columns
+        .filter((column) =>
+          containsMatch(column.normalizedName, context.search),
+        )
+        .map((column) => ({
+          name: column.name,
+          normalizedName: column.normalizedName,
+          kind: "column" as const,
+          sqlType: column.type,
+          nullable: column.nullable,
+          column,
+        }));
       return sortCandidates(
-        columns
-          .filter((column) =>
-            containsMatch(column.normalizedName, context.search),
-          )
-          .map((column) => ({
-            name: column.name,
-            normalizedName: column.normalizedName,
-            kind: "column" as const,
-            sqlType: column.type,
-            nullable: column.nullable,
-            column,
-          })),
+        applyTypeCompatibility(dmlCandidates, expected?.expectedType),
         context.search,
         "member",
       );
@@ -127,7 +137,11 @@ export function createCandidates(
           (item) => normalizeName(item.qualifier) === normalizeName(alias),
         )
       : resolveVisibleRowSource(semantics, alias);
-    if (binding) candidates = scopedColumnCandidates(binding.source, scope);
+    if (binding)
+      candidates = scopedColumnCandidates(
+        rebindIdentityLessSource(binding.source, alias, context.sql, scope),
+        scope,
+      );
   } else if (context.kind === "qualified") {
     const parts = context.qualifier?.parts ?? [];
     if (parts.length === 2 && clauseContext.finalSetOrderBy) return [];
@@ -273,7 +287,11 @@ export function createCandidates(
         })),
       );
   }
-  if (clauseContext.join && scope)
+  if (
+    clauseContext.join &&
+    scope &&
+    !hasExplicitJoinComparison(context.sql, context.cursor)
+  )
     candidates.push(
       ...joinPredicateCandidates(
         clauseContext.join.currentRightRowSource,
@@ -317,15 +335,83 @@ export function createCandidates(
       candidate,
     );
   return sortCandidates(
-    [...unique.values()].filter((candidate) =>
-      containsMatch(
-        candidate.searchText ?? candidate.normalizedName,
-        context.search,
+    applyTypeCompatibility(
+      [...unique.values()].filter((candidate) =>
+        containsMatch(
+          candidate.searchText ?? candidate.normalizedName,
+          context.search,
+        ),
       ),
+      expected?.expectedType,
     ),
     context.search,
     sortKind,
   );
+}
+
+function hasExplicitJoinComparison(sql: string, cursor: number): boolean {
+  const tokens = tokenizeSql(sql).filter((token) => token.start < cursor);
+  let on = -1;
+  for (let index = tokens.length - 1; index >= 0; index--)
+    if (tokens[index]?.normalized === "on") {
+      on = index;
+      break;
+    }
+  return (
+    on >= 0 &&
+    tokens
+      .slice(on + 1)
+      .some((token) => ["=", "<", ">", "!"].includes(token.text))
+  );
+}
+
+function applyTypeCompatibility(
+  candidates: readonly CompletionCandidate[],
+  expected?: ReturnType<typeof describeSqlType>,
+): CompletionCandidate[] {
+  if (!expected || expected.kind === "unknown") return [...candidates];
+  return candidates.map((candidate) => {
+    const actual = candidate.sqlType ?? candidate.returnType;
+    return {
+      ...candidate,
+      expectedType: expected,
+      typeCompatibility: actual
+        ? compareSqlTypes(expected, describeSqlType(actual))
+        : "unknown",
+    };
+  });
+}
+
+function rebindIdentityLessSource(
+  source: RowSource,
+  alias: string,
+  sql: string,
+  scope?: CompletionScope,
+): RowSource {
+  if (!scope || source.sourceObject || source.schema || source.database)
+    return source;
+  const reference = resolveDocumentSymbols(
+    tokenizeSql(sql),
+    Number.POSITIVE_INFINITY,
+  ).aliases.get(normalizeName(alias));
+  if (!reference) return source;
+  const database = reference.database ?? scope.activeDatabase;
+  const index = scope.indexes.get(normalizedDatabase(database));
+  const object = reference.schema
+    ? index?.findObject(reference.schema, reference.name)
+    : index?.objects.find(
+        (candidate) =>
+          candidate.normalizedName === normalizeName(reference.name),
+      );
+  if (!object) return source;
+  return {
+    ...source,
+    name: object.name,
+    database,
+    schema: object.schema,
+    sourceObject: object,
+    columns: object.columns,
+  };
 }
 
 function physicalBinding(
@@ -458,7 +544,9 @@ function rankRelatedRowSources(
 function localColumnCandidates(
   source: RowSource,
   index?: DatabaseIndex,
+  physicalObject?: DatabaseObject,
 ): CompletionCandidate[] {
+  const object = physicalObject ?? source.sourceObject;
   return source.columns.map((column) => ({
     name: column.name,
     normalizedName: column.normalizedName,
@@ -466,10 +554,11 @@ function localColumnCandidates(
     sqlType: column.type,
     nullable: column.nullable,
     column,
+    ...(object?.kind === "table" ? { physicalColumn: true } : {}),
     ...(source.database ? { database: source.database } : {}),
     ...(source.schema ? { schema: source.schema } : {}),
-    ...(source.sourceObject ? { sourceObject: source.sourceObject } : {}),
-    ...relationshipProperties(index, source.sourceObject, column.name),
+    ...(object ? { sourceObject: object } : {}),
+    ...relationshipProperties(index, object, column.name),
   }));
 }
 
@@ -479,11 +568,13 @@ function scopedColumnCandidates(
 ): CompletionCandidate[] {
   const database = source.database ?? scope?.activeDatabase ?? "";
   const index = scope?.indexes.get(normalizedDatabase(database));
+  const indexedObject = source.schema
+    ? index?.findObject(source.schema, source.name)
+    : undefined;
+  const physicalObject = indexedObject ?? source.sourceObject;
   if (source.columns.length || !scope)
-    return localColumnCandidates(source, index);
-  const object =
-    source.sourceObject ??
-    (source.schema ? index?.findObject(source.schema, source.name) : undefined);
+    return localColumnCandidates(source, index, physicalObject);
+  const object = physicalObject;
   if (!object) return [];
   return object.columns.map((column) => ({
     name: column.name,
@@ -495,6 +586,7 @@ function scopedColumnCandidates(
     nullable: column.nullable,
     sourceObject: object,
     column,
+    ...(object.kind === "table" ? { physicalColumn: true } : {}),
     ...relationshipProperties(index, object, column.name),
   }));
 }

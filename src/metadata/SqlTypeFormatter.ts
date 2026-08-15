@@ -1,4 +1,5 @@
 import type { SqlType } from "./MetadataModels.js";
+import type { SqlTypeDescriptor } from "./SqlTypeDescriptor.js";
 
 const LENGTH_TYPES = new Set([
   "binary",
@@ -34,6 +35,29 @@ export function formatSqlType(type: SqlType): string {
   if (SCALE_TYPES.has(normalized) && type.scale !== undefined)
     return `${name}(${String(type.scale)})`;
   return name;
+}
+
+/** Formats normalized inference metadata using SQL declaration syntax only. */
+export function formatSqlTypeDescriptorForDisplay(
+  descriptor: SqlTypeDescriptor,
+): string {
+  const normalized = descriptor.normalizedName;
+  return formatSqlType({
+    name: descriptor.sqlName,
+    ...(descriptor.schema ? { schema: descriptor.schema } : {}),
+    ...(LENGTH_TYPES.has(normalized) && descriptor.length !== undefined
+      ? { maxLength: descriptor.length }
+      : {}),
+    ...(PRECISION_TYPES.has(normalized) &&
+    descriptor.precision !== undefined &&
+    descriptor.scale !== undefined
+      ? { precision: descriptor.precision, scale: descriptor.scale }
+      : {}),
+    ...(SCALE_TYPES.has(normalized) && descriptor.scale !== undefined
+      ? { scale: descriptor.scale }
+      : {}),
+    ...(descriptor.userDefined ? { userDefined: true } : {}),
+  });
 }
 
 export function quoteIdentifier(name: string): string {

@@ -1,5 +1,24 @@
 # Implementation plan
 
+## 0.9.0 Type-aware Expression Intelligence
+
+- [x] Normalize structured SQL types into cached descriptors with explicit families and preserved facets.
+- [x] Classify exact, same-base, compatible-family, unknown, and incompatible type relationships.
+- [x] Infer physical/query-local columns, literals, CAST/CONVERT, scalar UDF returns, arithmetic, and conservative CASE results.
+- [x] Explain known expected-type ranking with non-empty native-widget display groups and no-op decorative headers.
+- [x] Resolve UPDATE ownership with positional, depth-aware assignment ranges before binding the target alias and column type.
+- [x] Bypass compatibility sorting and headers completely when no expected type exists.
+- [x] Cap visible physical-column identifiers at 32 characters and wrap documentation near 40 while preserving complete semantic fields.
+- [x] Rebind canonical physical table identity before deriving PK/UQ/FK metadata, regardless of expected-type grouping.
+- [x] Compose physical CompletionItem labels through one factory as fixed 32/8/20 name/role/type slots plus nullability.
+- [x] Migrate current package, runtime, tests, documentation, and Marketplace identity to `BeardedPuppyLabs`.
+- [x] Rebind identity-less forward aliases from complete-statement symbols before multi-group physical candidate materialization.
+- [x] Order group headers/candidates before one final canonical CompletionItem construction pass.
+- [x] Infer expected types for comparisons, catalog function arguments, UPDATE assignments, INSERT values/projections, LIKE, and arithmetic.
+- [x] Rank by compatibility without filtering incompatible visible expressions or broadening explicit qualifiers.
+- [x] Preserve FK predicate priority, Contains matching, scope isolation, and query-free hot-path behavior.
+- [x] Cover helpers, candidate ordering, the registered CompletionItemProvider, and live fixture integration.
+
 ## Verified contracts
 
 - VS Code 1.105 completion providers support structured labels, explicit replacement ranges, `filterText`, lazy resolution, and incomplete lists.
@@ -350,10 +369,10 @@ JOIN completion reads only per-database cache indexes. Relationship lookup is pr
 
 ## 0.8.3 Completion Metadata Layout Fix
 
-- [x] Keep the exact physical-column identifier in `CompletionItemLabel.label`.
+- [x] Keep the exact physical-column identifier in semantic identity, filter/insert text, and documentation; allow only the visible label to be capped.
 - [x] Render roles, datatype, and nullability as one coherent `detail` string, preceded by bounded name compensation.
-- [x] Derive widths from physical-column-only candidate sets; cap names at 32, roles at 8, and datatypes at 18 visible characters.
+- [x] Replace candidate-derived widths with canonical 32/8/20 name/role/type slots.
 - [x] Preserve exact filter/insert text, semantic sorting, Contains matching, rich documentation, and the 0.8.2 JOIN insertion repair.
 - [x] Leave mixed completion domains on their existing unpadded presentation path.
 
-The 0.8.2 field allocation aligned roles and types inside each detail string but let native label widths move the start of that string independently on every row. The 0.8.3 layout compensates for normal label widths while allowing identifiers longer than 32 characters to overflow naturally with only the minimum separator; they do not impose unbounded padding on other rows.
+The 0.8.2 field allocation aligned roles and types inside each detail string but let native label widths move the start of that string independently on every row. The current canonical row formatter uses fixed 32/8/20 slots; complete values remain in all behavioral fields and wrapped documentation.

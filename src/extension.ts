@@ -21,7 +21,7 @@ import {
   type SuggestionConfigurationScope,
 } from "./config/MicrosoftSuggestions.js";
 
-const EXTENSION_ID = "Bismarck.improved-sql-intellisense";
+const EXTENSION_ID = "BeardedPuppyLabs.improved-sql-intellisense";
 let suggestionNoticePending = false;
 
 export function activate(context: vscode.ExtensionContext): void {

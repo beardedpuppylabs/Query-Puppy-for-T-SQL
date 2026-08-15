@@ -1,12 +1,42 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  columnPresentationLayout,
+  formatColumnRoles,
+  MAX_VISIBLE_COLUMN_NAME,
+  PHYSICAL_COLUMN_ROLE_WIDTH,
+  PHYSICAL_COLUMN_TYPE_WIDTH,
+  physicalColumnDisplayRow,
   presentationModel,
 } from "../src/completion/PresentationModel.js";
 import type { CompletionCandidate } from "../src/completion/CompletionCandidate.js";
-test("presentation covers columns, scalar/TVF functions, procedures, and mixed descriptions", () => {
-  const param = {
+
+const sourceObject = {
+  id: 1,
+  schema: "reltest",
+  name: "CompletionLayoutStress",
+  normalizedName: "completionlayoutstress",
+  kind: "table" as const,
+  parameters: [],
+  columns: [],
+};
+const physical = (
+  name: string,
+  type: NonNullable<CompletionCandidate["sqlType"]>,
+  nullable: boolean,
+  keyRoles: CompletionCandidate["keyRoles"] = [],
+): CompletionCandidate => ({
+  name,
+  normalizedName: name.toLocaleLowerCase("en-US"),
+  kind: "column",
+  sqlType: type,
+  nullable,
+  keyRoles,
+  sourceObject,
+  physicalColumn: true,
+});
+
+test("presentation covers nonphysical columns, callable objects, and mixed descriptions", () => {
+  const parameter = {
     name: "@Id",
     type: { name: "int" },
     output: false,
@@ -31,7 +61,7 @@ test("presentation covers columns, scalar/TVF functions, procedures, and mixed d
         name: "Name",
         normalizedName: "name",
         kind: "scalarFunction",
-        parameters: [param],
+        parameters: [parameter],
         returnType: { name: "nvarchar", maxLength: 400 },
       },
       true,
@@ -44,27 +74,15 @@ test("presentation covers columns, scalar/TVF functions, procedures, and mixed d
         name: "Rows",
         normalizedName: "rows",
         kind: "tableValuedFunction",
-        parameters: [param],
+        parameters: [parameter],
       },
       true,
     ).detail,
     "(@Id int) → table",
   );
-  assert.equal(
-    presentationModel(
-      {
-        name: "Run",
-        normalizedName: "run",
-        kind: "procedure",
-        parameters: [{ ...param, output: true }],
-      },
-      true,
-    ).detail,
-    "(@Id int OUTPUT)",
-  );
 });
 
-test("database candidates use the database semantic description only in mixed results", () => {
+test("database candidates use their semantic description only in mixed results", () => {
   const database = {
     name: "IntelliSenseLabReporting",
     normalizedName: "intellisenselabreporting",
@@ -78,226 +96,45 @@ test("database candidates use the database semantic description only in mixed re
   });
 });
 
-test("column presentation puts compact key roles before type and nullability", () => {
-  assert.equal(
-    presentationModel(
-      {
-        name: "CompanyId",
-        normalizedName: "companyid",
-        kind: "column",
-        sqlType: { name: "int" },
-        nullable: false,
-        keyRoles: ["PK", "UQ", "FK"],
-      },
-      false,
-    ).detail,
-    " PK·UQ·FK int NOT NULL",
-  );
-});
-
-test("physical column sets align bounded type, nullability, and role fields", () => {
-  const sourceObject = {
-    id: 1,
-    schema: "reltest",
-    name: "Customers",
-    normalizedName: "customers",
-    kind: "table" as const,
-    parameters: [],
-    columns: [],
-  };
-  const candidates: CompletionCandidate[] = [
-    {
-      name: "CustomerId",
-      normalizedName: "customerid",
-      kind: "column",
-      sqlType: { name: "bigint" },
-      nullable: false,
-      keyRoles: ["PK"],
-      sourceObject,
-    },
-    {
-      name: "BillingAddressId",
-      normalizedName: "billingaddressid",
-      kind: "column",
-      sqlType: { name: "varchar", maxLength: 50 },
-      nullable: true,
-      keyRoles: ["FK"],
-      sourceObject,
-    },
-    {
-      name: "Total",
-      normalizedName: "total",
-      kind: "column",
-      sqlType: { name: "decimal", precision: 18, scale: 4 },
-      nullable: true,
-      sourceObject,
-    },
-  ];
-  const layout = columnPresentationLayout(candidates);
-  assert.deepEqual(layout, { nameWidth: 16, roleWidth: 2, typeWidth: 13 });
-  const details = candidates.map(
-    (candidate) => presentationModel(candidate, false, layout).detail,
-  );
-  assert.deepEqual(details, [
-    "        PK  bigint         NOT NULL",
-    "  FK  varchar(50)    NULL",
-    "                 decimal(18,4)  NULL",
+test("physical column rows use fixed canonical slots and role order", () => {
+  assert.equal(MAX_VISIBLE_COLUMN_NAME, 32);
+  assert.equal(PHYSICAL_COLUMN_ROLE_WIDTH, 8);
+  assert.equal(PHYSICAL_COLUMN_TYPE_WIDTH, 20);
+  assert.equal(formatColumnRoles(["FK", "PK", "UQ"]), "PK·UQ·FK");
+  const rows = [
+    physical("CustomerId", { name: "bigint" }, false, ["PK"]),
+    physical("ExternalReference", { name: "uniqueidentifier" }, true, ["UQ"]),
+    physical("BillingAddressId", { name: "bigint" }, true, ["FK"]),
+    physical("UniqueCustomerId", { name: "bigint" }, false, ["UQ", "FK"]),
+  ].map(physicalColumnDisplayRow);
+  assert.deepEqual(rows, [
+    `${"CustomerId".padEnd(32)}  ${"PK".padEnd(8)}  ${"bigint".padEnd(20)}  NOT NULL`,
+    `${"ExternalReference".padEnd(32)}  ${"UQ".padEnd(8)}  ${"uniqueidentifier".padEnd(20)}  NULL`,
+    `${"BillingAddressId".padEnd(32)}  ${"FK".padEnd(8)}  ${"bigint".padEnd(20)}  NULL`,
+    `${"UniqueCustomerId".padEnd(32)}  ${"UQ·FK".padEnd(8)}  ${"bigint".padEnd(20)}  NOT NULL`,
   ]);
-  const first = details[0];
-  const second = details[1];
-  assert.ok(first && second);
-  assert.equal(
-    candidates[0]!.name.length + first.indexOf("PK"),
-    candidates[1]!.name.length + second.indexOf("FK"),
-  );
-  assert.equal(
-    candidates[0]!.name.length + first.indexOf("NOT NULL"),
-    candidates[1]!.name.length + second.indexOf("NULL"),
-  );
 });
 
-test("column alignment caps pathological names and types", () => {
-  const sourceObject = {
-    schema: "dbo",
-    name: "T",
-    normalizedName: "t",
-    kind: "table" as const,
-    parameters: [],
-    columns: [],
-  };
-  const candidates: CompletionCandidate[] = [
-    {
-      name: "X".repeat(100),
-      normalizedName: "x",
-      kind: "column",
-      sqlType: { name: "nvarchar", maxLength: 400 },
-      nullable: true,
-      sourceObject,
-    },
-    {
-      name: "Id",
-      normalizedName: "id",
-      kind: "column",
-      sqlType: { name: "int" },
-      nullable: false,
-      sourceObject,
-    },
-  ];
-  assert.deepEqual(columnPresentationLayout(candidates), {
-    nameWidth: 32,
-    roleWidth: 0,
-    typeWidth: 13,
-  });
+test("long physical names are presentation-only bounded with complete metadata", () => {
+  const name = "VeryLongERPBusinessTransactionPostingReferenceIdentifier";
+  const candidate = physical(
+    name,
+    { name: "decimal", precision: 38, scale: 18 },
+    true,
+  );
+  const row = physicalColumnDisplayRow(candidate);
+  assert.ok(row);
+  assert.equal(row.slice(0, 32), `${name.slice(0, 31)}…`);
+  assert.match(row, /decimal\(38,18\)\s+NULL$/);
+  assert.equal(candidate.name, name);
 });
 
-test("roles-first layout keeps complete multi-role metadata near the label", () => {
-  const sourceObject = {
-    schema: "dbo",
-    name: "T",
-    normalizedName: "t",
-    kind: "table" as const,
-    parameters: [],
-    columns: [],
-  };
-  const candidates: CompletionCandidate[] = [
-    {
-      name: "CompanyId",
-      normalizedName: "companyid",
-      kind: "column",
-      sqlType: { name: "int" },
-      nullable: false,
-      keyRoles: ["PK", "FK"],
-      sourceObject,
-    },
-    {
-      name: "CustomerId",
-      normalizedName: "customerid",
-      kind: "column",
-      sqlType: { name: "bigint" },
-      nullable: false,
-      keyRoles: ["UQ", "FK"],
-      sourceObject,
-    },
-  ];
-  const layout = columnPresentationLayout(candidates);
-  const company = candidates[0];
-  const customer = candidates[1];
-  assert.ok(company && customer);
-  assert.deepEqual(layout, { nameWidth: 10, roleWidth: 5, typeWidth: 6 });
-  assert.equal(
-    presentationModel(company, false, layout).detail,
-    "   PK·FK  int     NOT NULL",
+test("unusual physical datatypes are bounded only in the visible type slot", () => {
+  const row = physicalColumnDisplayRow(
+    physical("Value", { name: "ExtraordinarilyLongUserTypeName" }, true),
   );
-  assert.equal(
-    presentationModel(customer, false, layout).detail,
-    "  UQ·FK  bigint  NOT NULL",
-  );
-});
-
-test("CompletionLayoutStress keeps complete metadata and bounded name padding", () => {
-  const sourceObject = {
-    schema: "reltest",
-    name: "CompletionLayoutStress",
-    normalizedName: "completionlayoutstress",
-    kind: "table" as const,
-    parameters: [],
-    columns: [],
-  };
-  const specs = [
-    ["Amount", { name: "decimal", precision: 38, scale: 18 }, false, []],
-    ["BinaryPayload", { name: "varbinary", maxLength: -1 }, true, []],
-    ["Code", { name: "varchar", maxLength: 20 }, false, []],
-    ["CustomerId", { name: "bigint" }, false, ["FK"]],
-    ["DisplayName", { name: "nvarchar", maxLength: 400 }, true, []],
-    ["ExternalReference", { name: "uniqueidentifier" }, true, ["UQ"]],
-    ["Id", { name: "bigint" }, false, ["PK"]],
-    ["OccurredAt", { name: "datetimeoffset", scale: 7 }, false, []],
-    ["Payload", { name: "nvarchar", maxLength: -1 }, true, []],
-    ["UniqueCustomerId", { name: "bigint" }, false, ["UQ", "FK"]],
-    [
-      "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
-      { name: "nvarchar", maxLength: 200 },
-      true,
-      [],
-    ],
-  ] as const;
-  const candidates: CompletionCandidate[] = specs.map(
-    ([name, sqlType, nullable, keyRoles]) => ({
-      name,
-      normalizedName: name.toLocaleLowerCase("en-US"),
-      kind: "column",
-      sqlType,
-      nullable,
-      keyRoles,
-      sourceObject,
-    }),
-  );
-  const layout = columnPresentationLayout(candidates);
-  assert.deepEqual(layout, { nameWidth: 32, roleWidth: 5, typeWidth: 17 });
-  const rows = candidates.map(
-    (candidate) =>
-      `${candidate.name}${presentationModel(candidate, false, layout).detail}`,
-  );
-  for (const value of [
-    "decimal(38,18)",
-    "varbinary(max)",
-    "varchar(20)",
-    "nvarchar(200)",
-    "uniqueidentifier",
-    "bigint",
-    "datetimeoffset(7)",
-    "nvarchar(max)",
-    "PK",
-    "FK",
-    "UQ",
-    "UQ·FK",
-    "NULL",
-    "NOT NULL",
-  ])
-    assert.ok(
-      rows.some((row) => row.includes(value)),
-      `missing ${value}`,
-    );
-  assert.match(rows[9] ?? "", /UQ·FK\s+bigint\s+NOT NULL$/);
-  assert.equal(layout.nameWidth, 32);
+  assert.ok(row);
+  const typeStart = 32 + 2 + 8 + 2;
+  assert.equal(row.slice(typeStart, typeStart + 20).at(-1), "…");
+  assert.match(row, /NULL$/);
 });

@@ -30,6 +30,7 @@ export interface SqlType {
   readonly precision?: number;
   readonly scale?: number;
   readonly userDefined?: boolean;
+  readonly underlyingSystemType?: string;
 }
 
 export interface ColumnMetadata {

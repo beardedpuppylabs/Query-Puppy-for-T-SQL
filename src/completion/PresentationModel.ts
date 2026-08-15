@@ -6,54 +6,58 @@ export interface PresentationModel {
   readonly detail: string;
   readonly description?: string;
 }
-export interface ColumnPresentationLayout {
-  readonly nameWidth: number;
-  readonly roleWidth: number;
-  readonly typeWidth: number;
+
+/** Maximum visible identifier slot in the native suggestion widget. */
+export const MAX_VISIBLE_COLUMN_NAME = 32;
+export const PHYSICAL_COLUMN_ROLE_WIDTH = 8;
+export const PHYSICAL_COLUMN_TYPE_WIDTH = 20;
+
+export function visibleCandidateName(candidate: CompletionCandidate): string {
+  if (
+    candidate.kind !== "column" ||
+    candidate.name.length <= MAX_VISIBLE_COLUMN_NAME
+  )
+    return candidate.name;
+  return `${candidate.name.slice(0, MAX_VISIBLE_COLUMN_NAME - 1)}…`;
 }
 
-const NAME_WIDTH_CAP = 32;
-const ROLE_WIDTH_CAP = 8;
-const TYPE_WIDTH_CAP = 18;
-const boundedWidth = (values: readonly string[], cap: number): number =>
-  Math.min(cap, Math.max(...values.map((value) => value.length)));
+const fixedSlot = (value: string, width: number): string => {
+  const visible =
+    value.length <= width ? value : `${value.slice(0, width - 1)}…`;
+  return visible.padEnd(width, " ");
+};
 
-export function columnPresentationLayout(
-  candidates: readonly CompletionCandidate[],
-): ColumnPresentationLayout | undefined {
-  const physical = candidates.filter(
-    (candidate) =>
-      candidate.kind === "column" &&
-      candidate.sourceObject?.kind === "table" &&
-      candidate.sqlType,
-  );
-  if (physical.length < 1 || physical.length !== candidates.length)
+export const formatColumnRoles = (
+  roles: CompletionCandidate["keyRoles"],
+): string =>
+  ["PK", "UQ", "FK"]
+    .filter((role) => roles?.includes(role as "PK" | "UQ" | "FK"))
+    .join("·");
+
+export function physicalColumnDisplayRow(
+  candidate: CompletionCandidate,
+): string | undefined {
+  if (
+    candidate.kind !== "column" ||
+    !candidate.physicalColumn ||
+    !candidate.sqlType
+  )
     return undefined;
-  return {
-    nameWidth: boundedWidth(
-      physical.map((candidate) => candidate.name),
-      NAME_WIDTH_CAP,
-    ),
-    roleWidth: boundedWidth(
-      physical.map((candidate) => candidate.keyRoles?.join("·") ?? ""),
-      ROLE_WIDTH_CAP,
-    ),
-    typeWidth: boundedWidth(
-      physical.flatMap((candidate) =>
-        candidate.sqlType ? [formatSqlType(candidate.sqlType)] : [],
-      ),
-      TYPE_WIDTH_CAP,
-    ),
-  };
+  const name = fixedSlot(candidate.name, MAX_VISIBLE_COLUMN_NAME);
+  const roles = fixedSlot(
+    formatColumnRoles(candidate.keyRoles),
+    PHYSICAL_COLUMN_ROLE_WIDTH,
+  );
+  const type = fixedSlot(
+    formatSqlType(candidate.sqlType),
+    PHYSICAL_COLUMN_TYPE_WIDTH,
+  );
+  return `${name}  ${roles}  ${type}  ${candidate.nullable ? "NULL" : "NOT NULL"}`;
 }
-
-const paddingAfter = (value: string, width: number): string =>
-  " ".repeat(Math.max(2, width - Math.min(value.length, width) + 2));
 
 export function presentationModel(
   candidate: CompletionCandidate,
   mixed: boolean,
-  columnLayout?: ColumnPresentationLayout,
 ): PresentationModel {
   const params = (candidate.parameters ?? [])
     .map(
@@ -66,13 +70,7 @@ export function presentationModel(
     (candidate.kind === "column" || candidate.kind === "procedureParameter") &&
     candidate.sqlType
   )
-    if (candidate.kind === "column" && columnLayout) {
-      const type = formatSqlType(candidate.sqlType);
-      const nullability = candidate.nullable ? "NULL" : "NOT NULL";
-      const roles = candidate.keyRoles?.join("·") ?? "";
-      detail = `${paddingAfter(candidate.name, columnLayout.nameWidth)}${roles}${paddingAfter(roles, columnLayout.roleWidth)}${type}${paddingAfter(type, columnLayout.typeWidth)}${nullability}`;
-    } else
-      detail = ` ${candidate.keyRoles?.length ? `${candidate.keyRoles.join("·")} ` : ""}${formatSqlType(candidate.sqlType)} ${candidate.nullable ? "NULL" : "NOT NULL"}`;
+    detail = ` ${formatColumnRoles(candidate.keyRoles) ? `${formatColumnRoles(candidate.keyRoles)} ` : ""}${formatSqlType(candidate.sqlType)} ${candidate.nullable ? "NULL" : "NOT NULL"}`;
   if (candidate.kind === "procedureParameter" && candidate.sqlType)
     detail = ` ${formatSqlType(candidate.sqlType)}${candidate.parameterOutput ? " OUTPUT" : ""}`;
   else if (candidate.kind === "scalarFunction")

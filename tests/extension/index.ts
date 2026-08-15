@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { DatabaseIndex } from "../../src/metadata/DatabaseIndex.js";
+import type { SqlType } from "../../src/metadata/MetadataModels.js";
 
 const database = "IntelliSenseLab";
 const index = new DatabaseIndex({
@@ -190,6 +191,34 @@ const index = new DatabaseIndex({
           nullable: true,
           ordinal: 6,
         },
+        {
+          name: "DisplayName",
+          normalizedName: "displayname",
+          type: { name: "nvarchar", maxLength: 400 },
+          nullable: true,
+          ordinal: 7,
+        },
+        {
+          name: "RegionId",
+          normalizedName: "regionid",
+          type: { name: "int" },
+          nullable: true,
+          ordinal: 8,
+        },
+        {
+          name: "CreatedAt",
+          normalizedName: "createdat",
+          type: { name: "datetime2", scale: 3 },
+          nullable: false,
+          ordinal: 9,
+        },
+        {
+          name: "Amount",
+          normalizedName: "amount",
+          type: { name: "decimal", precision: 18, scale: 4 },
+          nullable: false,
+          ordinal: 10,
+        },
       ],
     },
     {
@@ -213,6 +242,13 @@ const index = new DatabaseIndex({
           type: { name: "bigint" },
           nullable: false,
           ordinal: 2,
+        },
+        {
+          name: "AmountExact",
+          normalizedName: "amountexact",
+          type: { name: "decimal", precision: 38, scale: 18 },
+          nullable: true,
+          ordinal: 3,
         },
       ],
     },
@@ -280,6 +316,68 @@ const index = new DatabaseIndex({
           ordinal: 1,
         },
       ],
+    },
+    {
+      id: 16,
+      schema: "reltest",
+      name: "TypedTargets",
+      normalizedName: "typedtargets",
+      kind: "table",
+      parameters: [],
+      columns: [
+        {
+          name: "CustomerId",
+          normalizedName: "customerid",
+          type: { name: "bigint" },
+          nullable: false,
+          ordinal: 1,
+        },
+        {
+          name: "ExternalReference",
+          normalizedName: "externalreference",
+          type: { name: "uniqueidentifier" },
+          nullable: true,
+          ordinal: 2,
+        },
+        {
+          name: "Amount",
+          normalizedName: "amount",
+          type: { name: "decimal", precision: 18, scale: 2 },
+          nullable: false,
+          ordinal: 3,
+        },
+      ],
+    },
+    {
+      id: 17,
+      schema: "reltest",
+      name: "CompletionLayoutStress",
+      normalizedName: "completionlayoutstress",
+      kind: "table",
+      parameters: [],
+      columns: [
+        ["Amount", { name: "decimal", precision: 38, scale: 18 }, false],
+        ["BinaryPayload", { name: "varbinary", maxLength: -1 }, true],
+        ["Code", { name: "varchar", maxLength: 20 }, false],
+        ["CustomerId", { name: "bigint" }, false],
+        ["DisplayName", { name: "nvarchar", maxLength: 400 }, true],
+        ["ExternalReference", { name: "uniqueidentifier" }, true],
+        ["Id", { name: "bigint" }, false],
+        ["OccurredAt", { name: "datetimeoffset", scale: 7 }, false],
+        ["Payload", { name: "nvarchar", maxLength: -1 }, true],
+        ["UniqueCustomerId", { name: "bigint" }, false],
+        [
+          "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
+          { name: "nvarchar", maxLength: 200 },
+          true,
+        ],
+      ].map(([name, type, nullable], ordinal) => ({
+        name: name as string,
+        normalizedName: (name as string).toLocaleLowerCase("en-US"),
+        type: type as SqlType,
+        nullable: nullable as boolean,
+        ordinal: ordinal + 1,
+      })),
     },
   ],
   keys: [
@@ -538,7 +636,12 @@ async function completion(
   );
   const items = result instanceof vscode.CompletionList ? result.items : result;
   return items.map((item) =>
-    typeof item.label === "string" ? item.label : item.label.label,
+    item.kind === vscode.CompletionItemKind.Field &&
+    typeof item.filterText === "string"
+      ? item.filterText
+      : typeof item.label === "string"
+        ? item.label
+        : item.label.label,
   );
 }
 
@@ -546,6 +649,7 @@ type MarkedCompletionItem = vscode.CompletionItem & {
   readonly data?: {
     readonly provider?: string;
     readonly semanticKind?: string;
+    readonly decorative?: string;
   };
 };
 async function semanticCompletion(
@@ -574,7 +678,12 @@ async function semanticCompletion(
 }
 const labels = (items: readonly vscode.CompletionItem[]) =>
   items.map((item) =>
-    typeof item.label === "string" ? item.label : item.label.label,
+    (item as MarkedCompletionItem).data?.semanticKind === "column" &&
+    typeof item.filterText === "string"
+      ? item.filterText
+      : typeof item.label === "string"
+        ? item.label
+        : item.label.label,
   );
 
 type Invocation = {
@@ -609,7 +718,7 @@ async function waitForInvocation(
 
 export async function run(): Promise<void> {
   const extension = vscode.extensions.getExtension(
-    "Bismarck.improved-sql-intellisense",
+    "BeardedPuppyLabs.improved-sql-intellisense",
   );
   assert.ok(extension, "development extension was not discovered");
   await extension.activate();
@@ -641,20 +750,16 @@ export async function run(): Promise<void> {
     const sql = expectation[0];
     const cursor = sql.indexOf(" FROM");
     const item = (await semanticCompletion(sql, cursor)).find(
-      (candidate) =>
-        (typeof candidate.label === "string"
-          ? candidate.label
-          : candidate.label.label) === expectation[1],
+      (candidate) => candidate.filterText === expectation[1],
     );
     assert.ok(item, `missing schema-intelligence candidate ${expectation[1]}`);
     assert.ok(
-      typeof item.label !== "string" &&
-        item.label.detail?.includes(expectation[2]),
+      typeof item.label === "string" && item.label.includes(expectation[2]),
     );
-    if (typeof item.label !== "string") {
-      const detail = item.label.detail ?? "";
-      assert.ok(detail.indexOf(expectation[2]) < detail.indexOf("NULL"));
-    }
+    assert.ok(
+      typeof item.label === "string" &&
+        item.label.indexOf(expectation[2]) < item.label.indexOf("NULL"),
+    );
     assert.equal(item.insertText, expectation[1]);
     assert.equal(item.filterText, expectation[1]);
     assert.match(item.sortText ?? "", /^\d{8}$/);
@@ -675,11 +780,7 @@ export async function run(): Promise<void> {
   const compositeSql = "SELECT ol.order FROM reltest.OrderLines ol";
   const compositeItem = (
     await semanticCompletion(compositeSql, compositeSql.indexOf(" FROM"))
-  ).find(
-    (item) =>
-      (typeof item.label === "string" ? item.label : item.label.label) ===
-      "OrderId",
-  );
+  ).find((item) => item.filterText === "OrderId");
   assert.ok(compositeItem);
   assert.ok(compositeItem.documentation instanceof vscode.MarkdownString);
   assert.match(compositeItem.documentation.value, /FK_OrderLines_OrderHeaders/);
@@ -821,6 +922,286 @@ export async function run(): Promise<void> {
       addressesItem.label.detail?.includes("related via 3 FKs"),
   );
 
+  const typeAwareLabels = async (markedSql: string) => {
+    const cursor = markedSql.indexOf("|");
+    assert.ok(cursor >= 0, "type-aware SQL is missing its cursor marker");
+    const sql = markedSql.replace("|", "");
+    return labels(
+      (await semanticCompletion(sql, cursor)).filter(
+        (item) => item.data?.semanticKind,
+      ),
+    );
+  };
+  const markedTypeItems = async (markedSql: string) => {
+    const cursor = markedSql.indexOf("|");
+    assert.ok(cursor >= 0, "type-aware SQL is missing its cursor marker");
+    return semanticCompletion(markedSql.replace("|", ""), cursor);
+  };
+  const isHeader = (item: MarkedCompletionItem) =>
+    item.data?.decorative === "typeGroupHeader";
+  const bigintMembers = await typeAwareLabels(
+    "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.Customers c ON oh.CustomerId = c.|",
+  );
+  assert.deepEqual(bigintMembers.slice(0, 4), [
+    "BillingAddressId",
+    "CustomerId",
+    "PrimaryAddressId",
+    "ShippingAddressId",
+  ]);
+  assert.ok(
+    bigintMembers.indexOf("RegionId") < bigintMembers.indexOf("CustomerCode"),
+  );
+  assert.ok(
+    bigintMembers.indexOf("ExternalKey") >
+      bigintMembers.indexOf("CustomerCode"),
+  );
+  assert.equal(bigintMembers.includes("ExternalKey"), true);
+
+  const groupedBigint = await markedTypeItems(
+    "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.Customers c ON oh.CustomerId = c.|",
+  );
+  const groupedLabels = labels(groupedBigint);
+  assert.ok(
+    groupedLabels.some((label) => label.includes("Type match · bigint")),
+  );
+  assert.ok(
+    groupedLabels.some((label) => label.includes("Compatible numeric")),
+  );
+  assert.ok(
+    groupedLabels.some((label) => label.includes("Other visible columns")),
+  );
+  const headers = groupedBigint.filter(isHeader);
+  assert.equal(headers.length, 3);
+  const groupedBilling = groupedBigint.find(
+    (item) =>
+      item.data?.semanticKind === "column" &&
+      item.filterText === "BillingAddressId",
+  );
+  const groupedCustomer = groupedBigint.find(
+    (item) =>
+      item.data?.semanticKind === "column" && item.filterText === "CustomerId",
+  );
+  assert.ok(groupedBilling && typeof groupedBilling.label === "string");
+  assert.match(groupedBilling.label, /FK\s+bigint\s+NULL/);
+  assert.ok(groupedCustomer && typeof groupedCustomer.label === "string");
+  assert.match(groupedCustomer.label, /PK\s+bigint\s+NOT NULL/);
+  for (const header of headers) {
+    assert.equal(header.insertText, "");
+    assert.equal(header.preselect, false);
+    assert.ok(header.range instanceof vscode.Range);
+    assert.equal(header.range.isEmpty, true);
+  }
+  assert.equal(groupedBigint.find((item) => !isHeader(item))?.preselect, true);
+
+  const varcharMembers = await typeAwareLabels(
+    "SELECT * FROM reltest.Customers c WHERE c.CustomerCode = c.|",
+  );
+  assert.equal(varcharMembers[0], "CustomerCode");
+  assert.ok(
+    varcharMembers.indexOf("DisplayName") <
+      varcharMembers.indexOf("ExternalKey"),
+  );
+  const guidMembers = await typeAwareLabels(
+    "SELECT * FROM reltest.Customers c WHERE c.ExternalKey = c.|",
+  );
+  assert.equal(guidMembers[0], "ExternalKey");
+  const dateMembers = await typeAwareLabels(
+    "SELECT * FROM reltest.Customers c WHERE c.CreatedAt = c.|",
+  );
+  assert.equal(dateMembers[0], "CreatedAt");
+
+  const functionMembers = await typeAwareLabels(
+    "SELECT billing.CalculateBillingTotal_0001(c.|, 0.19) FROM reltest.Customers c",
+  );
+  assert.equal(functionMembers[0], "Amount");
+  const updateMembers = await typeAwareLabels(
+    "UPDATE c SET ExternalKey = c.| FROM reltest.Customers c",
+  );
+  assert.equal(updateMembers[0], "ExternalKey");
+  const updateAliasItems = await markedTypeItems(
+    "UPDATE s SET ExternalReference = c.| FROM IntelliSenseLab.reltest.CompletionLayoutStress AS s CROSS JOIN IntelliSenseLab.reltest.Customers AS c;",
+  );
+  assert.equal(
+    labels(updateAliasItems.filter((item) => item.data?.semanticKind))[0],
+    "ExternalKey",
+  );
+  assert.ok(
+    labels(updateAliasItems.filter((item) => item.data?.semanticKind)).includes(
+      "CustomerId",
+    ),
+  );
+  assert.ok(
+    labels(updateAliasItems).some((label) =>
+      label.includes("Type match · uniqueidentifier"),
+    ),
+  );
+  assert.equal(
+    labels(updateAliasItems).some((label) =>
+      label.includes("uniqueidentifier("),
+    ),
+    false,
+  );
+  const groupedExternal = updateAliasItems.find(
+    (item) =>
+      item.data?.semanticKind === "column" && item.filterText === "ExternalKey",
+  );
+  assert.ok(groupedExternal && typeof groupedExternal.label === "string");
+  assert.match(groupedExternal.label, /UQ\s+uniqueidentifier\s+NULL/);
+  assert.ok(groupedExternal.documentation instanceof vscode.MarkdownString);
+  assert.match(groupedExternal.documentation.value, /UX_Customers_ExternalKey/);
+  const ordinaryExternal = (
+    await markedTypeItems(
+      "SELECT c.| FROM IntelliSenseLab.reltest.Customers AS c;",
+    )
+  ).find(
+    (item) =>
+      item.data?.semanticKind === "column" && item.filterText === "ExternalKey",
+  );
+  assert.ok(ordinaryExternal);
+  assert.equal(ordinaryExternal.label, groupedExternal.label);
+  assert.equal(ordinaryExternal.filterText, groupedExternal.filterText);
+  assert.equal(ordinaryExternal.insertText, groupedExternal.insertText);
+  assert.ok(ordinaryExternal.documentation instanceof vscode.MarkdownString);
+  assert.equal(
+    ordinaryExternal.documentation.value,
+    groupedExternal.documentation.value,
+  );
+  const multipleUpdate = await typeAwareLabels(
+    "UPDATE s SET CustomerId = c.CustomerId, ExternalReference = c.| FROM IntelliSenseLab.reltest.CompletionLayoutStress AS s CROSS JOIN IntelliSenseLab.reltest.Customers AS c;",
+  );
+  assert.equal(multipleUpdate[0], "ExternalKey");
+  const multipleUpdateItems = await markedTypeItems(
+    "UPDATE s SET CustomerId = c.CustomerId, ExternalReference = c.| FROM IntelliSenseLab.reltest.CompletionLayoutStress AS s CROSS JOIN IntelliSenseLab.reltest.Customers AS c;",
+  );
+  const multipleExternal = multipleUpdateItems.find(
+    (item) =>
+      item.data?.semanticKind === "column" && item.filterText === "ExternalKey",
+  );
+  assert.ok(multipleExternal);
+  assert.equal(multipleExternal.label, groupedExternal.label);
+  assert.ok(multipleExternal.documentation instanceof vscode.MarkdownString);
+  assert.equal(
+    multipleExternal.documentation.value,
+    groupedExternal.documentation.value,
+  );
+  const firstAssignment = await markedTypeItems(
+    "UPDATE s SET CustomerId = c.|, ExternalReference = c.ExternalKey FROM IntelliSenseLab.reltest.CompletionLayoutStress AS s CROSS JOIN IntelliSenseLab.reltest.Customers AS c;",
+  );
+  assert.ok(
+    labels(firstAssignment).some((label) =>
+      label.includes("Type match · bigint"),
+    ),
+  );
+  assert.equal(
+    labels(firstAssignment).some((label) => label.includes("bigint(")),
+    false,
+  );
+  const numericUpdate = await typeAwareLabels(
+    "UPDATE s SET CustomerId = c.| FROM IntelliSenseLab.reltest.CompletionLayoutStress AS s CROSS JOIN IntelliSenseLab.reltest.Customers AS c;",
+  );
+  assert.deepEqual(numericUpdate.slice(0, 4), [
+    "BillingAddressId",
+    "CustomerId",
+    "PrimaryAddressId",
+    "ShippingAddressId",
+  ]);
+  const thirdAssignment = await markedTypeItems(
+    "UPDATE s SET CustomerId = c.CustomerId, ExternalReference = c.ExternalKey, Amount = ol.| FROM IntelliSenseLab.reltest.CompletionLayoutStress AS s CROSS JOIN IntelliSenseLab.reltest.Customers AS c CROSS JOIN IntelliSenseLab.reltest.OrderLines AS ol;",
+  );
+  assert.ok(
+    labels(thirdAssignment).some((label) =>
+      label.includes("Type match · decimal(38,18)"),
+    ),
+  );
+  assert.equal(
+    labels(thirdAssignment.filter((item) => item.data?.semanticKind))[0],
+    "AmountExact",
+  );
+  const insertMembers = await typeAwareLabels(
+    "INSERT INTO reltest.TypedTargets (CustomerId, ExternalReference, Amount) SELECT c.CustomerId, c.ExternalKey, c.| FROM reltest.Customers c",
+  );
+  assert.equal(insertMembers[0], "Amount");
+
+  const containsTyped = await typeAwareLabels(
+    "SELECT * FROM reltest.Customers c WHERE c.CustomerId = c.id|",
+  );
+  assert.deepEqual(containsTyped, [
+    "BillingAddressId",
+    "CustomerId",
+    "PrimaryAddressId",
+    "ShippingAddressId",
+    "RegionId",
+  ]);
+  const unknownTyped = await typeAwareLabels(
+    "SELECT c.| FROM reltest.Customers c",
+  );
+  assert.deepEqual(
+    unknownTyped,
+    [...unknownTyped].sort((a, b) => a.localeCompare(b)),
+  );
+  const untypedStress = await markedTypeItems(
+    "SELECT s.| FROM reltest.CompletionLayoutStress AS s;",
+  );
+  assert.equal(untypedStress.some(isHeader), false);
+  assert.deepEqual(labels(untypedStress), [
+    "Amount",
+    "BinaryPayload",
+    "Code",
+    "CustomerId",
+    "DisplayName",
+    "ExternalReference",
+    "Id",
+    "OccurredAt",
+    "Payload",
+    "UniqueCustomerId",
+    "VeryLongERPBusinessTransactionPosti…",
+  ]);
+  assert.deepEqual(
+    untypedStress.map((item) => item.filterText),
+    [
+      "Amount",
+      "BinaryPayload",
+      "Code",
+      "CustomerId",
+      "DisplayName",
+      "ExternalReference",
+      "Id",
+      "OccurredAt",
+      "Payload",
+      "UniqueCustomerId",
+      "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
+    ],
+  );
+  const longColumn = untypedStress.at(-1);
+  assert.ok(longColumn);
+  assert.ok(typeof longColumn.label === "string");
+  const longVisibleName = longColumn.label.slice(0, 32);
+  assert.equal(longVisibleName.length, 32);
+  assert.match(longVisibleName, /…$/);
+  assert.match(longColumn.label, /nvarchar\(100\)\s+NULL/);
+  assert.equal(
+    longColumn.filterText,
+    "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
+  );
+  assert.equal(
+    longColumn.insertText,
+    "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
+  );
+  assert.ok(longColumn.documentation instanceof vscode.MarkdownString);
+  assert.match(
+    longColumn.documentation.value.replace(/\s+/g, ""),
+    /VeryLongERPBusinessTransactionPostingReferenceIdentifier/,
+  );
+  assert.match(longColumn.documentation.value, /Posting\s{2}\nReference/);
+  const longContains = await markedTypeItems(
+    "SELECT s.reference| FROM reltest.CompletionLayoutStress AS s;",
+  );
+  assert.equal(longContains.length, 1);
+  assert.equal(
+    longContains.find((item) => item.data?.semanticKind)?.filterText,
+    "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
+  );
+
   const nestedSql = `SELECT * FROM dbo.Customers c WHERE EXISTS (SELECT 1 FROM sales.CustomerOrders o WHERE o.`;
   assert.deepEqual(
     (await completion(nestedSql)).filter((name) =>
@@ -882,7 +1263,7 @@ WHERE EXISTS (SELECT 1 FROM dbo.CustomerAddresses ca WHERE ca.CustomerAddressId 
     (await completion(crossDatabase, crossDatabase.indexOf("r.)") + 2)).filter(
       (name) => ["ReportingCustomerId", "CustomerDisplayName"].includes(name),
     ),
-    ["CustomerDisplayName", "ReportingCustomerId"],
+    ["ReportingCustomerId", "CustomerDisplayName"],
   );
   const closed = `SELECT * FROM dbo.Customers c WHERE EXISTS (SELECT 1 FROM sales.CustomerOrders o) AND o.`;
   assert.equal(
@@ -893,7 +1274,7 @@ WHERE EXISTS (SELECT 1 FROM dbo.CustomerAddresses ca WHERE ca.CustomerAddressId 
   );
   const derived = `SELECT * FROM dbo.Customers c JOIN (SELECT 1 FROM sales.CustomerOrders o WHERE c.`;
   assert.equal(
-    (await completion(derived)).some((name) =>
+    labels(await semanticCompletion(derived)).some((name) =>
       ["CustomerId", "CustomerCode"].includes(name),
     ),
     false,
@@ -934,7 +1315,7 @@ WHERE EXISTS
     (await completion(closedExists, closedExists.indexOf("c.") + 2)).filter(
       (name) => ["CustomerId", "CustomerCode"].includes(name),
     ),
-    ["CustomerCode", "CustomerId"],
+    ["CustomerId", "CustomerCode"],
   );
   const closedApply = `SELECT *
 FROM dbo.Customers AS c
@@ -948,14 +1329,14 @@ CROSS APPLY
     (await completion(closedApply, closedApply.indexOf("c.") + 2)).filter(
       (name) => ["CustomerId", "CustomerCode"].includes(name),
     ),
-    ["CustomerCode", "CustomerId"],
+    ["CustomerId", "CustomerCode"],
   );
   const outerApply = closedApply.replace("CROSS APPLY", "OUTER APPLY");
   assert.deepEqual(
     (await completion(outerApply, outerApply.indexOf("c.") + 2)).filter(
       (name) => ["CustomerId", "CustomerCode"].includes(name),
     ),
-    ["CustomerCode", "CustomerId"],
+    ["CustomerId", "CustomerCode"],
   );
   for (const sql of [closedExists, closedApply, outerApply]) {
     const items = await semanticCompletion(sql, sql.indexOf("c.") + 2);
@@ -964,7 +1345,7 @@ CROSS APPLY
         typeof item.label === "string" ? item.label : item.label.label,
       ),
     );
-    assert.deepEqual(labels(coreItems), ["CustomerCode", "CustomerId"]);
+    assert.deepEqual(labels(coreItems), ["CustomerId", "CustomerCode"]);
     assert.ok(
       coreItems.every(
         (item) =>
@@ -1075,10 +1456,10 @@ WHERE EXISTS
     exactCorrelatedSet,
     exactCorrelatedSet.lastIndexOf("c.") + 2,
   );
-  assert.deepEqual(labels(correlatedSecondItems), [
-    "CustomerCode",
-    "CustomerId",
-  ]);
+  assert.deepEqual(
+    labels(correlatedSecondItems.filter((item) => item.data?.semanticKind)),
+    ["CustomerId", "CustomerCode"],
+  );
   assert.ok(
     correlatedSecondItems.every(
       (item) => item.data?.provider === "improved-sql-intellisense",
@@ -1192,7 +1573,7 @@ FROM ${database}.dbo.Customers c`;
         functionArgument.indexOf("cust") + 4,
       ),
     ),
-    ["CustomerCode", "CustomerId"],
+    ["CustomerId", "CustomerCode"],
   );
   const expressionDomain = `SELECT${" "}
 FROM ${database}.dbo.Customers c`;
@@ -1345,7 +1726,7 @@ SELECT x. FROM X x`;
     labels(
       await semanticCompletion(crossDatabase, crossDatabase.indexOf("r.)") + 2),
     ),
-    ["CustomerDisplayName", "ReportingCustomerId"],
+    ["ReportingCustomerId", "CustomerDisplayName"],
   );
   assert.deepEqual(labels(await semanticCompletion(derived)), []);
   assert.deepEqual(
