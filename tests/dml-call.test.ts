@@ -5,10 +5,11 @@ import { DatabaseIndex } from "../src/metadata/DatabaseIndex.js";
 import { isWritableColumn } from "../src/metadata/MetadataModels.js";
 import { quoteIdentifier } from "../src/metadata/SqlTypeFormatter.js";
 import {
-  functionInvocationDatabase,
-  functionSignatureLabel,
-  resolveFunctionSignature,
-} from "../src/parser/DmlCallAnalyzer.js";
+  callableDatabase,
+  callableSignatureLabel,
+  parseCallSite,
+  resolveCallableAtCursor,
+} from "../src/parser/CallableAnalyzer.js";
 import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
 
 const columns = [
@@ -249,9 +250,9 @@ test("cross-database DML, EXEC, and function signatures use the qualified catalo
     "@Search",
   ]);
   const sql = "SELECT Other.billing.CalculateBillingTotal_0001(1, ";
-  const signature = resolveFunctionSignature(sql, sql.length, scope);
+  const signature = resolveCallableAtCursor(sql, sql.length, scope);
   assert.ok(signature);
-  assert.equal(signature.object.schema, "billing");
+  assert.equal(signature.signature.schema, "billing");
   assert.equal(signature.activeParameter, 1);
 });
 test("UPDATE target and alias SET completion excludes used targets while RHS remains alias members", () => {
@@ -294,33 +295,33 @@ test("EXEC named parameters preserve declaration order, used exclusion, OUTPUT, 
   assert.equal(result[1]?.parameterOutput, true);
 });
 test("function signatures track arguments and ignore nested commas", () => {
-  const first = resolveFunctionSignature(
+  const first = resolveCallableAtCursor(
     "SELECT billing.CalculateBillingTotal_0001(",
     51,
     scope,
   );
   assert.ok(first);
   assert.equal(first.activeParameter, 0);
-  assert.equal(first.object.returnType?.precision, 18);
+  assert.equal(first.signature.returnType?.precision, 18);
   assert.equal(
-    functionSignatureLabel(first.object),
+    callableSignatureLabel(first.signature),
     "billing.CalculateBillingTotal_0001(@NetAmount decimal(18,2), @TaxRate decimal(9,4)) → decimal(18,2)",
   );
   const qualifiedCall = "SELECT Other.billing.CalculateBillingTotal_0001(";
   assert.equal(
-    functionInvocationDatabase(qualifiedCall, qualifiedCall.length),
+    callableDatabase(parseCallSite(qualifiedCall, qualifiedCall.length)),
     "Other",
   );
   const afterComma =
     "SELECT Other.billing.CalculateBillingTotal_0001(COALESCE(1, 2), ";
   assert.equal(
-    functionInvocationDatabase(afterComma, afterComma.length),
+    callableDatabase(parseCallSite(afterComma, afterComma.length)),
     "Other",
   );
   const stringsAndComments =
     "SELECT billing.CalculateBillingTotal_0001('a,b' /* x,y */, ";
   assert.equal(
-    resolveFunctionSignature(
+    resolveCallableAtCursor(
       stringsAndComments,
       stringsAndComments.length,
       scope,
@@ -330,26 +331,58 @@ test("function signatures track arguments and ignore nested commas", () => {
   const autoClosed = "SELECT billing.CalculateBillingTotal_0001() ; SELECT 1";
   const autoClosedCursor = autoClosed.indexOf("(") + 1;
   assert.equal(
-    resolveFunctionSignature(autoClosed, autoClosedCursor, scope)
+    resolveCallableAtCursor(autoClosed, autoClosedCursor, scope)
       ?.activeParameter,
     0,
   );
   const secondSql =
     "SELECT billing.CalculateBillingTotal_0001(COALESCE(1, 2), ";
   assert.equal(
-    resolveFunctionSignature(secondSql, secondSql.length, scope)
+    resolveCallableAtCursor(secondSql, secondSql.length, scope)
       ?.activeParameter,
     1,
   );
   const tvf = "SELECT * FROM reporting.GetCustomerAddresses_0001(";
   assert.equal(
-    resolveFunctionSignature(tvf, tvf.length, scope)?.object.kind,
-    "tableValuedFunction",
+    resolveCallableAtCursor(tvf, tvf.length, scope)?.signature.kind,
+    "tableValued",
   );
-  const tvfObject = resolveFunctionSignature(tvf, tvf.length, scope)?.object;
+  const tvfObject = resolveCallableAtCursor(tvf, tvf.length, scope)?.signature;
   assert.equal(
-    tvfObject && functionSignatureLabel(tvfObject),
+    tvfObject && callableSignatureLabel(tvfObject),
     "reporting.GetCustomerAddresses_0001(@CustomerId bigint) → table",
+  );
+});
+test("shared call sites own qualification, argument ranges, and nested active arguments", () => {
+  const firstSql = "SELECT billing.CalculateBillingTotal_0001(";
+  const first = parseCallSite(firstSql, firstSql.length);
+  assert.ok(first);
+  assert.deepEqual(first.nameParts, ["billing", "CalculateBillingTotal_0001"]);
+  assert.equal(first.name, "CalculateBillingTotal_0001");
+  assert.equal(first.schema, "billing");
+  assert.equal(first.database, undefined);
+  assert.equal(first.activeArgument, 0);
+  assert.equal(first.complete, false);
+
+  const laterSql =
+    "SELECT Other.billing.CalculateBillingTotal_0001(COALESCE(1, 2), CAST(3 AS decimal(18, 2)), ";
+  const later = parseCallSite(laterSql, laterSql.length);
+  assert.ok(later);
+  assert.deepEqual(later.nameParts, [
+    "Other",
+    "billing",
+    "CalculateBillingTotal_0001",
+  ]);
+  assert.equal(later.database, "Other");
+  assert.equal(later.activeArgument, 2);
+  assert.equal(later.arguments.length, 3);
+  assert.equal(
+    laterSql.slice(later.arguments[0]?.start, later.arguments[0]?.end).trim(),
+    "COALESCE(1, 2)",
+  );
+  assert.equal(
+    laterSql.slice(later.arguments[1]?.start, later.arguments[1]?.end).trim(),
+    "CAST(3 AS decimal(18, 2))",
   );
 });
 test("OUTPUT inserted/deleted availability follows DML semantics", () => {

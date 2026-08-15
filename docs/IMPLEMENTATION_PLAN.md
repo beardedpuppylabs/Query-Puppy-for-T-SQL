@@ -41,6 +41,21 @@ architecture documents describe the intended present-day design.
 - [x] Preserve FK predicate priority, Contains matching, scope isolation, and cached steady-state completion behavior.
 - [x] Cover helpers, candidate ordering, the registered CompletionItemProvider, and live fixture integration.
 
+## 0.9.1 architectural preparation
+
+- [x] Extract one editor-independent parsed call-site model with qualification,
+      depth-aware argument ranges, and active-argument ownership.
+- [x] Adapt catalog scalar UDFs and TVFs into one source-neutral callable signature
+      consumed by Signature Help and ExpectedType.
+- [x] Route completed scalar-UDF return inference through the same callable
+      resolver while retaining TVFs as non-scalar RowSources.
+- [x] Reuse shared call-site parsing for cross-database discovery and automatic
+      Signature Help fallback eligibility.
+
+This is preparation only. SQL Server built-in function metadata, completion,
+Signature Help, and return rules remain unimplemented until the 0.9.1 feature
+milestone.
+
 ## Verified contracts
 
 - VS Code 1.105 completion providers support structured labels, explicit replacement ranges, `filterText`, lazy resolution, and incomplete lists.

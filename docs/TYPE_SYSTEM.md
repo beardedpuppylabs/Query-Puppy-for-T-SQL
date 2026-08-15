@@ -304,11 +304,16 @@ JOIN ON uses the same comparison type logic as WHERE.
 
 ## Function arguments
 
-Catalog-backed signature metadata provides ExpectedType for the active argument.
+The shared callable resolver provides the signature and active parameter used to
+derive ExpectedType for the active argument. Catalog UDFs/TVFs are one signature
+source; future built-ins must use the same callable model.
 
 Reuse the existing active-parameter parser/state.
 
 Do not create a separate argument-index parser only for type ranking.
+
+Scalar callable return inference consumes the same callable resolution. TVFs remain
+RowSources and do not acquire scalar return types through this abstraction.
 
 ## UPDATE
 
@@ -411,3 +416,6 @@ A future built-in SQL Server function signature catalog may provide:
 It should reuse this type system.
 
 Do not create a second built-in-specific type engine.
+
+It must also plug into the shared call-site and callable-signature boundary used by
+Signature Help, ExpectedType, and scalar return inference.

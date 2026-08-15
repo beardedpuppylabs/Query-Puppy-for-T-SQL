@@ -697,6 +697,11 @@ Future built-in function intelligence should reuse the existing signature/type
 infrastructure wherever the semantic responsibilities are shared rather than
 creating a second parallel subsystem.
 
+Callable name parsing, depth-aware argument ranges, active-argument calculation,
+signature resolution, parameter ExpectedType, and scalar return inference share the
+canonical parser-layer call-site/callable infrastructure. Future callable sources
+must plug into that boundary rather than bypass it.
+
 ## Wildcard expansion
 
 Wildcard expansion is intentionally explicit.

@@ -1154,7 +1154,7 @@ export async function run(): Promise<void> {
     "OccurredAt",
     "Payload",
     "UniqueCustomerId",
-    "VeryLongERPBusinessTransactionPosti…",
+    "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
   ]);
   assert.deepEqual(
     untypedStress.map((item) => item.filterText),
@@ -1196,9 +1196,19 @@ export async function run(): Promise<void> {
   const longContains = await markedTypeItems(
     "SELECT s.reference| FROM reltest.CompletionLayoutStress AS s;",
   );
-  assert.equal(longContains.length, 1);
+  assert.deepEqual(
+    longContains.map((item) => item.filterText),
+    [
+      "ExternalReference",
+      "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
+    ],
+  );
   assert.equal(
-    longContains.find((item) => item.data?.semanticKind)?.filterText,
+    longContains.find(
+      (item) =>
+        item.filterText ===
+        "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
+    )?.filterText,
     "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
   );
 
@@ -1340,10 +1350,12 @@ CROSS APPLY
   );
   for (const sql of [closedExists, closedApply, outerApply]) {
     const items = await semanticCompletion(sql, sql.indexOf("c.") + 2);
-    const coreItems = items.filter((item) =>
-      ["CustomerCode", "CustomerId"].includes(
-        typeof item.label === "string" ? item.label : item.label.label,
-      ),
+    const coreItems = items.filter(
+      (item) =>
+        item.data?.semanticKind === "column" &&
+        ["CustomerCode", "CustomerId"].includes(
+          typeof item.filterText === "string" ? item.filterText : "",
+        ),
     );
     assert.deepEqual(labels(coreItems), ["CustomerId", "CustomerCode"]);
     assert.ok(
@@ -1351,8 +1363,8 @@ CROSS APPLY
         (item) =>
           item.kind === vscode.CompletionItemKind.Field &&
           item.data?.semanticKind === "column" &&
-          typeof item.label !== "string" &&
-          item.label.detail?.includes("NOT NULL") === true,
+          typeof item.label === "string" &&
+          item.label.includes("NOT NULL"),
       ),
     );
   }
@@ -1439,8 +1451,8 @@ FROM ${database}.billing.BillingAddresses AS b`;
       (item) =>
         item.kind === vscode.CompletionItemKind.Field &&
         item.data?.provider === "improved-sql-intellisense" &&
-        typeof item.label !== "string" &&
-        /bigint|nvarchar/.test(item.label.detail ?? ""),
+        typeof item.label === "string" &&
+        /bigint|nvarchar/.test(item.label),
     ),
   );
   const exactCorrelatedSet = `SELECT * FROM ${database}.dbo.Customers AS c
@@ -1568,10 +1580,12 @@ ORDER BY val`;
 FROM ${database}.dbo.Customers c`;
   assert.deepEqual(
     labels(
-      await semanticCompletion(
-        functionArgument,
-        functionArgument.indexOf("cust") + 4,
-      ),
+      (
+        await semanticCompletion(
+          functionArgument,
+          functionArgument.indexOf("cust") + 4,
+        )
+      ).filter((item) => item.data?.semanticKind),
     ),
     ["CustomerId", "CustomerCode"],
   );
@@ -1606,10 +1620,12 @@ FROM ${database}.dbo.Customers c`;
 FROM ${database}.dbo.Customers c`;
   assert.deepEqual(
     labels(
-      await semanticCompletion(
-        updateExpression,
-        updateExpression.indexOf("cust") + 4,
-      ),
+      (
+        await semanticCompletion(
+          updateExpression,
+          updateExpression.indexOf("cust") + 4,
+        )
+      ).filter((item) => item.data?.semanticKind),
     ),
     ["CustomerCode", "CustomerId"],
   );
@@ -1724,7 +1740,12 @@ SELECT x. FROM X x`;
   );
   assert.deepEqual(
     labels(
-      await semanticCompletion(crossDatabase, crossDatabase.indexOf("r.)") + 2),
+      (
+        await semanticCompletion(
+          crossDatabase,
+          crossDatabase.indexOf("r.)") + 2,
+        )
+      ).filter((item) => item.data?.semanticKind),
     ),
     ["ReportingCustomerId", "CustomerDisplayName"],
   );

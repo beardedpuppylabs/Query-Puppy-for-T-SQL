@@ -10,10 +10,11 @@ import { resolveSqlContext } from "../../src/parser/SqlContextResolver.js";
 import { analyzeDocumentSemantics } from "../../src/parser/DocumentSemanticAnalyzer.js";
 import { resolveSmartAliasContext } from "../../src/parser/SmartAlias.js";
 import {
-  functionInvocationDatabase,
-  functionSignatureLabel,
-  resolveFunctionSignature,
-} from "../../src/parser/DmlCallAnalyzer.js";
+  callableDatabase,
+  callableSignatureLabel,
+  parseCallSite,
+  resolveCallableAtCursor,
+} from "../../src/parser/CallableAnalyzer.js";
 import { isWritableColumn } from "../../src/metadata/MetadataModels.js";
 
 const names = [
@@ -1258,14 +1259,14 @@ JOIN ala AS y ON y.`;
     );
     assert.equal(execCandidates.at(-1)?.parameterOutput, true);
     const scalarSql = `SELECT ${activeDatabase}.billing.CalculateBillingTotal_0001(`;
-    const scalar = resolveFunctionSignature(scalarSql, scalarSql.length, scope);
+    const scalar = resolveCallableAtCursor(scalarSql, scalarSql.length, scope);
     assert.ok(scalar);
     assert.equal(
-      functionSignatureLabel(scalar.object),
+      callableSignatureLabel(scalar.signature),
       "billing.CalculateBillingTotal_0001(@NetAmount decimal(18,2), @TaxRate decimal(9,4)) → decimal(18,2)",
     );
     assert.equal(
-      functionInvocationDatabase(scalarSql, scalarSql.length),
+      callableDatabase(parseCallSite(scalarSql, scalarSql.length)),
       activeDatabase,
     );
     assert.equal(scalar.activeParameter, 0);
@@ -1274,15 +1275,15 @@ JOIN ala AS y ON y.`;
       `${scalarSql}COALESCE(100, 0),`,
     ])
       assert.equal(
-        resolveFunctionSignature(invocation, invocation.length, scope)
+        resolveCallableAtCursor(invocation, invocation.length, scope)
           ?.activeParameter,
         1,
       );
     const tvfSql = `SELECT * FROM ${activeDatabase}.reporting.GetCustomerAddresses_0001(`;
-    const tvf = resolveFunctionSignature(tvfSql, tvfSql.length, scope);
+    const tvf = resolveCallableAtCursor(tvfSql, tvfSql.length, scope);
     assert.ok(tvf);
     assert.equal(
-      functionSignatureLabel(tvf.object),
+      callableSignatureLabel(tvf.signature),
       "reporting.GetCustomerAddresses_0001(@CustomerId bigint) → table",
     );
     const outputCandidates = createCandidates(

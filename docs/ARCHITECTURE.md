@@ -61,6 +61,29 @@ Conceptually:
             v
       VS Code / VSCodium
 
+## Callable architecture
+
+Function consumers share one editor-independent semantic boundary:
+
+    SQL text / tokens
+        -> ParsedCallSite
+        -> callable resolution
+        -> CallableSignature
+        -> Signature Help / ExpectedType / return inference
+
+`ParsedCallSite` owns callable name parts, qualification, the opening parenthesis,
+depth-aware argument ranges, and the active argument. Catalog scalar UDFs and TVFs
+are adapted from canonical `DatabaseObject` metadata into `CallableSignature` at
+the resolver boundary. Downstream consumers do not require a `DatabaseObject`.
+
+The same boundary is the extension point for future built-in function metadata.
+Built-ins must not introduce a second call parser, active-argument calculation,
+Signature Help provider, ExpectedType path, or return-type inference engine.
+
+The editor's automatic Signature Help fallback remains UI coordination. It may
+restrict which edits are eligible, but semantic call interpretation comes from the
+shared call-site parser and callable resolver.
+
 ## Microsoft SQL Server extension integration
 
 Improved SQL IntelliSense provides its own completion semantics.

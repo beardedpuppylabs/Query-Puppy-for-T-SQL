@@ -300,6 +300,25 @@ Protect:
 - TVF signatures
 - manual Signature Help fallback
 
+## Callable infrastructure invariant
+
+Signature Help, function-argument ExpectedType, and scalar-call return inference
+must resolve through the same parsed call-site and callable-signature
+infrastructure.
+
+Protect:
+
+- qualification/name parts
+- depth-aware argument ranges
+- one active-argument calculation
+- incomplete calls while typing
+- catalog scalar UDF parameters and return type
+- catalog TVF parameters and non-scalar semantics
+- same-server database-qualified resolution
+
+Helper coverage for the call site is necessary, but provider or Extension Host
+coverage must also prove that native Signature Help consumes the common result.
+
 ## JOIN tests
 
 Protect:

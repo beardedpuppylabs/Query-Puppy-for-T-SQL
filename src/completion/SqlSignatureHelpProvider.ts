@@ -6,10 +6,12 @@ import { formatSqlType } from "../metadata/SqlTypeFormatter.js";
 import { normalizeName } from "../metadata/MetadataModels.js";
 import type { CompletionScope } from "./CandidateFactory.js";
 import {
-  functionInvocationDatabase,
-  functionSignatureLabel,
-  resolveFunctionSignature,
-} from "../parser/DmlCallAnalyzer.js";
+  callableDatabase,
+  callableSignatureLabel,
+  parseCallSite,
+  resolveCallable,
+  resolveCallableAtCursor,
+} from "../parser/CallableAnalyzer.js";
 
 export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
   private testScope: CompletionScope | undefined;
@@ -68,6 +70,7 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
       });
     const sql = document.getText();
     const cursor = document.offsetAt(position);
+    const callSite = parseCallSite(sql, cursor);
     let scope = this.testScope;
     if (!scope) {
       const active = await this.connections.active();
@@ -85,7 +88,7 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
         () => this.loader.load(active),
       );
       indexes.set(normalizeName(active.database), activeIndex);
-      const database = functionInvocationDatabase(sql, cursor);
+      const database = callableDatabase(callSite);
       if (
         database &&
         normalizeName(database) !== normalizeName(active.database)
@@ -99,7 +102,7 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
       }
       scope = { activeDatabase: active.database, indexes };
     }
-    const resolution = resolveFunctionSignature(sql, cursor, scope);
+    const resolution = callSite ? resolveCallable(callSite, scope) : undefined;
     if (!resolution) {
       this.diagnostics.set(
         document.uri.toString(),
@@ -110,15 +113,15 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
       );
       return undefined;
     }
-    const object = resolution.object;
-    const parameters = object.parameters.map(
+    const signatureModel = resolution.signature;
+    const parameters = signatureModel.parameters.map(
       (parameter) =>
         new vscode.ParameterInformation(
           `${parameter.name} ${formatSqlType(parameter.type)}${parameter.output ? " OUTPUT" : ""}`,
         ),
     );
     const signature = new vscode.SignatureInformation(
-      functionSignatureLabel(object),
+      callableSignatureLabel(signatureModel),
     );
     signature.parameters = parameters;
     const help = new vscode.SignatureHelp();
@@ -133,10 +136,10 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     };
     this.diagnostics.set(
       document.uri.toString(),
-      `parsed call:\n  database: ${functionInvocationDatabase(sql, cursor) ?? scope.activeDatabase}\n  schema: ${object.schema}\n  object: ${object.name}\nmetadata match:\n  found: yes\n  kind: ${object.kind === "scalarFunction" ? "scalar function" : "table-valued function"}\n  parameters: ${String(object.parameters.length)}\n  return: ${object.kind === "tableValuedFunction" ? "table" : object.returnType ? formatSqlType(object.returnType) : "unknown"}\nprovider result:\n  returned: yes\n  signatures: 1\n  activeParameter: ${String(resolution.activeParameter)}`,
+      `parsed call:\n  database: ${signatureModel.database ?? scope.activeDatabase}\n  schema: ${signatureModel.schema ?? "none"}\n  object: ${signatureModel.name}\nmetadata match:\n  found: yes\n  kind: ${signatureModel.kind === "scalar" ? "scalar function" : "table-valued function"}\n  parameters: ${String(signatureModel.parameters.length)}\n  return: ${signatureModel.kind === "tableValued" ? "table" : signatureModel.returnType ? formatSqlType(signatureModel.returnType) : "unknown"}\nprovider result:\n  returned: yes\n  signatures: 1\n  activeParameter: ${String(resolution.activeParameter)}`,
     );
     this.debug(
-      `Signature Help invoked: language=${document.languageId}; triggerKind=${vscode.SignatureHelpTriggerKind[context.triggerKind]}; triggerCharacter=${context.triggerCharacter ?? "none"}; function=${object.schema}.${object.name}; resolved=yes; activeParameter=${String(resolution.activeParameter)}.`,
+      `Signature Help invoked: language=${document.languageId}; triggerKind=${vscode.SignatureHelpTriggerKind[context.triggerKind]}; triggerCharacter=${context.triggerCharacter ?? "none"}; function=${signatureModel.schema ? `${signatureModel.schema}.` : ""}${signatureModel.name}; resolved=yes; activeParameter=${String(resolution.activeParameter)}.`,
     );
     return help;
   }
@@ -156,14 +159,15 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     const sql = document.getText();
     const cursor = document.offsetAt(position);
     if (this.testScope)
-      return Boolean(resolveFunctionSignature(sql, cursor, this.testScope));
+      return Boolean(resolveCallableAtCursor(sql, cursor, this.testScope));
     const active = await this.connections.active();
     if (!active) return false;
     const indexes = new Map();
     const activeIndex = this.cache.get(active.connectionId, active.database);
     if (!activeIndex) return false;
     indexes.set(normalizeName(active.database), activeIndex);
-    const database = functionInvocationDatabase(sql, cursor);
+    const callSite = parseCallSite(sql, cursor);
+    const database = callableDatabase(callSite);
     if (
       database &&
       normalizeName(database) !== normalizeName(active.database)
@@ -173,7 +177,8 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
       indexes.set(normalizeName(database), index);
     }
     return Boolean(
-      resolveFunctionSignature(sql, cursor, {
+      callSite &&
+      resolveCallable(callSite, {
         activeDatabase: active.database,
         indexes,
       }),

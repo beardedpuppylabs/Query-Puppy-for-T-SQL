@@ -6,7 +6,7 @@ import { ConnectionService } from "./mssql/ConnectionService.js";
 import { getMssqlApi } from "./mssql/MssqlApi.js";
 import { MetadataLoader } from "./mssql/MetadataLoader.js";
 import { SqlSignatureHelpProvider } from "./completion/SqlSignatureHelpProvider.js";
-import { tokenizeSql } from "./parser/SqlTokenizer.js";
+import { parseCallSite } from "./parser/CallableAnalyzer.js";
 import {
   SIGNATURE_HELP_METADATA,
   SQL_DOCUMENT_SELECTOR,
@@ -342,28 +342,9 @@ function functionCallAtCursor(
   cursor: number,
   character: string,
 ): boolean {
-  const prefix = sql.slice(0, cursor);
-  if (character === "(")
-    return /(?:^|[^A-Za-z0-9_])(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_@$#]*)(?:\.(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_@$#]*)){1,2}\($/.test(
-      prefix,
-    );
-  if (character !== ",") return false;
-  const tokens = tokenizeSql(prefix);
-  let depth = 0;
-  for (let i = tokens.length - 2; i >= 0; i--) {
-    if (tokens[i]?.text === ")") depth++;
-    if (tokens[i]?.text !== "(") continue;
-    if (depth > 0) {
-      depth--;
-      continue;
-    }
-    return (
-      tokens[i - 1]?.kind === "identifier" &&
-      tokens[i - 2]?.text === "." &&
-      tokens[i - 3]?.kind === "identifier"
-    );
-  }
-  return false;
+  if (character !== "(" && character !== ",") return false;
+  const callSite = parseCallSite(sql, cursor);
+  return Boolean(callSite && callSite.nameParts.length >= 2);
 }
 
 function parameterHintStatusLine(document?: vscode.TextDocument): string {

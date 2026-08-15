@@ -91,6 +91,14 @@ const metadata: DatabaseMetadata = {
       ],
       returnType: { name: "decimal", precision: 18, scale: 2 },
     },
+    {
+      schema: "billing",
+      name: "Amounts",
+      normalizedName: "amounts",
+      kind: "tableValuedFunction",
+      columns: customerColumns,
+      parameters: [],
+    },
   ],
 };
 const index = new DatabaseIndex(metadata);
@@ -287,6 +295,7 @@ test("infers physical/local columns, literals, casts, scalar UDFs, arithmetic, a
     infer("billing.Calculate(c.Amount, 1.0)").normalizedName,
     "decimal",
   );
+  assert.equal(infer("billing.Amounts()").kind, "unknown");
   assert.ok(["integer", "decimal"].includes(infer("c.CustomerId + 1").family));
   assert.equal(
     infer("CASE WHEN 1=1 THEN c.CustomerId ELSE c.PrimaryAddressId END")

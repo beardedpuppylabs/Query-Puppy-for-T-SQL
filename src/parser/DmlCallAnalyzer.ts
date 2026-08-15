@@ -1,4 +1,3 @@
-import type { DatabaseIndex } from "../metadata/DatabaseIndex.js";
 import {
   isWritableColumn,
   normalizeName,
@@ -8,12 +7,12 @@ import {
 } from "../metadata/MetadataModels.js";
 import type { RowSource } from "./DocumentSemanticAnalyzer.js";
 import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
-import { formatSqlType } from "../metadata/SqlTypeFormatter.js";
+import {
+  resolveCatalogObject,
+  type CatalogScope,
+} from "./CatalogObjectResolver.js";
 
-export interface DmlCatalog {
-  readonly activeDatabase: string;
-  readonly indexes: ReadonlyMap<string, DatabaseIndex>;
-}
+export type DmlCatalog = CatalogScope;
 export type DmlCompletion =
   | { readonly kind: "columns"; readonly columns: readonly ColumnMetadata[] }
   | {
@@ -55,29 +54,6 @@ const reference = (
   }
   return { parts, end: i };
 };
-export function resolveCatalogObject(
-  parts: readonly string[],
-  catalog: DmlCatalog,
-  kinds?: readonly DatabaseObject["kind"][],
-): DatabaseObject | undefined {
-  const database =
-    parts.length === 3
-      ? (parts[0] ?? catalog.activeDatabase)
-      : catalog.activeDatabase;
-  const schema = parts.length >= 2 ? parts.at(-2) : undefined;
-  const name = parts.at(-1) ?? "";
-  const index = catalog.indexes.get(normalizeName(database));
-  if (!index) return undefined;
-  const objects = schema
-    ? ([index.findObject(schema, name)].filter(Boolean) as DatabaseObject[])
-    : index.objects.filter(
-        (o) => normalizeName(o.name) === normalizeName(name),
-      );
-  const filtered = kinds
-    ? objects.filter((o) => kinds.includes(o.kind))
-    : objects;
-  return filtered.length === 1 ? filtered[0] : undefined;
-}
 const usedNames = (
   tokens: readonly SqlToken[],
   start: number,
@@ -237,95 +213,6 @@ export function analyzeDmlCompletion(
       kind: "columns",
       columns: writable.filter((c) => !used.has(c.normalizedName)),
     };
-  }
-  return undefined;
-}
-
-export interface SignatureResolution {
-  readonly object: DatabaseObject;
-  readonly activeParameter: number;
-}
-export function functionSignatureLabel(object: DatabaseObject): string {
-  const parameters = object.parameters
-    .map(
-      (parameter) =>
-        `${parameter.name} ${formatSqlType(parameter.type)}${parameter.output ? " OUTPUT" : ""}`,
-    )
-    .join(", ");
-  const returns =
-    object.kind === "tableValuedFunction"
-      ? " → table"
-      : object.returnType
-        ? ` → ${formatSqlType(object.returnType)}`
-        : "";
-  return `${object.schema}.${object.name}(${parameters})${returns}`;
-}
-export function resolveFunctionSignature(
-  sql: string,
-  cursor: number,
-  catalog: DmlCatalog,
-): SignatureResolution | undefined {
-  const tokens = tokenizeSql(sql.slice(0, cursor));
-  let depth = 0,
-    open = -1;
-  for (let i = tokens.length - 1; i >= 0; i--) {
-    if (tokens[i]?.text === ")") depth++;
-    if (tokens[i]?.text === "(") {
-      if (depth === 0) {
-        open = i;
-        break;
-      }
-      depth--;
-    }
-  }
-  if (open < 0) return undefined;
-  let start = open - 1;
-  while (start >= 2 && tokens[start - 1]?.text === ".") start -= 2;
-  const ref = reference(tokens, start);
-  const object = resolveCatalogObject(ref.parts, catalog, [
-    "scalarFunction",
-    "tableValuedFunction",
-  ]);
-  if (!object) return undefined;
-  let active = 0;
-  depth = 0;
-  for (let i = open + 1; i < tokens.length; i++) {
-    if (tokens[i]?.text === "(") depth++;
-    if (tokens[i]?.text === ")") depth--;
-    if (depth === 0 && tokens[i]?.text === ",") active++;
-  }
-  return {
-    object,
-    activeParameter: Math.min(
-      active,
-      Math.max(0, object.parameters.length - 1),
-    ),
-  };
-}
-
-export function functionInvocationDatabase(
-  sql: string,
-  cursor: number,
-): string | undefined {
-  const tokens = tokenizeSql(sql.slice(0, cursor));
-  let depth = 0;
-  for (let open = tokens.length - 1; open >= 0; open--) {
-    if (tokens[open]?.text === ")") depth++;
-    if (tokens[open]?.text !== "(") continue;
-    if (depth > 0) {
-      depth--;
-      continue;
-    }
-    const name = open - 1;
-    if (
-      tokens[name]?.kind === "identifier" &&
-      tokens[name - 1]?.text === "." &&
-      tokens[name - 2]?.kind === "identifier" &&
-      tokens[name - 3]?.text === "." &&
-      tokens[name - 4]?.kind === "identifier"
-    )
-      return tokens[name - 4]?.text;
-    return undefined;
   }
   return undefined;
 }

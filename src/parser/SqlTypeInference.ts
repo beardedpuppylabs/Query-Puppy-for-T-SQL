@@ -10,10 +10,11 @@ import type {
   DocumentSemanticModel,
   RowSource,
 } from "./DocumentSemanticAnalyzer.js";
+import { resolveCatalogObject } from "./CatalogObjectResolver.js";
 import {
-  resolveCatalogObject,
-  resolveFunctionSignature,
-} from "./DmlCallAnalyzer.js";
+  resolveCallableAtCursor,
+  resolveCompletedScalarCallable,
+} from "./CallableAnalyzer.js";
 import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
 import { resolveDocumentSymbols } from "./DocumentSymbols.js";
 
@@ -236,15 +237,6 @@ const parseTypeTokens = (tokens: readonly SqlToken[]): SqlTypeDescriptor => {
   return known(type);
 };
 
-const matchingOpen = (tokens: readonly SqlToken[], close: number): number => {
-  let depth = 0;
-  for (let i = close; i >= 0; i--) {
-    if (tokens[i]?.text === ")") depth++;
-    if (tokens[i]?.text === "(" && --depth === 0) return i;
-  }
-  return -1;
-};
-
 const reconcile = (types: readonly SqlTypeDescriptor[]): SqlTypeDescriptor => {
   const values = types.filter((type) => type.kind === "known");
   const first = values[0];
@@ -360,17 +352,9 @@ export function inferExpressionType(
     return reconcile([left, right]);
   }
   if (tokens.at(-1)?.text === ")") {
-    const open = matchingOpen(tokens, tokens.length - 1);
-    if (open > 0) {
-      let first = open - 1;
-      while (first >= 2 && tokens[first - 1]?.text === ".") first -= 2;
-      const parts = tokens
-        .slice(first, open)
-        .filter((token) => token.kind === "identifier")
-        .map((token) => token.text);
-      const object = resolveCatalogObject(parts, scope, ["scalarFunction"]);
-      if (object?.returnType) return known(object.returnType);
-    }
+    const callable = resolveCompletedScalarCallable(sql, start, end, scope);
+    if (callable?.signature.returnType)
+      return known(callable.signature.returnType);
   }
   return known(findColumn(tokens, semantics)?.type);
 }
@@ -402,8 +386,8 @@ export function inferExpectedTypeAtCursor(
   scope: CompletionScope,
   semantics: DocumentSemanticModel,
 ): ExpectedTypeContext | undefined {
-  const signature = resolveFunctionSignature(sql, cursor, scope);
-  const parameter = signature?.object.parameters[signature.activeParameter];
+  const signature = resolveCallableAtCursor(sql, cursor, scope);
+  const parameter = signature?.signature.parameters[signature.activeParameter];
   if (parameter)
     return contextResult(known(parameter.type), "functionParameter");
 
