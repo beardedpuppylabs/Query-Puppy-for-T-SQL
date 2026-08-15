@@ -93,19 +93,9 @@ export function createCandidates(
     );
     if (dml?.kind === "none") return [];
     if (dml?.kind === "columns" || dml?.kind === "pseudo") {
-      const columns = dml.kind === "pseudo" ? dml.source.columns : dml.columns;
-      const dmlCandidates = columns
-        .filter((column) =>
-          containsMatch(column.normalizedName, context.search),
-        )
-        .map((column) => ({
-          name: column.name,
-          normalizedName: column.normalizedName,
-          kind: "column" as const,
-          sqlType: column.type,
-          nullable: column.nullable,
-          column,
-        }));
+      const dmlCandidates = scopedColumnCandidates(dml.source, scope).filter(
+        (column) => containsMatch(column.normalizedName, context.search),
+      );
       return sortCandidates(
         applyTypeCompatibility(dmlCandidates, expected?.expectedType),
         context.search,

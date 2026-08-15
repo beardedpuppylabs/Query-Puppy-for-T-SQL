@@ -14,7 +14,7 @@ import {
 
 export type DmlCatalog = CatalogScope;
 export type DmlCompletion =
-  | { readonly kind: "columns"; readonly columns: readonly ColumnMetadata[] }
+  | { readonly kind: "columns"; readonly source: RowSource }
   | {
       readonly kind: "parameters";
       readonly parameters: readonly ParameterMetadata[];
@@ -82,7 +82,11 @@ function dmlTarget(
   catalog: DmlCatalog,
   aliases: ReadonlyMap<string, RowSource>,
 ):
-  | { verb: "insert" | "update" | "delete"; object?: DatabaseObject }
+  | {
+      verb: "insert" | "update" | "delete";
+      object?: DatabaseObject;
+      database?: string;
+    }
   | undefined {
   const verbToken = tokens.find((t) =>
     ["insert", "update", "delete"].includes(t.normalized),
@@ -114,15 +118,52 @@ function dmlTarget(
               "table",
               "view",
             ]);
-            return { verb, ...(object ? { object } : {}) };
+            return {
+              verb,
+              ...(object
+                ? {
+                    object,
+                    database:
+                      candidate.parts.length === 3
+                        ? candidate.parts[0]
+                        : catalog.activeDatabase,
+                  }
+                : {}),
+            };
           }
         }
       }
     }
   }
   const object = resolveCatalogObject(ref.parts, catalog, ["table", "view"]);
-  return { verb, ...(object ? { object } : {}) };
+  return {
+    verb,
+    ...(object
+      ? {
+          object,
+          database:
+            ref.parts.length === 3 ? ref.parts[0] : catalog.activeDatabase,
+        }
+      : {}),
+  };
 }
+
+const targetSource = (
+  object: DatabaseObject,
+  database: string | undefined,
+  columns: readonly ColumnMetadata[],
+  sourceId: string,
+  sourceKind: RowSource["sourceKind"] = "derivedTable",
+): RowSource => ({
+  sourceId,
+  name: object.name,
+  sourceKind,
+  ...(database ? { database } : {}),
+  schema: object.schema,
+  sourceObject: object,
+  columns,
+  origin: { start: 0, end: 0 },
+});
 export function analyzeDmlCompletion(
   sql: string,
   cursor: number,
@@ -148,10 +189,14 @@ export function analyzeDmlCompletion(
       return {
         kind: "pseudo",
         source: {
-          sourceId: `dml-${lastDot}`,
+          ...targetSource(
+            target.object,
+            target.database,
+            target.object.columns,
+            `dml-${lastDot}`,
+            lastDot,
+          ),
           name: lastDot,
-          sourceKind: lastDot,
-          columns: target.object.columns,
           origin: { start: 0, end: cursor },
         },
       };
@@ -192,7 +237,12 @@ export function analyzeDmlCompletion(
       const used = usedNames(tokens, open + 1, tokens.length - 1);
       return {
         kind: "columns",
-        columns: writable.filter((c) => !used.has(c.normalizedName)),
+        source: targetSource(
+          target.object,
+          target.database,
+          writable.filter((c) => !used.has(c.normalizedName)),
+          "dml-insert-target",
+        ),
       };
     }
   }
@@ -211,7 +261,12 @@ export function analyzeDmlCompletion(
     const used = usedNames(tokens, set + 1, comma + 1, true);
     return {
       kind: "columns",
-      columns: writable.filter((c) => !used.has(c.normalizedName)),
+      source: targetSource(
+        target.object,
+        target.database,
+        writable.filter((c) => !used.has(c.normalizedName)),
+        "dml-update-target",
+      ),
     };
   }
   return undefined;

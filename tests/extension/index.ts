@@ -155,6 +155,7 @@ const index = new DatabaseIndex({
           type: { name: "bigint" },
           nullable: false,
           ordinal: 1,
+          identity: true,
         },
         {
           name: "CustomerCode",
@@ -1210,6 +1211,76 @@ export async function run(): Promise<void> {
         "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
     )?.filterText,
     "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
+  );
+
+  const physicalByName = (
+    items: readonly MarkedCompletionItem[],
+    name: string,
+  ) => items.find((item) => item.filterText === name);
+  const visibleLabel = (item: MarkedCompletionItem | undefined) =>
+    typeof item?.label === "string" ? item.label : (item?.label.label ?? "");
+  const ordinaryCustomers = await markedTypeItems(
+    "SELECT c.| FROM reltest.Customers AS c;",
+  );
+  const insertTargets = await markedTypeItems(
+    "INSERT INTO reltest.Customers (|",
+  );
+  const updateTargets = await markedTypeItems("UPDATE reltest.Customers SET |");
+  const insertedMembers = await markedTypeItems(
+    "UPDATE reltest.Customers SET DisplayName=N'x' OUTPUT inserted.|",
+  );
+  const deletedMembers = await markedTypeItems(
+    "DELETE FROM reltest.Customers OUTPUT deleted.|",
+  );
+  const equivalentFields = (
+    left: MarkedCompletionItem,
+    right: MarkedCompletionItem,
+  ) => {
+    assert.equal(right.label, left.label);
+    assert.equal(right.filterText, left.filterText);
+    assert.equal(right.insertText, left.insertText);
+    assert.ok(left.documentation instanceof vscode.MarkdownString);
+    assert.ok(right.documentation instanceof vscode.MarkdownString);
+    assert.equal(right.documentation.value, left.documentation.value);
+  };
+  for (const name of ["CustomerCode", "ExternalKey", "BillingAddressId"]) {
+    const ordinary = physicalByName(ordinaryCustomers, name);
+    assert.ok(ordinary, `ordinary physical candidate missing ${name}`);
+    for (const dmlItems of [insertTargets, updateTargets]) {
+      const dml = physicalByName(dmlItems, name);
+      assert.ok(dml, `writable DML candidate missing ${name}`);
+      equivalentFields(ordinary, dml);
+    }
+  }
+  assert.equal(physicalByName(insertTargets, "CustomerId"), undefined);
+  assert.equal(physicalByName(updateTargets, "CustomerId"), undefined);
+  for (const [items, source] of [
+    [insertedMembers, "inserted"],
+    [deletedMembers, "deleted"],
+  ] as const)
+    for (const name of [
+      "CustomerId",
+      "CustomerCode",
+      "ExternalKey",
+      "BillingAddressId",
+    ]) {
+      const ordinary = physicalByName(ordinaryCustomers, name);
+      const pseudo = physicalByName(items, name);
+      assert.ok(ordinary, `ordinary physical candidate missing ${name}`);
+      assert.ok(pseudo, `${source} physical candidate missing ${name}`);
+      equivalentFields(ordinary, pseudo);
+    }
+  assert.match(
+    visibleLabel(physicalByName(insertedMembers, "CustomerId")),
+    /PK/,
+  );
+  assert.match(
+    visibleLabel(physicalByName(insertTargets, "CustomerCode")),
+    /UQ/,
+  );
+  assert.match(
+    visibleLabel(physicalByName(updateTargets, "BillingAddressId")),
+    /FK/,
   );
 
   const nestedSql = `SELECT * FROM dbo.Customers c WHERE EXISTS (SELECT 1 FROM sales.CustomerOrders o WHERE o.`;

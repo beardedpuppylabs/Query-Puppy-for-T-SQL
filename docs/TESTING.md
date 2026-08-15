@@ -210,6 +210,8 @@ The same physical column obtained through:
 
 - ordinary member completion
 - grouped type-aware completion
+- writable INSERT/UPDATE target completion, when eligible
+- legal `inserted`/`deleted` OUTPUT member completion
 
 must produce equivalent:
 
@@ -222,6 +224,11 @@ must produce equivalent:
 - visible physical-row presentation
 
 Ignore only deliberate ranking/group positioning differences.
+
+Writable-target tests must separately prove that identity, computed, generated,
+hidden, and rowversion columns remain excluded. OUTPUT pseudo-source tests must prove
+that those columns retain canonical metadata when legally visible rather than being
+subjected to writable-target filtering.
 
 This test protects against duplicate CompletionItem pipelines.
 

@@ -4,6 +4,7 @@ import { createCandidates } from "../src/completion/CandidateFactory.js";
 import { DatabaseIndex } from "../src/metadata/DatabaseIndex.js";
 import { isWritableColumn } from "../src/metadata/MetadataModels.js";
 import { quoteIdentifier } from "../src/metadata/SqlTypeFormatter.js";
+import { physicalColumnDisplayRow } from "../src/completion/PresentationModel.js";
 import {
   callableDatabase,
   callableSignatureLabel,
@@ -93,6 +94,7 @@ const index = new DatabaseIndex({
   loadedAt: 0,
   objects: [
     {
+      id: 1,
       schema: "dbo",
       name: "Customers",
       normalizedName: "customers",
@@ -101,6 +103,7 @@ const index = new DatabaseIndex({
       columns,
     },
     {
+      id: 2,
       schema: "dbo",
       name: "CustomerAddresses",
       normalizedName: "customeraddresses",
@@ -201,6 +204,54 @@ const index = new DatabaseIndex({
       ],
     },
   ],
+  keys: [
+    {
+      database: "Db",
+      objectId: 1,
+      schema: "dbo",
+      objectName: "Customers",
+      name: "PK_Customers",
+      kind: "primaryKey",
+      filtered: false,
+      columns: [{ columnId: 1, columnName: "CustomerId", ordinal: 1 }],
+    },
+    {
+      database: "Db",
+      objectId: 1,
+      schema: "dbo",
+      objectName: "Customers",
+      name: "UQ_Customers_CustomerCode",
+      kind: "uniqueConstraint",
+      filtered: false,
+      columns: [{ columnId: 2, columnName: "CustomerCode", ordinal: 1 }],
+    },
+  ],
+  foreignKeys: [
+    {
+      database: "Db",
+      id: 10,
+      name: "FK_Customers_BillingAddress",
+      parentObjectId: 1,
+      parentSchema: "dbo",
+      parentObjectName: "Customers",
+      referencedObjectId: 2,
+      referencedSchema: "dbo",
+      referencedObjectName: "CustomerAddresses",
+      columns: [
+        {
+          parentColumnId: 5,
+          parentColumnName: "BillingAddressId",
+          referencedColumnId: 1,
+          referencedColumnName: "AddressId",
+          ordinal: 1,
+        },
+      ],
+      deleteAction: "SET_NULL",
+      updateAction: "NO_ACTION",
+      disabled: false,
+      notTrusted: false,
+    },
+  ],
 });
 const otherIndex = new DatabaseIndex({
   ...index.metadata,
@@ -240,6 +291,67 @@ test("INSERT columns are target-only, contains matched, and exclude used columns
   ).find((candidate) => candidate.name === "Customer Name");
   assert.ok(bracketed);
   assert.equal(quoteIdentifier(bracketed.name), "[Customer Name]");
+});
+
+test("DML-selected physical columns preserve ordinary canonical metadata", () => {
+  const ordinarySql = "SELECT c. FROM dbo.Customers c";
+  const ordinary = createCandidates(
+    resolveSqlContext(ordinarySql, ordinarySql.indexOf("c.") + 2),
+    scope,
+  );
+  const contexts = [
+    createCandidates(resolveSqlContext("INSERT INTO dbo.Customers ("), scope),
+    createCandidates(resolveSqlContext("UPDATE dbo.Customers SET "), scope),
+    createCandidates(
+      resolveSqlContext(
+        "UPDATE dbo.Customers SET EmailAddress=N'x' OUTPUT inserted.",
+      ),
+      scope,
+    ),
+    createCandidates(
+      resolveSqlContext("DELETE FROM dbo.Customers OUTPUT deleted."),
+      scope,
+    ),
+  ];
+  for (const candidates of contexts)
+    for (const name of ["CustomerCode", "BillingAddressId", "EmailAddress"]) {
+      const expected = ordinary.find((candidate) => candidate.name === name);
+      const actual = candidates.find((candidate) => candidate.name === name);
+      assert.ok(expected, `ordinary candidate missing ${name}`);
+      assert.ok(actual, `DML candidate missing ${name}`);
+      assert.equal(actual.physicalColumn, true);
+      assert.equal(actual.database, expected.database);
+      assert.equal(actual.schema, expected.schema);
+      assert.equal(actual.sourceObject, expected.sourceObject);
+      assert.equal(actual.column, expected.column);
+      assert.deepEqual(actual.keyRoles, expected.keyRoles);
+      assert.deepEqual(actual.keys, expected.keys);
+      assert.deepEqual(actual.foreignKeys, expected.foreignKeys);
+      assert.equal(
+        physicalColumnDisplayRow(actual),
+        physicalColumnDisplayRow(expected),
+      );
+    }
+  assert.deepEqual(
+    contexts
+      .slice(0, 2)
+      .map((candidates) =>
+        candidates.some((candidate) => candidate.name === "CustomerId"),
+      ),
+    [false, false],
+    "writable targets must still exclude the identity PK",
+  );
+  assert.deepEqual(
+    contexts
+      .slice(2)
+      .map(
+        (candidates) =>
+          candidates.find((candidate) => candidate.name === "CustomerId")
+            ?.keyRoles,
+      ),
+    [["PK"], ["PK"]],
+    "OUTPUT pseudo sources must retain non-writable PK columns",
+  );
 });
 
 test("cross-database DML, EXEC, and function signatures use the qualified catalog", () => {
