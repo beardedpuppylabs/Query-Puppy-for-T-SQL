@@ -20,9 +20,38 @@ It does not scrape, filter, or post-process Microsoft SQL Server completion
 results.
 
 The Microsoft SQL Server extension is used for its active SQL connection through
-its supported connection-sharing integration.
+the project's existing connection-sharing integration.
 
-## Required architecture reading
+## Documentation model
+
+The repository documentation has distinct responsibilities.
+
+Current architecture is defined by:
+
+- `docs/ARCHITECTURE.md`
+- `docs/COMPLETION_PIPELINE.md`
+- `docs/TYPE_SYSTEM.md`
+- `docs/TESTING.md`
+
+Operational development and release guidance is defined by:
+
+- `docs/DEVELOPMENT.md`
+- `docs/PUBLISHING.md`
+
+Milestone planning and implementation history are recorded in:
+
+- `docs/IMPLEMENTATION_PLAN.md`
+
+`docs/IMPLEMENTATION_PLAN.md` is not authoritative for current architecture.
+
+Historical milestone notes may describe implementation details that were correct
+for a particular release and later changed.
+
+When historical implementation notes conflict with current architecture
+documentation, treat the current architecture documents as the intended present-day
+design contract and inspect the implementation before changing either.
+
+## Required reading
 
 Before modifying completion candidate creation, member completion, filtering,
 ranking, sorting, grouping, physical-column presentation, CompletionItem
@@ -32,13 +61,13 @@ construction, or CompletionItem documentation:
 
 Before modifying SQL datatype representation, expression type inference,
 expected-type detection, compatibility ranking, function argument typing,
-UPDATE/INSERT typing, or type-group presentation:
+UPDATE/INSERT typing, arithmetic typing, or type-group presentation:
 
     read docs/TYPE_SYSTEM.md
 
 Before modifying connection handling, catalog loading, metadata caching,
-QueryScopes, RowSources, subsystem boundaries, cross-database behavior, or
-schema/relationship metadata:
+QueryScopes, RowSources, subsystem boundaries, cross-database behavior,
+schema/relationship metadata, or major data flow:
 
     read docs/ARCHITECTURE.md
 
@@ -47,12 +76,28 @@ or manual SQL acceptance cases:
 
     read docs/TESTING.md
 
-When a task crosses several of these areas, read all relevant documents before
-changing production code.
+Before modifying developer prerequisites, npm scripts, build commands,
+integration-test environment setup, local development workflow, or packaging
+commands:
 
-## Architecture documentation maintenance
+    read docs/DEVELOPMENT.md
 
-Treat the architecture documentation as part of the implementation.
+Before modifying versioning, VSIX release procedures, Marketplace publication,
+publisher identity, publishing authentication, or release security checks:
+
+    read docs/PUBLISHING.md
+
+Before planning a new milestone, changing milestone scope, or updating completed
+milestone state:
+
+    read docs/IMPLEMENTATION_PLAN.md
+
+When a task crosses several areas, read all relevant documents before changing
+production code.
+
+## Documentation maintenance
+
+Treat maintained project documentation as part of the implementation.
 
 When a task changes or introduces:
 
@@ -60,70 +105,107 @@ When a task changes or introduces:
 - data flow
 - completion pipeline behavior
 - semantic candidate structure
-- caching or metadata loading behavior
+- caching or metadata-loading behavior
 - QueryScope or RowSource semantics
 - SQL type inference or compatibility rules
-- testing strategy or required regression coverage
+- testing strategy or regression coverage
+- development prerequisites or workflows
+- build or packaging commands
+- release or publishing procedures
+- publisher identity
+- milestone scope or completion state
 - an architectural invariant documented in this repository
 
 review the relevant documentation before considering the task complete.
 
-Update the relevant document when the intended architecture or public behavior has
-actually changed.
+Update documentation when its intended contract, workflow, public behavior, or
+project state has actually changed.
 
-Do not update architecture documentation merely because implementation details were
-renamed, moved, or rearranged without changing the documented contract.
+Do not update documentation merely because implementation details were renamed,
+moved, or rearranged without affecting the documented contract.
 
-The current documentation responsibilities are:
+### Architecture documentation responsibilities
 
-- `docs/ARCHITECTURE.md`
-  - subsystem boundaries
-  - connection and database architecture
-  - catalog and metadata flow
-  - caching and lazy loading
-  - QueryScopes
-  - RowSources
-  - Schema Intelligence
-  - relationships
-  - cross-database boundaries
-  - performance and security invariants
+`docs/ARCHITECTURE.md` owns:
 
-- `docs/COMPLETION_PIPELINE.md`
-  - semantic candidate creation
-  - matching and filtering
-  - ranking
-  - grouping
-  - sorting
-  - CompletionItem materialization
-  - physical-column presentation
-  - completion invariants
+- subsystem boundaries
+- connection and database architecture
+- catalog and metadata flow
+- caching and lazy loading
+- QueryScopes
+- RowSources
+- Schema Intelligence
+- relationships
+- cross-database boundaries
+- performance and security invariants
 
-- `docs/TYPE_SYSTEM.md`
-  - normalized SQL types
-  - type families and facets
-  - expression inference
-  - ExpectedType
-  - compatibility behavior
-  - canonical SQL type display
+`docs/COMPLETION_PIPELINE.md` owns:
 
-- `docs/TESTING.md`
-  - unit tests
-  - provider tests
-  - Extension Host tests
-  - live SQL integration tests
-  - installed VSCodium acceptance
-  - regression requirements
-  - manual acceptance conventions
+- semantic candidate creation
+- matching and filtering
+- ranking
+- grouping
+- sorting
+- CompletionItem materialization
+- physical-column presentation
+- completion invariants
 
-If a subsystem grows large enough that its rules make one of these documents
-difficult to navigate, repeatedly require long task-specific explanations, or
-represent a clearly independent architectural responsibility, report that the
-documentation should be split into a dedicated document.
+`docs/TYPE_SYSTEM.md` owns:
 
-Do not silently allow one architecture document to grow indefinitely.
+- normalized SQL types
+- type families and facets
+- expression inference
+- ExpectedType
+- compatibility behavior
+- canonical SQL type display
 
-Do not create additional architecture documents merely for hypothetical future
-needs.
+`docs/TESTING.md` owns:
+
+- unit tests
+- provider tests
+- Extension Host tests
+- live SQL integration tests
+- installed VSCodium acceptance
+- regression requirements
+- manual acceptance conventions
+
+### Operational documentation responsibilities
+
+`docs/DEVELOPMENT.md` owns:
+
+- prerequisites
+- dependency installation
+- development commands
+- build and verification commands
+- integration-test environment setup
+- local packaging workflow
+- concise developer-facing architecture entry points
+
+It should link to architecture documentation rather than duplicating detailed
+architecture.
+
+`docs/PUBLISHING.md` owns:
+
+- Marketplace publisher requirements
+- release verification
+- VSIX packaging and inspection
+- explicit publication procedures
+- publishing authentication guidance
+- release security checks
+
+It should remain durable and avoid unnecessary release-version-specific examples.
+
+### Planning and history responsibility
+
+`docs/IMPLEMENTATION_PLAN.md` owns:
+
+- milestone scope
+- completed milestone state
+- implementation history
+- release-specific verification notes
+- deliberately deferred work
+
+Historical implementation notes must not override current architecture contracts.
 
 Before completing every development task, explicitly evaluate:
 
@@ -178,7 +260,7 @@ It must not broaden an explicit qualifier to unrelated RowSources.
 
 ## Native editor UI
 
-Use the supported native VS Code/VSCodium APIs.
+Use supported native VS Code/VSCodium APIs.
 
 Do not introduce a custom completion popup, custom editor overlay, external search
 window, or webview merely to work around Suggest Widget presentation limitations.
@@ -212,18 +294,15 @@ Do not provision integration fixtures from extension runtime code.
 Persistent SQL Server metadata is cached by the appropriate connection/database
 context.
 
-The steady-state completion hot path performs zero SQL catalog queries per
-keystroke.
-
-A first access to an uncached database may trigger the project's existing lazy
-catalog load.
+A first access to an uncached database may trigger the project's existing
+coalesced lazy metadata load.
 
 Concurrent requests for the same not-yet-loaded catalog must share or coalesce that
-load rather than start duplicate catalog queries for the same metadata state.
+load rather than starting duplicate loads for the same metadata state.
 
-Once the relevant catalog has been loaded, subsequent completion requests use
-cached metadata until normal cache invalidation or refresh semantics require
-otherwise.
+Once the relevant catalog has been loaded, the steady-state completion hot path
+uses cached metadata and performs no repeated SQL catalog access for each
+keystroke.
 
 Do not turn lazy loading into repeated per-completion metadata access.
 
@@ -601,8 +680,8 @@ other statement forms.
 
 ## Signature Help
 
-Preserve the existing automatic Signature Help behavior for supported catalog-backed
-functions.
+Preserve the existing automatic Signature Help behavior for supported
+catalog-backed functions.
 
 Typing `(` should trigger Signature Help where supported.
 
@@ -614,8 +693,8 @@ Ctrl+Space remains normal completion.
 
 Signature Help remains the editor's native Signature Help mechanism.
 
-When future built-in function intelligence is introduced, it should reuse the same
-signature/type infrastructure where the semantic concepts are shared rather than
+Future built-in function intelligence should reuse the existing signature/type
+infrastructure wherever the semantic responsibilities are shared rather than
 creating a second parallel subsystem.
 
 ## Wildcard expansion
@@ -761,18 +840,23 @@ Current full extension ID:
 
     BeardedPuppyLabs.improved-sql-intellisense
 
-Do not revert active package/documentation links to an old publisher identity.
+All maintained repository references to the project/publisher identity must use the
+current identity.
 
-Historical documentation may retain an old publisher identity when it genuinely
-documents historical state and is not an active installation, publication, or
-Marketplace reference.
+Do not preserve obsolete publisher names merely because a maintained document
+describes an older milestone.
+
+Historical milestone meaning may be preserved without retaining an obsolete
+publisher identifier.
+
+Do not rewrite Git history.
 
 ## Release safety
 
 Do not publish automatically.
 
-VSIX packaging for verification is allowed when requested or part of the established
-test flow.
+VSIX packaging for verification is allowed when requested or part of the
+established test flow.
 
 Marketplace/Open VSX publication requires explicit user instruction.
 
@@ -782,18 +866,30 @@ established release process requires it.
 Before packaging or publishing, ensure no credentials, tokens, private SQL
 connection strings, fixture secrets, or other sensitive local data are included.
 
+For release-process changes, keep `docs/PUBLISHING.md` synchronized with the
+actual package scripts and current supported publication workflow.
+
 ## Documentation growth
 
-The current architecture documentation is intentionally limited to:
+The current core architecture documentation is:
 
     docs/ARCHITECTURE.md
     docs/COMPLETION_PIPELINE.md
     docs/TYPE_SYSTEM.md
     docs/TESTING.md
 
+Operational documentation currently includes:
+
+    docs/DEVELOPMENT.md
+    docs/PUBLISHING.md
+
+Milestone planning/history currently lives in:
+
+    docs/IMPLEMENTATION_PLAN.md
+
 Do not create additional architecture documents without a concrete reason.
 
-A dedicated document becomes appropriate when a subsystem:
+A dedicated architecture document becomes appropriate when a subsystem:
 
 - develops substantial independent architecture
 - has several important invariants of its own
@@ -801,7 +897,7 @@ A dedicated document becomes appropriate when a subsystem:
 - causes an existing document to become difficult to navigate
 - becomes risky to modify without focused architectural context
 
-Potential future splits might include subjects such as:
+Potential future splits might include:
 
 - built-in function intelligence
 - QueryScope/parser architecture
@@ -812,6 +908,33 @@ These are examples, not instructions to create those files now.
 
 If such a threshold is reached, report the recommended documentation split before
 or as part of the relevant architectural task.
+
+## Repository and package documentation policy
+
+All maintained project documentation remains version-controlled.
+
+Do not add:
+
+- `AGENTS.md`
+- `docs/ARCHITECTURE.md`
+- `docs/COMPLETION_PIPELINE.md`
+- `docs/DEVELOPMENT.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/PUBLISHING.md`
+- `docs/TESTING.md`
+- `docs/TYPE_SYSTEM.md`
+
+to `.gitignore`.
+
+Git tracking and VSIX packaging are separate concerns.
+
+Internal engineering documentation may be excluded from the published VSIX through
+`.vscodeignore` when that matches the repository's package-content policy.
+
+Do not use `.gitignore` to control VSIX contents.
+
+Before changing `.vscodeignore`, inspect the actual package-content policy and
+current `vsce` file list.
 
 ## Definition of done
 
@@ -829,7 +952,14 @@ Before considering a development task complete:
 10. inspect the final diff
 11. remove temporary diagnostics/debugging
 12. confirm no credentials or private data were introduced
-13. review whether AGENTS.md or architecture documentation needs updating
-14. update documentation when the architectural contract genuinely changed
-15. report exactly what was verified and what was not
-16. do not publish unless explicitly instructed
+13. review whether `AGENTS.md` or any `docs/` file needs updating
+14. update documentation when its architectural, operational, release, or milestone
+    contract genuinely changed
+15. verify maintained publisher identity references when public/release metadata was
+    affected
+16. verify operational documentation still references commands that actually exist
+    in `package.json`
+17. verify internal documentation remains tracked and package inclusion/exclusion is
+    controlled through the appropriate mechanism
+18. report exactly what was verified and what was not
+19. do not publish unless explicitly instructed

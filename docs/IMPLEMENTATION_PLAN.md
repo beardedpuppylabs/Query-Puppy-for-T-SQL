@@ -1,5 +1,27 @@
 # Implementation plan
 
+## Purpose and authority
+
+This document records milestone planning, implementation history, completed work,
+release-specific verification state, and deliberately deferred work.
+
+It is useful for understanding how the project evolved.
+
+It is not the authoritative source for current architecture.
+
+For current design contracts, use:
+
+- [Architecture](ARCHITECTURE.md)
+- [Completion Pipeline](COMPLETION_PIPELINE.md)
+- [SQL Type System](TYPE_SYSTEM.md)
+- [Testing Strategy](TESTING.md)
+
+Historical milestone notes may describe implementation details that were accurate at
+that milestone and later superseded.
+
+When historical text conflicts with the current architecture documents, the current
+architecture documents describe the intended present-day design.
+
 ## 0.9.0 Type-aware Expression Intelligence
 
 - [x] Normalize structured SQL types into cached descriptors with explicit families and preserved facets.
@@ -16,13 +38,14 @@
 - [x] Order group headers/candidates before one final canonical CompletionItem construction pass.
 - [x] Infer expected types for comparisons, catalog function arguments, UPDATE assignments, INSERT values/projections, LIKE, and arithmetic.
 - [x] Rank by compatibility without filtering incompatible visible expressions or broadening explicit qualifiers.
-- [x] Preserve FK predicate priority, Contains matching, scope isolation, and query-free hot-path behavior.
+- [x] Preserve FK predicate priority, Contains matching, scope isolation, and cached steady-state completion behavior.
 - [x] Cover helpers, candidate ordering, the registered CompletionItemProvider, and live fixture integration.
 
 ## Verified contracts
 
 - VS Code 1.105 completion providers support structured labels, explicit replacement ranges, `filterText`, lazy resolution, and incomplete lists.
-- mssql 1.45 exports `connectionSharing` with active connection/database lookup, `connect`, `isConnected`, and `executeSimpleQuery`. `SimpleExecuteResult.rows` contains cell objects. The API is public but marked for future retirement, so all use is isolated in `MssqlApi`/`ConnectionService`.
+- mssql 1.45 exports the connection-sharing surface currently consumed by the project for active connection/database lookup and query execution.
+- External mssql integration is isolated in `MssqlApi`/`ConnectionService` so changes to the external connection-sharing contract can be adapted without changing the semantic completion engine.
 - `mssql.intelliSense.enableSuggestions` remains the independently configurable Microsoft suggestion switch.
 
 ## Execution state
@@ -30,20 +53,49 @@
 - [x] Initialize strict TypeScript extension and development configuration.
 - [x] Build typed metadata model, formatter, index, cache, and catalog queries.
 - [x] Add tokenizer, aliases, CTE/local-variable/temp-table symbols, and context resolution.
-- [x] Add contains matching, deterministic context sorting, presentation and completion provider.
+- [x] Add Contains matching, deterministic context sorting, presentation, and completion provider.
 - [x] Add refresh/status/explicit settings command and diagnostics.
 - [x] Add critical unit and acceptance-scenario coverage.
 - [x] Run formatter, lint, compile, tests, build, package, and final review.
 
-## Design decisions
+## Current design summary
 
-One combined catalog query minimizes round trips and is cached by connection ID plus database. Procedure result-set discovery is deliberately deferred rather than risking failure of the base catalog; no schema is fabricated. Semantic Contains matching determines the candidate domain. Physical columns retain their exact identifier as `filterText`; other candidate kinds use a typed-fragment compatibility prefix where the native widget needs it, without changing insertion or ranking.
+Persistent SQL Server metadata is loaded lazily using set-based metadata operations
+and cached by connection ID plus database.
 
-## Final verification
+Concurrent requests for the same unloaded catalog use the project's coalesced
+loading path.
 
-The 0.1.1 repair explicitly selects the active database with a safely delimited `USE`, validates the public `SimpleExecuteResult` shape, reports expected/actual database and row/object counts, distinguishes empty and failed cache states, and includes an opt-in IntelliSenseLab integration suite. Final verification state is updated after the repair loop.
+The exact number and shape of catalog queries may evolve as metadata domains are
+added. The authoritative current architecture is documented in
+`docs/ARCHITECTURE.md`.
 
-Local unit, lint, compile, build, and packaging verification is complete. The real IntelliSenseLab integration suite also passes: it proves the active database and non-empty catalog, loads the required objects and typed columns, verifies middle-of-name `addr` row-source matches, and restricts alias-member results to `dbo.Customers` columns.
+After the relevant metadata has been loaded, steady-state completion operates from
+cached metadata and does not perform repeated SQL catalog access for every
+keystroke.
+
+Procedure result-set discovery remains deliberately deferred rather than risking
+failure of the base catalog or fabricating schema.
+
+Semantic Contains matching determines the candidate domain.
+
+Physical columns retain their exact identifier as `filterText`; other candidate
+kinds may use typed-fragment compatibility behavior where required by the native
+widget without changing insertion or semantic ranking contracts.
+
+## Historical verification notes
+
+The 0.1.1 repair explicitly selected the active database with a safely delimited
+`USE`, validated the public `SimpleExecuteResult` shape, reported expected/actual
+database and row/object counts, distinguished empty and failed cache states, and
+included an opt-in IntelliSenseLab integration suite.
+
+Local unit, lint, compile, build, and packaging verification was completed.
+
+The real IntelliSenseLab integration suite also passed: it proved the active
+database and non-empty catalog, loaded the required objects and typed columns,
+verified middle-of-name `addr` row-source matches, and restricted alias-member
+results to `dbo.Customers` columns.
 
 ## 0.2.0 same-server cross-database execution
 
@@ -57,7 +109,7 @@ Local unit, lint, compile, build, and packaging verification is complete. The re
 
 The admin fixture is `tests/fixtures/create-cross-database-fixture.sql`. Unit coverage proves lazy loading, coalescing, per-database isolation, active-database default scope, schema/object qualifier positions, double-dot normalization, cross-database aliases, and four-part rejection.
 
-Final verification: formatting, ESLint, strict compilation, 29 unit tests, both real database integration tests, esbuild, and VSIX packaging pass. IntelliSenseLabReporting proves independent catalog loading, fully qualified tables/views, contains search, cross-database aliases, and cache isolation.
+Final verification: formatting, ESLint, strict compilation, 29 unit tests, both real database integration tests, esbuild, and VSIX packaging pass. IntelliSenseLabReporting proves independent catalog loading, fully qualified tables/views, Contains search, cross-database aliases, and cache isolation.
 
 ## 0.2.1 database discovery and row-source repair
 
@@ -126,12 +178,16 @@ Final 0.4.0 verification: formatting, ESLint, strict compilation, 40 unit tests,
 
 ## 0.4.1 publisher identity update
 
-- [x] Change the developer, author, copyright, and intended Marketplace publisher to Bismarck.
-- [x] Update the runtime extension identifier and publishing documentation.
+- [x] Change the maintained developer, author, copyright, and Marketplace publisher identity to Bearded Puppy Labs / `BeardedPuppyLabs`.
+- [x] Update the maintained extension identifier and publishing documentation.
 - [x] Advance the manifest and lockfile version to 0.4.1.
 - [x] Run release verification and inspect the 0.4.1 VSIX.
 
-Final 0.4.1 verification: formatting, ESLint, strict compilation, 40 unit tests, production bundling, VSIX packaging, identity inspection, and archive security checks pass. Both opt-in SQL Server integration tests were discovered and skipped because their environment was not configured. The resulting extension identifier is `Bismarck.improved-sql-intellisense`.
+Final verification at that milestone covered formatting, ESLint, strict compilation, unit tests, production bundling, VSIX packaging, identity inspection, and archive security checks. Both opt-in SQL Server integration tests were discovered and skipped because their environment was not configured.
+
+The maintained extension identifier is now:
+
+    BeardedPuppyLabs.improved-sql-intellisense
 
 ## 0.4.2 public-release UX cleanup
 
@@ -182,7 +238,7 @@ Final 0.5.1 verification: formatting, ESLint, strict compilation, 62 unit tests,
 - [x] Preserve lazy, connection-and-database-specific metadata loading for qualified targets.
 - [x] Add unit and real fixture coverage for DML, procedures, functions, and OUTPUT.
 
-All DML and callable analysis is performed over the cached typed catalog and defensive token stream. It does not open a connection or query on a keystroke. Explicit secondary-database qualification uses the existing lazy metadata cache path.
+All DML and callable analysis is performed over the cached typed catalog and defensive token stream. It does not open an independent connection or perform repeated steady-state catalog access on each keystroke. Explicit secondary-database qualification uses the existing lazy metadata-cache path.
 
 MERGE, trigger-body pseudo tables, OUTPUT INTO mapping, positional EXEC assistance, built-in function signatures, Linked Servers, and full T-SQL grammar remain outside this milestone.
 
@@ -343,7 +399,7 @@ No foreign completion items are inspected or modified. The fixes affect only Imp
 - [x] Add idempotent persistent `reltest`/`relref` fixture and unit/provider/integration coverage.
 - [x] Run final live Schema Intelligence acceptance using only the restricted metadata login after administrator-owned fixture provisioning.
 
-The loader uses two constant, set-based queries per database refresh: the existing object/member catalog query and one relationship query. Completion performs no catalog queries. JOIN predicate suggestions and relationship ranking are reserved for the next release.
+At this milestone the loader used two constant, set-based metadata queries per database refresh: the existing object/member catalog query and one relationship query. Completion itself performed no repeated catalog query after the relevant metadata had been loaded.
 
 Security boundary: production initialization and completion are catalog-read-only and are regression-tested to contain no DDL/DML statements. The persistent fixture SQL is administrator-owned integration infrastructure; missing objects cause a clear integration-test prerequisite failure and are never provisioned by the extension.
 
@@ -358,7 +414,7 @@ Final live acceptance: the restricted login loads 8 PKs, 7 unique constraints/in
 - [x] Retain bounded native physical-column alignment and behavioral field invariants.
 - [x] Add pure, provider, Extension Host, and live fixture coverage.
 
-JOIN completion reads only per-database cache indexes. Relationship lookup is proportional to the participating objects' adjacency lists, and no catalog query occurs per keystroke. There is no heuristic name/type matching, automatic mutation, custom UI, hover provider, or runtime fixture provisioning.
+JOIN completion reads only per-database cache indexes. Relationship lookup is proportional to the participating objects' adjacency lists, and no repeated catalog query occurs during steady-state completion after metadata is loaded. There is no heuristic name/type matching, automatic mutation, custom UI, hover provider, or runtime fixture provisioning.
 
 ## 0.8.2 JOIN insertion and compact role visibility
 
