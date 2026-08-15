@@ -28,27 +28,109 @@ Before modifying completion candidate creation, member completion, filtering,
 ranking, sorting, grouping, physical-column presentation, CompletionItem
 construction, or CompletionItem documentation:
 
-Read [docs/COMPLETION_PIPELINE.md](docs/COMPLETION_PIPELINE.md).
+    read docs/COMPLETION_PIPELINE.md
 
 Before modifying SQL datatype representation, expression type inference,
 expected-type detection, compatibility ranking, function argument typing,
 UPDATE/INSERT typing, or type-group presentation:
 
-Read [docs/TYPE_SYSTEM.md](docs/TYPE_SYSTEM.md).
+    read docs/TYPE_SYSTEM.md
 
 Before modifying connection handling, catalog loading, metadata caching,
 QueryScopes, RowSources, subsystem boundaries, cross-database behavior, or
 schema/relationship metadata:
 
-Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+    read docs/ARCHITECTURE.md
 
 Before adding or changing automated tests, integration tests, Extension Host tests,
 or manual SQL acceptance cases:
 
-Read [docs/TESTING.md](docs/TESTING.md).
+    read docs/TESTING.md
 
 When a task crosses several of these areas, read all relevant documents before
 changing production code.
+
+## Architecture documentation maintenance
+
+Treat the architecture documentation as part of the implementation.
+
+When a task changes or introduces:
+
+- subsystem responsibilities
+- data flow
+- completion pipeline behavior
+- semantic candidate structure
+- caching or metadata loading behavior
+- QueryScope or RowSource semantics
+- SQL type inference or compatibility rules
+- testing strategy or required regression coverage
+- an architectural invariant documented in this repository
+
+review the relevant documentation before considering the task complete.
+
+Update the relevant document when the intended architecture or public behavior has
+actually changed.
+
+Do not update architecture documentation merely because implementation details were
+renamed, moved, or rearranged without changing the documented contract.
+
+The current documentation responsibilities are:
+
+- `docs/ARCHITECTURE.md`
+  - subsystem boundaries
+  - connection and database architecture
+  - catalog and metadata flow
+  - caching and lazy loading
+  - QueryScopes
+  - RowSources
+  - Schema Intelligence
+  - relationships
+  - cross-database boundaries
+  - performance and security invariants
+
+- `docs/COMPLETION_PIPELINE.md`
+  - semantic candidate creation
+  - matching and filtering
+  - ranking
+  - grouping
+  - sorting
+  - CompletionItem materialization
+  - physical-column presentation
+  - completion invariants
+
+- `docs/TYPE_SYSTEM.md`
+  - normalized SQL types
+  - type families and facets
+  - expression inference
+  - ExpectedType
+  - compatibility behavior
+  - canonical SQL type display
+
+- `docs/TESTING.md`
+  - unit tests
+  - provider tests
+  - Extension Host tests
+  - live SQL integration tests
+  - installed VSCodium acceptance
+  - regression requirements
+  - manual acceptance conventions
+
+If a subsystem grows large enough that its rules make one of these documents
+difficult to navigate, repeatedly require long task-specific explanations, or
+represent a clearly independent architectural responsibility, report that the
+documentation should be split into a dedicated document.
+
+Do not silently allow one architecture document to grow indefinitely.
+
+Do not create additional architecture documents merely for hypothetical future
+needs.
+
+Before completing every development task, explicitly evaluate:
+
+    Does this change require an update to AGENTS.md or docs/?
+
+If no documentation contract changed, do not create documentation churn merely to
+touch the files.
 
 ## Core completion contract
 
@@ -80,6 +162,8 @@ type appears incompatible.
 Apparently incompatible candidates remain available below stronger matches unless a
 different SQL semantic rule genuinely makes them invalid.
 
+Do not turn IntelliSense into a type checker.
+
 ## Explicit qualifiers
 
 For:
@@ -101,9 +185,13 @@ window, or webview merely to work around Suggest Widget presentation limitations
 
 Use native CompletionItems, Signature Help, documentation, commands, and settings.
 
+Do not rely on private VS Code/VSCodium APIs to manipulate Suggest Widget geometry
+or behavior.
+
 ## SQL connection contract
 
-Reuse the active SQL connection owned by the Microsoft SQL Server extension.
+Reuse the active SQL connection owned by the Microsoft SQL Server extension through
+the project's existing connection-sharing integration.
 
 Do not introduce:
 
@@ -119,11 +207,25 @@ Do not require administrator credentials.
 
 Do not provision integration fixtures from extension runtime code.
 
-## Performance contract
+## Catalog loading and performance contract
 
-After the coalesced lazy load for a database completes, a completion request must
-perform zero SQL catalog queries per keystroke. A first request may initiate that
-load; explicitly qualified secondary databases load lazily and are cached.
+Persistent SQL Server metadata is cached by the appropriate connection/database
+context.
+
+The steady-state completion hot path performs zero SQL catalog queries per
+keystroke.
+
+A first access to an uncached database may trigger the project's existing lazy
+catalog load.
+
+Concurrent requests for the same not-yet-loaded catalog must share or coalesce that
+load rather than start duplicate catalog queries for the same metadata state.
+
+Once the relevant catalog has been loaded, subsequent completion requests use
+cached metadata until normal cache invalidation or refresh semantics require
+otherwise.
+
+Do not turn lazy loading into repeated per-completion metadata access.
 
 Hot-path completion operates from:
 
@@ -139,6 +241,9 @@ objects and many thousands of columns.
 
 Prefer indexed lookups over complete-catalog scans.
 
+Do not add expensive whole-catalog work to the per-keystroke path when equivalent
+indexed or precomputed state can be used.
+
 ## Canonical metadata
 
 Do not lose semantic metadata while transforming candidates.
@@ -146,7 +251,9 @@ Do not lose semantic metadata while transforming candidates.
 Physical-column metadata may include:
 
 - complete identifier
-- source database/schema/object
+- source database
+- source schema
+- source object
 - datatype and facets
 - nullability
 - PK membership
@@ -164,6 +271,7 @@ Do not reduce a physical column to a lossy temporary representation such as only
 when the canonical metadata already contains more information.
 
 Filtering, ranking, grouping, and presentation decorate canonical candidates.
+
 They must not replace them with stripped copies.
 
 ## Single-responsibility implementation rule
@@ -189,6 +297,10 @@ Prefer extending or consolidating the canonical implementation.
 Do not create parallel implementations for the same concept.
 
 Repeated context-specific implementations are architectural drift.
+
+If an existing abstraction represents the same semantic responsibility but cannot
+currently support the requested behavior cleanly, first determine whether it should
+be extended or refactored rather than bypassed.
 
 ## Physical-column completion invariant
 
@@ -217,6 +329,7 @@ completion, it must retain the same:
 - filterText
 - insertText
 - documentation
+- constraint/index metadata
 
 when appearing in:
 
@@ -225,16 +338,22 @@ when appearing in:
 - UPDATE RHS
 - INSERT SELECT
 - function arguments
+- correlated scopes
 - type-aware compatibility groups
 
 Context may change:
 
 - ranking
 - sortText
+- compatibility group
 - group placement
 - preselection
 
 Context must not change the physical-column identity or strip metadata.
+
+If ordinary completion and a context-specific completion path produce different
+physical metadata for the same column, treat that as architectural drift rather
+than patching the presentation locally.
 
 ## Physical-column presentation
 
@@ -259,6 +378,8 @@ The complete identifier remains the source for:
 
 Accepting a truncated visual item inserts the complete identifier.
 
+### Roles
+
 Role order is:
 
     PK
@@ -272,10 +393,18 @@ Combined examples:
     UQ·FK
     PK·UQ·FK
 
+Use one canonical role formatter.
+
+Do not create grouped and ungrouped variants.
+
+### SQL type display
+
 SQL type display uses canonical SQL declaration syntax.
 
 Examples:
 
+    tinyint
+    smallint
     int
     bigint
     varchar(50)
@@ -284,6 +413,8 @@ Examples:
     datetime2(3)
     datetimeoffset(7)
     uniqueidentifier
+    varbinary(max)
+    nvarchar(max)
 
 Do not expose internal normalized facets as invalid SQL declarations.
 
@@ -303,6 +434,9 @@ not:
 
     uniqueidentifier(16)
 
+The same canonical display formatter should be reused wherever the same SQL type
+needs the same user-facing declaration representation.
+
 ## Type-aware intelligence
 
 There is one normalized type system and one compatibility model.
@@ -315,10 +449,11 @@ Do not build separate type systems for:
 - UPDATE
 - INSERT
 - arithmetic
+- future built-in function intelligence
 
 Type-aware completion is primarily ranking.
 
-When a reliable expected type exists, compatibility may affect ordering.
+When a reliable ExpectedType exists, compatibility may affect ordering.
 
 When no expected type exists, type ranking must not participate.
 
@@ -335,6 +470,13 @@ Typical user-facing groups are:
 Within a group, equivalent candidates remain alphabetical.
 
 Group headers are no-op presentation items, not semantic SQL candidates.
+
+If filtering leaves only one meaningful group, avoid unnecessary group-header
+clutter.
+
+Expected-type classification decorates canonical candidates.
+
+It must not create stripped replacement physical-column candidates.
 
 ## Query scope semantics
 
@@ -376,6 +518,9 @@ FK relationship intelligence is database-local.
 
 Do not infer cross-database or cross-server foreign keys.
 
+Relationship-aware source ranking may promote actually related objects but must not
+change the project's Contains matching contract.
+
 ## Cross-database scope
 
 Support the existing same-server cross-database completion semantics.
@@ -405,6 +550,8 @@ Preserve semantic support where implemented for:
 
 Preserve datatype/nullability information through local projections where it can be
 inferred reliably.
+
+Do not replace known type information with Unknown unnecessarily.
 
 ## Set operations
 
@@ -449,6 +596,9 @@ Comma handling must respect expression nesting.
 
 Incomplete SQL is a normal IntelliSense state.
 
+Do not solve DML-context bugs through heuristics that break nested expressions or
+other statement forms.
+
 ## Signature Help
 
 Preserve the existing automatic Signature Help behavior for supported catalog-backed
@@ -460,9 +610,13 @@ Comma navigation updates the active parameter.
 
 Nested expressions must not corrupt active-parameter tracking.
 
-Ctrl+Space remains completion.
+Ctrl+Space remains normal completion.
 
-Signature Help remains the editor's Signature Help mechanism.
+Signature Help remains the editor's native Signature Help mechanism.
+
+When future built-in function intelligence is introduced, it should reuse the same
+signature/type infrastructure where the semantic concepts are shared rather than
+creating a second parallel subsystem.
 
 ## Wildcard expansion
 
@@ -476,6 +630,8 @@ Tab may expand semantic:
 to explicit columns.
 
 Enter must never trigger wildcard expansion.
+
+This behavior is intentional and protects normal workflows on very wide tables.
 
 ## Schema Intelligence
 
@@ -501,6 +657,9 @@ Incoming FKs must not incorrectly mark principal columns as FK columns.
 Object identity must include sufficient database/schema context to avoid collapsing
 same-named objects.
 
+Relationship intelligence must use actual catalog relationships rather than
+name/type guessing.
+
 ## Presentation must not affect semantics
 
 Presentation-only changes must never modify:
@@ -513,8 +672,11 @@ Presentation-only changes must never modify:
 - replacement ranges
 - type inference
 - relationship inference
+- canonical metadata
 
 Keep semantic data and presentation data separate.
+
+If a UI workaround requires changing semantic metadata, reconsider the approach.
 
 ## Refactoring threshold
 
@@ -529,11 +691,16 @@ Examples:
 - separate grouped/ungrouped role formatters
 - duplicate documentation builders
 - multiple competing sort-key builders
+- context-specific copies of canonical semantic metadata
 
 Do not perform unrelated repository-wide rewrites.
 
 If safe consolidation would require a broad high-risk change, document the issue
 and propose a dedicated refactoring task instead.
+
+Repeated bugs caused by different code paths implementing the same semantic
+responsibility are a strong signal that a dedicated consolidation/refactoring task
+may be appropriate.
 
 ## Testing
 
@@ -542,15 +709,43 @@ Follow `docs/TESTING.md`.
 For behavioral bugs:
 
 1. reproduce the failure
-2. add a regression test when practical
-3. make sure the test actually fails against the broken implementation
-4. fix the root cause
-5. run relevant regressions
+2. identify the failing subsystem/path
+3. add a regression test when practical
+4. ensure the regression actually fails against the broken behavior
+5. fix the root cause
+6. run the regression
+7. run relevant surrounding regressions
 
 Provider bugs require provider-level verification.
 
 A helper-only test is not sufficient evidence that CompletionProvider integration
 works.
+
+Native Suggest Widget or Signature Help behavior may require installed VSCodium
+acceptance in addition to automated tests.
+
+## Manual SQL acceptance
+
+When user-visible IntelliSense behavior requires manual acceptance, provide compact
+copy/paste SQL test cases.
+
+Comments inside the SQL document may identify:
+
+- test number
+- scenario
+- cursor position
+
+Do not place expected candidate names in SQL comments.
+
+VS Code/VSCodium word completion can surface comment text as generic `abc`
+suggestions and create false positives.
+
+Expected semantic candidates must be described separately from the SQL script.
+
+Within equivalent groups, expected candidate lists should be alphabetical.
+
+Generic editor word suggestions do not count as Improved SQL IntelliSense semantic
+results.
 
 ## Publisher identity
 
@@ -568,6 +763,10 @@ Current full extension ID:
 
 Do not revert active package/documentation links to an old publisher identity.
 
+Historical documentation may retain an old publisher identity when it genuinely
+documents historical state and is not an active installation, publication, or
+Marketplace reference.
+
 ## Release safety
 
 Do not publish automatically.
@@ -578,21 +777,59 @@ test flow.
 Marketplace/Open VSX publication requires explicit user instruction.
 
 Do not bump the version merely because code changed unless the release task or
-release process requires it.
+established release process requires it.
+
+Before packaging or publishing, ensure no credentials, tokens, private SQL
+connection strings, fixture secrets, or other sensitive local data are included.
+
+## Documentation growth
+
+The current architecture documentation is intentionally limited to:
+
+    docs/ARCHITECTURE.md
+    docs/COMPLETION_PIPELINE.md
+    docs/TYPE_SYSTEM.md
+    docs/TESTING.md
+
+Do not create additional architecture documents without a concrete reason.
+
+A dedicated document becomes appropriate when a subsystem:
+
+- develops substantial independent architecture
+- has several important invariants of its own
+- repeatedly requires long explanations in task prompts
+- causes an existing document to become difficult to navigate
+- becomes risky to modify without focused architectural context
+
+Potential future splits might include subjects such as:
+
+- built-in function intelligence
+- QueryScope/parser architecture
+- Schema Intelligence
+- relationship/JOIN intelligence
+
+These are examples, not instructions to create those files now.
+
+If such a threshold is reached, report the recommended documentation split before
+or as part of the relevant architectural task.
 
 ## Definition of done
 
-Before considering a task complete:
+Before considering a development task complete:
 
-1. confirm the root cause was addressed
-2. confirm existing behavior remains intact
+1. confirm the root cause or requested behavior was addressed
+2. confirm relevant existing behavior remains intact
 3. confirm canonical project responsibilities were reused
-4. confirm no new duplicate implementation was introduced
-5. run relevant provider/unit tests
-6. run Extension Host/integration tests when applicable
-7. run formatting, lint, strict TypeScript, and production build when applicable
-8. inspect the final diff
-9. remove temporary diagnostics
-10. confirm no credentials or private data were introduced
-11. report exactly what was verified
-12. do not publish unless explicitly instructed
+4. confirm no unnecessary duplicate implementation was introduced
+5. confirm semantic metadata remains lossless through affected pipelines
+6. run relevant provider/unit tests
+7. run Extension Host/integration tests when applicable
+8. run formatting, lint, strict TypeScript, and production build when applicable
+9. perform installed VSCodium acceptance when native UI behavior requires it
+10. inspect the final diff
+11. remove temporary diagnostics/debugging
+12. confirm no credentials or private data were introduced
+13. review whether AGENTS.md or architecture documentation needs updating
+14. update documentation when the architectural contract genuinely changed
+15. report exactly what was verified and what was not
+16. do not publish unless explicitly instructed
