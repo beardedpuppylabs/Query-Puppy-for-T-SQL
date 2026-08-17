@@ -1,12 +1,12 @@
 {
-  "name": "improved-sql-intellisense",
-  "displayName": "Improved SQL IntelliSense",
+  "name": "query-puppy-for-t-sql",
+  "displayName": "Query Puppy for T-SQL",
   "description": "Context-aware SQL Server IntelliSense for large schemas with Contains search, PK/FK metadata, and relationship-aware JOIN completion.",
-  "version": "0.9.0",
+  "version": "0.9.2",
   "publisher": "BeardedPuppyLabs",
   "author": "Bearded Puppy Labs",
   "license": "MIT",
-  "homepage": "https://marketplace.visualstudio.com/items?itemName=BeardedPuppyLabs.improved-sql-intellisense",
+  "homepage": "https://marketplace.visualstudio.com/items?itemName=BeardedPuppyLabs.query-puppy-for-t-sql",
   "icon": "images/logo.png",
   "galleryBanner": {
     "color": "#0B1F33",
@@ -45,44 +45,44 @@
   "contributes": {
     "commands": [
       {
-        "command": "improvedSqlIntellisense.expandSelectStar",
-        "title": "Improved SQL IntelliSense: Expand SELECT * to Columns"
+        "command": "queryPuppyForTSql.expandSelectStar",
+        "title": "Query Puppy for T-SQL: Expand SELECT * to Columns"
       },
       {
-        "command": "improvedSqlIntellisense.refreshMetadata",
-        "title": "Refresh IntelliSense Metadata"
+        "command": "queryPuppyForTSql.refreshMetadata",
+        "title": "Query Puppy for T-SQL: Refresh IntelliSense Metadata"
       },
       {
-        "command": "improvedSqlIntellisense.showStatus",
-        "title": "Show Improved SQL IntelliSense Status"
+        "command": "queryPuppyForTSql.showStatus",
+        "title": "Query Puppy for T-SQL: Show Status"
       },
       {
-        "command": "improvedSqlIntellisense.disableMicrosoftSuggestions",
-        "title": "Improved SQL IntelliSense: Disable Microsoft SQL Suggestions"
+        "command": "queryPuppyForTSql.disableMicrosoftSuggestions",
+        "title": "Query Puppy for T-SQL: Disable Microsoft SQL Suggestions"
       },
       {
-        "command": "improvedSqlIntellisense.diagnoseSignatureHelp",
-        "title": "Improved SQL IntelliSense: Diagnose Signature Help"
+        "command": "queryPuppyForTSql.diagnoseSignatureHelp",
+        "title": "Query Puppy for T-SQL: Diagnose Signature Help"
       },
       {
-        "command": "improvedSqlIntellisense.diagnoseQueryScope",
-        "title": "Improved SQL IntelliSense: Diagnose Query Scope"
+        "command": "queryPuppyForTSql.diagnoseQueryScope",
+        "title": "Query Puppy for T-SQL: Diagnose Query Scope"
       }
     ],
     "configuration": {
-      "title": "Improved SQL IntelliSense",
+      "title": "Query Puppy for T-SQL",
       "properties": {
-        "improvedSqlIntellisense.enabled": {
+        "queryPuppyForTSql.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable contains-based SQL completion."
         },
-        "improvedSqlIntellisense.debugLogging": {
+        "queryPuppyForTSql.debugLogging": {
           "type": "boolean",
           "default": false,
-          "description": "Write detailed diagnostics to the Improved SQL IntelliSense output channel."
+          "description": "Write detailed diagnostics to the Query Puppy for T-SQL output channel."
         },
-        "improvedSqlIntellisense.smartAliases.enabled": {
+        "queryPuppyForTSql.smartAliases.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Suggest short aliases after completing row sources in FROM, JOIN and APPLY clauses."
@@ -91,9 +91,9 @@
     },
     "keybindings": [
       {
-        "command": "improvedSqlIntellisense.expandSelectStar",
+        "command": "queryPuppyForTSql.expandSelectStar",
         "key": "tab",
-        "when": "editorTextFocus && editorLangId == sql && improvedSqlIntellisense.canExpandSelectStar && !suggestWidgetVisible && !inSnippetMode"
+        "when": "editorTextFocus && editorLangId == sql && queryPuppyForTSql.canExpandSelectStar && !suggestWidgetVisible && !inSnippetMode"
       }
     ]
   },
@@ -109,7 +109,7 @@
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
     "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run test:extension && npm run build",
-    "package": "npm run verify && vsce package --no-dependencies --out improved-sql-intellisense-0.9.0.vsix",
+    "package": "npm run verify && vsce package --no-dependencies --out query-puppy-for-t-sql-0.9.2.vsix",
     "publish:marketplace": "vsce publish"
   },
   "devDependencies": {

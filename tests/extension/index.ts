@@ -662,17 +662,14 @@ async function semanticCompletion(
     content: sql,
   });
   const result = await vscode.commands.executeCommand<vscode.CompletionList>(
-    "improvedSqlIntellisense.test.provideCompletions",
+    "queryPuppyForTSql.test.provideCompletions",
     document,
     document.positionAt(cursor),
   );
-  assert.ok(
-    result,
-    "direct Improved SQL IntelliSense provider returned no list",
-  );
+  assert.ok(result, "direct Query Puppy for T-SQL provider returned no list");
   const items = result.items as readonly MarkedCompletionItem[];
   assert.ok(
-    items.every((item) => item.data?.provider === "improved-sql-intellisense"),
+    items.every((item) => item.data?.provider === "query-puppy-for-t-sql"),
     "direct provider returned an unmarked completion item",
   );
   return items;
@@ -693,7 +690,7 @@ type Invocation = {
 };
 const takeInvocations = () =>
   vscode.commands.executeCommand<readonly Invocation[]>(
-    "improvedSqlIntellisense.test.takeSignatureInvocations",
+    "queryPuppyForTSql.test.takeSignatureInvocations",
   );
 async function waitForInvocation(
   character?: string,
@@ -719,12 +716,12 @@ async function waitForInvocation(
 
 export async function run(): Promise<void> {
   const extension = vscode.extensions.getExtension(
-    "BeardedPuppyLabs.improved-sql-intellisense",
+    "BeardedPuppyLabs.query-puppy-for-t-sql",
   );
   assert.ok(extension, "development extension was not discovered");
   await extension.activate();
   await vscode.commands.executeCommand(
-    "improvedSqlIntellisense.test.setCompletionScope",
+    "queryPuppyForTSql.test.setCompletionScope",
     {
       activeDatabase: database,
       indexes: new Map([
@@ -734,7 +731,7 @@ export async function run(): Promise<void> {
     },
   );
   await vscode.commands.executeCommand(
-    "improvedSqlIntellisense.test.setSignatureScope",
+    "queryPuppyForTSql.test.setSignatureScope",
     {
       activeDatabase: database,
       indexes: new Map([[database.toLowerCase(), index]]),
@@ -1444,7 +1441,7 @@ CROSS APPLY
     content: closedExists,
   });
   const diagnostic = await vscode.commands.executeCommand<string>(
-    "improvedSqlIntellisense.test.diagnoseQueryScope",
+    "queryPuppyForTSql.test.diagnoseQueryScope",
     diagnosticDocument,
     diagnosticDocument.positionAt(closedExists.indexOf("c.") + 2),
   );
@@ -1498,7 +1495,7 @@ SELECT x. FROM Combined AS x`;
     starSetItems.every(
       (item) =>
         item.kind === vscode.CompletionItemKind.Field &&
-        item.data?.provider === "improved-sql-intellisense" &&
+        item.data?.provider === "query-puppy-for-t-sql" &&
         item.data.semanticKind === "column" &&
         typeof item.label !== "string" &&
         item.label.detail?.includes("NOT NULL") === true,
@@ -1521,7 +1518,7 @@ FROM ${database}.billing.BillingAddresses AS b`;
     secondBranchItems.every(
       (item) =>
         item.kind === vscode.CompletionItemKind.Field &&
-        item.data?.provider === "improved-sql-intellisense" &&
+        item.data?.provider === "query-puppy-for-t-sql" &&
         typeof item.label === "string" &&
         /bigint|nvarchar/.test(item.label),
     ),
@@ -1545,7 +1542,7 @@ WHERE EXISTS
   );
   assert.ok(
     correlatedSecondItems.every(
-      (item) => item.data?.provider === "improved-sql-intellisense",
+      (item) => item.data?.provider === "query-puppy-for-t-sql",
     ),
   );
   const selectExpression = `SELECT cust

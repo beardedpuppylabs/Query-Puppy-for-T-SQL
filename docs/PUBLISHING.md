@@ -3,7 +3,7 @@
 ## Purpose
 
 This document describes the explicit release and Visual Studio Marketplace
-publication procedure for Improved SQL IntelliSense.
+publication procedure for Query Puppy for T-SQL.
 
 Publishing is intentionally separate from development, verification, build, and
 packaging.
@@ -33,13 +33,13 @@ BeardedPuppyLabs
 Extension name:
 
 ```text
-improved-sql-intellisense
+query-puppy-for-t-sql
 ```
 
 Full extension identifier:
 
 ```text
-BeardedPuppyLabs.improved-sql-intellisense
+BeardedPuppyLabs.query-puppy-for-t-sql
 ```
 
 The Marketplace publisher with ID `BeardedPuppyLabs` must exist and be owned by the
@@ -104,7 +104,7 @@ Confirm that `package.json` declares:
 Confirm that the resulting extension identity is:
 
 ```text
-BeardedPuppyLabs.improved-sql-intellisense
+BeardedPuppyLabs.query-puppy-for-t-sql
 ```
 
 Also confirm:
@@ -168,7 +168,7 @@ The generated archive is expected to follow the project's current package naming
 convention, for example:
 
 ```text
-improved-sql-intellisense-<version>.vsix
+query-puppy-for-t-sql-<version>.vsix
 ```
 
 where `<version>` is the actual current package version.
@@ -184,7 +184,7 @@ npx vsce ls --no-dependencies
 Then inspect the exact VSIX produced by `npm run package`:
 
 ```bash
-unzip -l improved-sql-intellisense-<version>.vsix
+unzip -l query-puppy-for-t-sql-<version>.vsix
 ```
 
 Replace `<version>` with the actual package version.
@@ -213,7 +213,7 @@ published VSIX.
 Verify the packaged extension manifest resolves to:
 
 ```text
-BeardedPuppyLabs.improved-sql-intellisense
+BeardedPuppyLabs.query-puppy-for-t-sql
 ```
 
 Do not rely only on the source `package.json`.
@@ -276,7 +276,7 @@ Wait for Marketplace validation and scanning to complete.
 Then verify the public listing:
 
 - publisher is Bearded Puppy Labs
-- full identifier is `BeardedPuppyLabs.improved-sql-intellisense`
+- full identifier is `BeardedPuppyLabs.query-puppy-for-t-sql`
 - version is correct
 - Preview state is correct
 - icon renders correctly
@@ -307,7 +307,7 @@ Before every later release:
 The maintained repository identity is:
 
 ```text
-BeardedPuppyLabs.improved-sql-intellisense
+BeardedPuppyLabs.query-puppy-for-t-sql
 ```
 
 Do not reintroduce obsolete publisher identifiers into maintained package,

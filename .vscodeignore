@@ -16,3 +16,4 @@ eslint.config.mjs
 package-lock.json
 tsconfig.json
 coverage/**
+images/*.old

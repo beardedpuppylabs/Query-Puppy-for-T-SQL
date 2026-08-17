@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Improved SQL IntelliSense has several distinct verification layers.
+Query Puppy for T-SQL has several distinct verification layers.
 
 Use the lowest layer that proves the behavior, but completion integration bugs
 usually require provider-level or Extension Host verification.
@@ -155,7 +155,7 @@ Expected semantic results are documented separately outside the SQL script.
 
 ## Manual candidate expectations
 
-Only semantic Improved SQL IntelliSense items count as successful results.
+Only semantic Query Puppy for T-SQL items count as successful results.
 
 Generic editor word suggestions with an `abc` icon do not count.
 

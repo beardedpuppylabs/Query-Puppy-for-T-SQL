@@ -133,7 +133,7 @@ Final verification: formatting, ESLint, strict compilation, 29 unit tests, both 
 - [x] Preserve active-database-only object completion.
 - [x] Prove loader/index/candidate flow retains tables, views, and TVFs.
 - [x] Add unit and real two-database assertions for database Contains matching and mixed row-source types.
-- [x] Complete final verification and package `improved-sql-intellisense-0.2.1.vsix`.
+- [x] Complete final verification and package the 0.2.1 VSIX.
 
 Final 0.2.1 verification: 33 unit tests and both live database integration tests pass. Live discovery proves `FROM Intelli` returns both fixture databases without secondary metadata loading; the secondary `reporting.Customer` and `reporting.addr` domains retain tables, views, TVFs, and synonyms in semantic group order.
 
@@ -202,7 +202,7 @@ Final verification at that milestone covered formatting, ESLint, strict compilat
 
 The maintained extension identifier is now:
 
-    BeardedPuppyLabs.improved-sql-intellisense
+    BeardedPuppyLabs.query-puppy-for-t-sql
 
 ## 0.4.2 public-release UX cleanup
 
@@ -359,7 +359,7 @@ The fallback is deliberately constrained to a binding proven visible by QuerySco
 - [x] Add a Query Scope diagnostic command backed by the same cursor-specific semantic model and cached metadata scope.
 - [x] Retain registered-pipeline, live-fixture, negative isolation, TOP/APPLY projection, and 0.6.x regression coverage.
 
-Direct provider tests now prove that successful labels originate from Improved SQL IntelliSense rather than editor word-based suggestions. The internal provenance marker is not displayed in the completion UI.
+Direct provider tests now prove that successful labels originate from Query Puppy for T-SQL rather than editor word-based suggestions. The internal provenance marker is not displayed in the completion UI.
 
 ## 0.7.4 set operation intelligence
 
@@ -403,7 +403,7 @@ Clause classification performs no metadata access. Candidate policies select sem
 - [x] Preserve deterministic same-scope collision suffixes and provider provenance for smart-alias snippets.
 - [x] Add direct-provider, unit, and live-fixture regressions for both repairs.
 
-No foreign completion items are inspected or modified. The fixes affect only Improved SQL IntelliSense semantic candidates and retain incomplete RowSource Contains completion before smart-alias takeover.
+No foreign completion items are inspected or modified. The fixes affect only Query Puppy for T-SQL semantic candidates and retain incomplete RowSource Contains completion before smart-alias takeover.
 
 ## 0.8.0 Schema Intelligence
 

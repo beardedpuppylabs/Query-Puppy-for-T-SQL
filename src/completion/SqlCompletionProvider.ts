@@ -106,7 +106,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
   ): Promise<vscode.CompletionList> {
     if (!(
       vscode.workspace
-        .getConfiguration("improvedSqlIntellisense")
+        .getConfiguration("queryPuppyForTSql")
         .get<boolean>("enabled") ?? true
     ))
       return new vscode.CompletionList([], true);
@@ -153,7 +153,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     }
     if (
       vscode.workspace
-        .getConfiguration("improvedSqlIntellisense.smartAliases", document.uri)
+        .getConfiguration("queryPuppyForTSql.smartAliases", document.uri)
         .get<boolean>("enabled") ??
       true
     ) {
@@ -169,7 +169,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
           vscode.CompletionItemKind.Snippet,
         );
         (item as vscode.CompletionItem & { data?: unknown }).data = {
-          provider: "improved-sql-intellisense",
+          provider: "query-puppy-for-t-sql",
           semanticKind: "rowSourceAlias",
         };
         item.detail = `alias for ${alias.objectName}`;
@@ -250,7 +250,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
           vscode.CompletionItemKind.Text,
         );
         (header as vscode.CompletionItem & { data?: unknown }).data = {
-          provider: "improved-sql-intellisense",
+          provider: "query-puppy-for-t-sql",
           decorative: "typeGroupHeader",
         };
         header.filterText = context.search || candidate.name;
@@ -281,7 +281,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
   private debug(message: string): void {
     if (
       vscode.workspace
-        .getConfiguration("improvedSqlIntellisense")
+        .getConfiguration("queryPuppyForTSql")
         .get<boolean>("debugLogging") ??
       false
     )

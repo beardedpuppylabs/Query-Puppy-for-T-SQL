@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines how Improved SQL IntelliSense turns semantic SQL state into
+This document defines how Query Puppy for T-SQL turns semantic SQL state into
 native VS Code/VSCodium CompletionItems.
 
 The central goal is to prevent context-specific completion paths from duplicating

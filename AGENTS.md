@@ -1,4 +1,4 @@
-# Improved SQL IntelliSense — Project Instructions
+# Query Puppy for T-SQL — Project Instructions
 
 These instructions apply to all work in this repository.
 
@@ -7,7 +7,7 @@ More specific task instructions may override them when explicitly required.
 
 ## Project mission
 
-Improved SQL IntelliSense is a context-aware SQL Server IntelliSense extension for
+Query Puppy for T-SQL is a context-aware SQL Server IntelliSense extension for
 VS Code and VSCodium.
 
 It is designed especially for large real-world SQL Server schemas such as ERP
@@ -828,7 +828,7 @@ Expected semantic candidates must be described separately from the SQL script.
 
 Within equivalent groups, expected candidate lists should be alphabetical.
 
-Generic editor word suggestions do not count as Improved SQL IntelliSense semantic
+Generic editor word suggestions do not count as Query Puppy for T-SQL semantic
 results.
 
 ## Publisher identity
@@ -843,7 +843,7 @@ Publisher ID:
 
 Current full extension ID:
 
-    BeardedPuppyLabs.improved-sql-intellisense
+    BeardedPuppyLabs.query-puppy-for-t-sql
 
 All maintained repository references to the project/publisher identity must use the
 current identity.

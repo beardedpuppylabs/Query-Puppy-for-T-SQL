@@ -3,7 +3,7 @@
 ## Purpose
 
 This document describes the local development, verification, integration-test, and
-packaging workflow for Improved SQL IntelliSense.
+packaging workflow for Query Puppy for T-SQL.
 
 For system architecture and semantic design, see:
 
@@ -200,13 +200,13 @@ canonical factory or formatter already represents the same responsibility.
 
 ## Editor word suggestions
 
-Alias-member completion from Improved SQL IntelliSense is semantic and
+Alias-member completion from Query Puppy for T-SQL is semantic and
 columns-only after an explicit RowSource qualifier resolves.
 
 If the extension returns no semantic item while the editor still shows generic
 `abc` entries, those may come from VS Code/VSCodium word-based suggestions.
 
-Improved SQL IntelliSense does not modify:
+Query Puppy for T-SQL does not modify:
 
 ```text
 editor.wordBasedSuggestions

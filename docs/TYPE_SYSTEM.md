@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Improved SQL IntelliSense uses a conservative normalized SQL type model to support:
+Query Puppy for T-SQL uses a conservative normalized SQL type model to support:
 
 - expression type inference
 - expected-type detection

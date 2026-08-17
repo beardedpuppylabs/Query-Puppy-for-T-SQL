@@ -3,7 +3,7 @@
 ## Purpose
 
 This document describes the high-level architecture and semantic boundaries of
-Improved SQL IntelliSense.
+Query Puppy for T-SQL.
 
 It documents intended architecture, not incidental implementation details.
 
@@ -86,13 +86,13 @@ shared call-site parser and callable resolver.
 
 ## Microsoft SQL Server extension integration
 
-Improved SQL IntelliSense provides its own completion semantics.
+Query Puppy for T-SQL provides its own completion semantics.
 
 It does not consume Microsoft's completion list.
 
 The Microsoft SQL Server extension remains responsible for the SQL connection.
 
-Improved SQL IntelliSense reuses the active connection through the existing
+Query Puppy for T-SQL reuses the active connection through the existing
 connection-sharing integration.
 
 Do not introduce independent connection ownership unless explicitly redesigned.

@@ -7,8 +7,7 @@ import {
   type SemanticCatalog,
 } from "../parser/DocumentSemanticAnalyzer.js";
 
-export const CAN_EXPAND_SELECT_STAR =
-  "improvedSqlIntellisense.canExpandSelectStar";
+export const CAN_EXPAND_SELECT_STAR = "queryPuppyForTSql.canExpandSelectStar";
 
 export class SelectStarExpansionController implements vscode.Disposable {
   private expansion: ReturnType<typeof resolveSelectWildcard>;
@@ -25,7 +24,7 @@ export class SelectStarExpansionController implements vscode.Disposable {
       vscode.window.onDidChangeTextEditorSelection(update),
       vscode.workspace.onDidChangeTextDocument(update),
       vscode.commands.registerCommand(
-        "improvedSqlIntellisense.expandSelectStar",
+        "queryPuppyForTSql.expandSelectStar",
         () => this.expand(),
       ),
     ];

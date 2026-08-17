@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.2
+
+- Updated the Query Puppy for T-SQL extension and Marketplace logo.
+
+## 0.9.1
+
+- Renamed the extension to Query Puppy for T-SQL with package identity `BeardedPuppyLabs.query-puppy-for-t-sql`.
+- Renamed extension-owned commands, settings, context keys, and diagnostic provenance to the `queryPuppyForTSql` / `query-puppy-for-t-sql` identity while preserving Microsoft mssql integration identifiers.
+
 ## 0.9.0
 
 - Added expected-type-aware expression completion and conservative compatibility ranking for comparisons, function arguments, UPDATE assignments, INSERT expressions, LIKE, and arithmetic operands.
@@ -10,7 +19,7 @@
 - Restored exact alphabetical member ordering when no expected type is available.
 - Stabilized physical-column presentation with a fixed 32-character visible identifier cap and wrapped complete documentation while preserving filtering, insertion, identity, and ordering.
 - Rebound inferred physical RowSources to canonical catalog objects before type grouping so PK/UQ/FK roles and constraint documentation are retained.
-- Rendered physical columns through one canonical factory as a deterministic 32/8/20-slot visible row and migrated the public extension identity to `BeardedPuppyLabs.improved-sql-intellisense`.
+- Rendered physical columns through one canonical factory as a deterministic 32/8/20-slot visible row and migrated the public publisher identity to `BeardedPuppyLabs`.
 - Fixed identity-less forward member aliases in multi-group UPDATE completion by rebinding them to cached canonical table metadata before materialization.
 - Ordered type groups before CompletionItem construction so every group member uses the ordinary physical-column factory exactly once.
 

@@ -95,7 +95,7 @@ function configureCandidateItem(
   rank: number,
 ): void {
   (item as vscode.CompletionItem & { data?: unknown }).data = {
-    provider: "improved-sql-intellisense",
+    provider: "query-puppy-for-t-sql",
     semanticKind: candidate.kind,
   };
   item.range = replacement;
@@ -117,7 +117,7 @@ function configureCandidateItem(
     };
   else if (candidate.triggerAliasSuggest)
     item.command = {
-      command: "improvedSqlIntellisense.triggerAliasSuggest",
+      command: "queryPuppyForTSql.triggerAliasSuggest",
       title: "Suggest row-source alias",
     };
 }

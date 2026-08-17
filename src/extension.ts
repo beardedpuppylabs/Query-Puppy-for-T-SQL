@@ -21,11 +21,11 @@ import {
   type SuggestionConfigurationScope,
 } from "./config/MicrosoftSuggestions.js";
 
-const EXTENSION_ID = "BeardedPuppyLabs.improved-sql-intellisense";
+const EXTENSION_ID = "BeardedPuppyLabs.query-puppy-for-t-sql";
 let suggestionNoticePending = false;
 
 export function activate(context: vscode.ExtensionContext): void {
-  const output = vscode.window.createOutputChannel("Improved SQL IntelliSense");
+  const output = vscode.window.createOutputChannel("Query Puppy for T-SQL");
   const cache = new MetadataCache();
   const connections = new ConnectionService(EXTENSION_ID, getMssqlApi);
   const loader = new MetadataLoader(connections, (message) =>
@@ -124,7 +124,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (
         (vscode.workspace
           .getConfiguration(
-            "improvedSqlIntellisense.smartAliases",
+            "queryPuppyForTSql.smartAliases",
             event.document.uri,
           )
           .get<boolean>("enabled") ??
@@ -162,15 +162,14 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.window.onDidChangeActiveTextEditor(() => clearAutomaticTrigger()),
     vscode.commands.registerCommand(
-      "improvedSqlIntellisense.triggerAliasSuggest",
+      "queryPuppyForTSql.triggerAliasSuggest",
       () => vscode.commands.executeCommand("editor.action.triggerSuggest"),
     ),
-    vscode.commands.registerCommand(
-      "improvedSqlIntellisense.refreshMetadata",
-      () => refreshMetadata(connections, loader, cache),
+    vscode.commands.registerCommand("queryPuppyForTSql.refreshMetadata", () =>
+      refreshMetadata(connections, loader, cache),
     ),
     vscode.commands.registerCommand(
-      "improvedSqlIntellisense.showStatus",
+      "queryPuppyForTSql.showStatus",
       async () => {
         try {
           const suggestionStatus = microsoftSuggestionStatusLines(
@@ -183,13 +182,13 @@ export function activate(context: vscode.ExtensionContext): void {
           const active = await connections.active();
           if (!installed) {
             await vscode.window.showInformationMessage(
-              `Improved SQL IntelliSense — mssql API unavailable; disconnected; metadata not loaded.\n${suggestionStatus}\n${parameterHintStatus}`,
+              `Query Puppy for T-SQL — mssql API unavailable; disconnected; metadata not loaded.\n${suggestionStatus}\n${parameterHintStatus}`,
             );
             return;
           }
           if (!active) {
             await vscode.window.showInformationMessage(
-              `Improved SQL IntelliSense — mssql API available; disconnected; metadata not loaded.\n${suggestionStatus}\n${parameterHintStatus}`,
+              `Query Puppy for T-SQL — mssql API available; disconnected; metadata not loaded.\n${suggestionStatus}\n${parameterHintStatus}`,
             );
             return;
           }
@@ -204,21 +203,21 @@ export function activate(context: vscode.ExtensionContext): void {
                   )
                   .join("; ");
           await vscode.window.showInformationMessage(
-            `Improved SQL IntelliSense — mssql API available; connected; active database: ${active.database}; cached databases: ${summary}.\n${suggestionStatus}\n${parameterHintStatus}`,
+            `Query Puppy for T-SQL — mssql API available; connected; active database: ${active.database}; cached databases: ${summary}.\n${suggestionStatus}\n${parameterHintStatus}`,
           );
         } catch (error) {
           await vscode.window.showInformationMessage(
-            `Improved SQL IntelliSense status unavailable: ${error instanceof Error ? error.message : String(error)}`,
+            `Query Puppy for T-SQL status unavailable: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
       },
     ),
     vscode.commands.registerCommand(
-      "improvedSqlIntellisense.disableMicrosoftSuggestions",
+      "queryPuppyForTSql.disableMicrosoftSuggestions",
       () => disableMicrosoftSuggestions(),
     ),
     vscode.commands.registerCommand(
-      "improvedSqlIntellisense.diagnoseSignatureHelp",
+      "queryPuppyForTSql.diagnoseSignatureHelp",
       async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document.languageId !== "sql") {
@@ -237,12 +236,12 @@ export function activate(context: vscode.ExtensionContext): void {
         );
         output.show(true);
         await vscode.window.showInformationMessage(
-          "Signature Help diagnosis was written to the Improved SQL IntelliSense output channel.",
+          "Signature Help diagnosis was written to the Query Puppy for T-SQL output channel.",
         );
       },
     ),
     vscode.commands.registerCommand(
-      "improvedSqlIntellisense.diagnoseQueryScope",
+      "queryPuppyForTSql.diagnoseQueryScope",
       async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document.languageId !== "sql") {
@@ -259,7 +258,7 @@ export function activate(context: vscode.ExtensionContext): void {
           output.appendLine(`Query Scope diagnosis:\n${report}`);
           output.show(true);
           await vscode.window.showInformationMessage(
-            "Query Scope diagnosis was written to the Improved SQL IntelliSense output channel.",
+            "Query Scope diagnosis was written to the Query Puppy for T-SQL output channel.",
           );
         } catch (error) {
           output.appendLine(
@@ -272,12 +271,12 @@ export function activate(context: vscode.ExtensionContext): void {
   if (context.extensionMode === vscode.ExtensionMode.Test)
     context.subscriptions.push(
       vscode.commands.registerCommand(
-        "improvedSqlIntellisense.test.setCompletionScope",
+        "queryPuppyForTSql.test.setCompletionScope",
         (scope: import("./completion/CandidateFactory.js").CompletionScope) =>
           provider.setTestScope(scope),
       ),
       vscode.commands.registerCommand(
-        "improvedSqlIntellisense.test.provideCompletions",
+        "queryPuppyForTSql.test.provideCompletions",
         async (document: vscode.TextDocument, position: vscode.Position) => {
           const cancellation = new vscode.CancellationTokenSource();
           try {
@@ -292,17 +291,17 @@ export function activate(context: vscode.ExtensionContext): void {
         },
       ),
       vscode.commands.registerCommand(
-        "improvedSqlIntellisense.test.diagnoseQueryScope",
+        "queryPuppyForTSql.test.diagnoseQueryScope",
         (document: vscode.TextDocument, position: vscode.Position) =>
           provider.diagnoseQueryScope(document, position),
       ),
       vscode.commands.registerCommand(
-        "improvedSqlIntellisense.test.setSignatureScope",
+        "queryPuppyForTSql.test.setSignatureScope",
         (scope: import("./completion/CandidateFactory.js").CompletionScope) =>
           signatureProvider.setTestScope(scope),
       ),
       vscode.commands.registerCommand(
-        "improvedSqlIntellisense.test.takeSignatureInvocations",
+        "queryPuppyForTSql.test.takeSignatureInvocations",
         () => signatureProvider.takeTestInvocations(),
       ),
     );
@@ -458,7 +457,7 @@ async function warnAboutMicrosoftSuggestions(
   suggestionNoticePending = true;
   try {
     const choice = await vscode.window.showInformationMessage(
-      "Improved SQL IntelliSense replaces Microsoft mssql suggestions. Disable Microsoft's suggestions to avoid duplicate and conflicting completion results?",
+      "Query Puppy for T-SQL replaces Microsoft mssql suggestions. Disable Microsoft's suggestions to avoid duplicate and conflicting completion results?",
       disable,
       notNow,
     );
@@ -467,7 +466,7 @@ async function warnAboutMicrosoftSuggestions(
       await updateMicrosoftSuggestions("global");
       if (inspectMicrosoftSuggestions().effectiveValue)
         await vscode.window.showWarningMessage(
-          "Microsoft SQL suggestions remain enabled by a workspace override. Run “Improved SQL IntelliSense: Disable Microsoft SQL Suggestions” to resolve it.",
+          "Microsoft SQL suggestions remain enabled by a workspace override. Run “Query Puppy for T-SQL: Disable Microsoft SQL Suggestions” to resolve it.",
         );
     }
   } finally {

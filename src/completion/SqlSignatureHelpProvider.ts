@@ -210,7 +210,7 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     if (
       this.output &&
       (vscode.workspace
-        .getConfiguration("improvedSqlIntellisense")
+        .getConfiguration("queryPuppyForTSql")
         .get<boolean>("debugLogging") ??
         false)
     )

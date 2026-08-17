@@ -1,6 +1,6 @@
-# Improved SQL IntelliSense
+# Query Puppy for T-SQL
 
-Improved SQL IntelliSense is context-aware SQL Server IntelliSense for databases where memorizing every table, column, function, and relationship is unrealistic. It combines case-insensitive Contains discovery with query-scope analysis and real SQL Server schema metadata.
+Query Puppy for T-SQL is context-aware SQL Server IntelliSense for databases where memorizing every table, column, function, and relationship is unrealistic. It combines case-insensitive Contains discovery with query-scope analysis and real SQL Server schema metadata.
 
 In a schema with hundreds or thousands of objects, remembering part of a name should be enough to find it. Once tables are joined, actual foreign-key metadata can help construct the `ON` predicate. The extension provides its own completion provider while reusing the active Microsoft SQL Server (`mssql`) connection—there is no second login or separate connection configuration.
 
@@ -68,7 +68,7 @@ Contains filtering remains active inside these semantic domains. For example, `c
 
 ## Type-aware completion
 
-Improved SQL IntelliSense can infer the type expected at common expression positions and rank compatible expressions higher. For example:
+Query Puppy for T-SQL can infer the type expected at common expression positions and rank compatible expressions higher. For example:
 
 ```sql
 WHERE oh.CustomerId = c.
@@ -95,7 +95,7 @@ The resulting sort key is deterministic: exact typed-name match, real FK JOIN pr
 
 ## Schema Intelligence
 
-Improved SQL IntelliSense reads SQL Server catalog metadata for primary keys, unique constraints and indexes, and foreign keys. It understands composite keys, composite foreign keys, filtered unique indexes, and cross-schema relationships within a database.
+Query Puppy for T-SQL reads SQL Server catalog metadata for primary keys, unique constraints and indexes, and foreign keys. It understands composite keys, composite foreign keys, filtered unique indexes, and cross-schema relationships within a database.
 
 Physical-column suggestions use one deterministic visible row with fixed name, role, type, and nullability slots:
 
@@ -185,7 +185,7 @@ Customers       -> AS c
 CustomerOrders  -> AS co
 ```
 
-Aliases are suggestions, not forced rewrites. They can be disabled with `improvedSqlIntellisense.smartAliases.enabled`.
+Aliases are suggestions, not forced rewrites. They can be disabled with `queryPuppyForTSql.smartAliases.enabled`.
 
 ## Cross-database completion
 
@@ -202,15 +202,15 @@ Secondary-database metadata is loaded only after explicit qualification. Ordinar
 
 ## How it works with mssql
 
-[Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql) is a required dependency because it owns SQL Server connections. Improved SQL IntelliSense uses the extension's supported connection-sharing API to identify the active connection/database, list same-server databases, and execute catalog queries.
+[Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql) is a required dependency because it owns SQL Server connections. Query Puppy for T-SQL uses the extension's supported connection-sharing API to identify the active connection/database, list same-server databases, and execute catalog queries.
 
-Improved SQL IntelliSense does not consume or filter Microsoft's completion output; it registers its own completion provider. Running both providers can produce duplicate suggestions. On first use, Improved SQL IntelliSense can offer to disable `mssql.intelliSense.enableSuggestions` globally, or you can run **Improved SQL IntelliSense: Disable Microsoft SQL Suggestions**. It never changes that setting silently. Other `mssql` services, including connection handling, remain available.
+Query Puppy for T-SQL does not consume or filter Microsoft's completion output; it registers its own completion provider. Running both providers can produce duplicate suggestions. On first use, Query Puppy for T-SQL can offer to disable `mssql.intelliSense.enableSuggestions` globally, or you can run **Query Puppy for T-SQL: Disable Microsoft SQL Suggestions**. It never changes that setting silently. Other `mssql` services, including connection handling, remain available.
 
 ## Performance and caching
 
 Catalog metadata is loaded with set-based queries and cached in memory per connection and database. Secondary databases load lazily after qualification. Completion and FK relationship lookup use cached indexes—there is no metadata query per keystroke.
 
-Run **Improved SQL IntelliSense: Refresh IntelliSense Metadata** after DDL changes.
+Run **Query Puppy for T-SQL: Refresh IntelliSense Metadata** after DDL changes.
 
 ## Privacy and database permissions
 
@@ -225,7 +225,7 @@ The connected login still needs permission to read the relevant SQL Server catal
 ## Installation and getting started
 
 1. Install [Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql).
-2. Install [Improved SQL IntelliSense from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=BeardedPuppyLabs.improved-sql-intellisense), or install a release VSIX in VSCodium.
+2. Install [Query Puppy for T-SQL from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=BeardedPuppyLabs.query-puppy-for-t-sql), or install a release VSIX in VSCodium.
 3. Open a SQL document and connect it with `mssql`.
 4. If duplicate completion lists appear, disable Microsoft SQL suggestions when prompted or with the provided command.
 
@@ -233,20 +233,20 @@ Requires VS Code 1.105 or a compatible VSCodium release.
 
 ## Commands
 
-- **Improved SQL IntelliSense: Expand SELECT \* to Columns**
-- **Improved SQL IntelliSense: Refresh IntelliSense Metadata**
-- **Improved SQL IntelliSense: Show Improved SQL IntelliSense Status**
-- **Improved SQL IntelliSense: Disable Microsoft SQL Suggestions**
-- **Improved SQL IntelliSense: Diagnose Signature Help**
-- **Improved SQL IntelliSense: Diagnose Query Scope**
+- **Query Puppy for T-SQL: Expand SELECT \* to Columns**
+- **Query Puppy for T-SQL: Refresh IntelliSense Metadata**
+- **Query Puppy for T-SQL: Show Status**
+- **Query Puppy for T-SQL: Disable Microsoft SQL Suggestions**
+- **Query Puppy for T-SQL: Diagnose Signature Help**
+- **Query Puppy for T-SQL: Diagnose Query Scope**
 
 The diagnostic commands report connection, cache, scope, visible-row-source, correlation, and provider information through VS Code/VSCodium UI and the extension output channel.
 
 ## Settings
 
-- `improvedSqlIntellisense.enabled`: enable or disable Improved SQL IntelliSense completion.
-- `improvedSqlIntellisense.debugLogging`: write detailed diagnostics to the **Improved SQL IntelliSense** output channel.
-- `improvedSqlIntellisense.smartAliases.enabled`: enable or disable smart alias suggestions.
+- `queryPuppyForTSql.enabled`: enable or disable Query Puppy for T-SQL completion.
+- `queryPuppyForTSql.debugLogging`: write detailed diagnostics to the **Query Puppy for T-SQL** output channel.
+- `queryPuppyForTSql.smartAliases.enabled`: enable or disable smart alias suggestions.
 
 ## Known limitations
 
@@ -266,4 +266,4 @@ Contributor guidance is in `docs/DEVELOPMENT.md`, publishing guidance is in `doc
 
 ## License
 
-Improved SQL IntelliSense is open-source software released under the MIT License. See `LICENSE` in the source repository for the full terms.
+Query Puppy for T-SQL is open-source software released under the MIT License. See `LICENSE` in the source repository for the full terms.
