@@ -156,6 +156,56 @@ test(
         [(process.env["MSSQL_TEST_DATABASE"] ?? "").toLowerCase(), index],
       ]),
     };
+    const belegeFamily = [
+      "Belege",
+      "BelegePositionen",
+      "BelegePositionenDetails",
+    ];
+    for (const name of belegeFamily)
+      assert.ok(
+        index.findObject("dbo", name),
+        `missing manually provisioned dbo.${name} fixture`,
+      );
+    assert.deepEqual(
+      createCandidates(
+        resolveSqlContext("SELECT * FROM dbo.Belege"),
+        relationshipScope,
+      ).map((candidate) => candidate.name),
+      belegeFamily,
+    );
+    assert.deepEqual(
+      createCandidates(
+        resolveSqlContext("SELECT * FROM dbo.Positionen"),
+        relationshipScope,
+      ).map((candidate) => candidate.name),
+      ["BelegePositionen", "BelegePositionenDetails"],
+    );
+    assert.deepEqual(
+      createCandidates(
+        resolveSqlContext("SELECT * FROM dbo.DETAILS"),
+        relationshipScope,
+      ).map((candidate) => candidate.name),
+      ["BelegePositionenDetails"],
+    );
+    const familyMembers = (sql: string) =>
+      createCandidates(resolveSqlContext(sql), relationshipScope).map(
+        (candidate) => candidate.name,
+      );
+    assert.deepEqual(
+      familyMembers("SELECT * FROM dbo.BelegePositionen AS p WHERE p."),
+      [
+        "Artikelnummer",
+        "BelegId",
+        "BelegPositionId",
+        "Einzelpreis",
+        "Menge",
+        "Positionsnummer",
+      ],
+    );
+    assert.deepEqual(
+      familyMembers("SELECT * FROM dbo.BelegePositionenDetails AS d WHERE d."),
+      ["BelegPositionDetailId", "BelegPositionId", "DetailCode", "DetailValue"],
+    );
     const role = (sql: string, name: string) =>
       createCandidates(
         resolveSqlContext(sql, sql.indexOf(" FROM")),
@@ -170,6 +220,18 @@ test(
         "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON",
       ),
       ["oh.CustomerId = c.CustomerId"],
+    );
+    assert.deepEqual(
+      joinPredicates(
+        "SELECT * FROM dbo.Belege b JOIN dbo.BelegePositionen p ON",
+      ),
+      ["p.BelegId = b.BelegId"],
+    );
+    assert.deepEqual(
+      joinPredicates(
+        "SELECT * FROM dbo.BelegePositionen p JOIN dbo.BelegePositionenDetails d ON",
+      ),
+      ["d.BelegPositionId = p.BelegPositionId"],
     );
     assert.deepEqual(
       joinPredicates(
@@ -642,6 +704,30 @@ test(
         [secondaryDatabase.toLowerCase(), secondary],
       ]),
     };
+    assert.ok(
+      secondary.findObject("dbo", "Auftraege"),
+      "missing manually provisioned dbo.Auftraege fixture",
+    );
+    assert.ok(
+      secondary.findObject("dbo", "AuftraegePositionen"),
+      "missing manually provisioned dbo.AuftraegePositionen fixture",
+    );
+    assert.deepEqual(
+      createCandidates(
+        resolveSqlContext(`SELECT * FROM ${secondaryDatabase}.dbo.Auftraege`),
+        scope,
+      ).map((candidate) => candidate.name),
+      ["Auftraege", "AuftraegePositionen"],
+    );
+    assert.deepEqual(
+      createCandidates(
+        resolveSqlContext(
+          `SELECT * FROM ${secondaryDatabase}.dbo.AuftraegePositionen AS p WHERE p.`,
+        ),
+        scope,
+      ).map((candidate) => candidate.name),
+      ["AuftragId", "AuftragPositionId", "Beschreibung", "Positionsnummer"],
+    );
     const setCteSql = `WITH X AS
 (
   SELECT c.CustomerId AS Id, c.EmailAddress AS Value
@@ -1374,16 +1460,21 @@ function createTestPool(database: string): sql.ConnectionPool {
 
 function metadataConnection(pool: sql.ConnectionPool): ConnectionService {
   return {
-    query: async (_connection: unknown, query: string) => {
-      const result = await pool.request().query<Record<string, unknown>>(query);
-      const rows: DbCellValue[][] = result.recordset.map((record) =>
-        Object.values(record).map((raw) => ({
-          isNull: raw === null || raw === undefined,
-          displayValue: toDisplayValue(raw),
-        })),
-      );
-      return { rowCount: rows.length, rows };
-    },
+    queryMany: async (_connection: unknown, queries: readonly string[]) =>
+      Promise.all(
+        queries.map(async (query) => {
+          const result = await pool
+            .request()
+            .query<Record<string, unknown>>(query);
+          const rows: DbCellValue[][] = result.recordset.map((record) =>
+            Object.values(record).map((raw) => ({
+              isNull: raw === null || raw === undefined,
+              displayValue: toDisplayValue(raw),
+            })),
+          );
+          return { rowCount: rows.length, rows };
+        }),
+      ),
   } as unknown as ConnectionService;
 }
 

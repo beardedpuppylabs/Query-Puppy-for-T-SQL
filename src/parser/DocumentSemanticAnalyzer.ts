@@ -760,6 +760,39 @@ const tokenDepths = (tokens: readonly SqlToken[]): readonly number[] => {
   });
 };
 
+/**
+ * Treats expression parentheses that are still open at the completion cursor as
+ * editor-incomplete syntax while scanning the remainder of the active query.
+ * Real closing tokens consume those pending opens without moving the query
+ * depth; parentheses opened after the cursor retain their ordinary nesting.
+ */
+const completionContinuationDepths = (
+  tokens: readonly SqlToken[],
+  ordinary: readonly number[],
+  cursor: number,
+  queryDepth: number,
+): readonly number[] => {
+  const continuation = tokens.findIndex((token) => token.start >= cursor);
+  if (continuation < 0) return ordinary;
+  let pendingOpen = Math.max(
+    0,
+    (ordinary[continuation] ?? queryDepth) - queryDepth,
+  );
+  if (pendingOpen === 0) return ordinary;
+  const adjusted = [...ordinary];
+  let depth = queryDepth;
+  for (let index = continuation; index < tokens.length; index++) {
+    adjusted[index] = depth;
+    if (tokens[index]?.text === "(") depth++;
+    else if (tokens[index]?.text === ")") {
+      if (depth > queryDepth) depth--;
+      else if (pendingOpen > 0) pendingOpen--;
+      else depth--;
+    }
+  }
+  return adjusted;
+};
+
 function objectRowSource(
   parts: readonly string[],
   alias: string,
@@ -868,10 +901,22 @@ function queryScopeModel(
       ...(applyOpenToken === undefined ? {} : { applyOpenToken }),
     });
   }
+  const activeMutable = [...mutable]
+    .filter((scope) => scope.range.start <= cursor && cursor <= scope.range.end)
+    .sort((a, b) => b.range.start - a.range.start)[0];
+  const activeDepths = activeMutable
+    ? completionContinuationDepths(
+        tokens,
+        depths,
+        cursor,
+        depths[activeMutable.startToken] ?? 0,
+      )
+    : depths;
   for (const scope of mutable) {
-    const depth = depths[scope.startToken] ?? 0;
+    const scopeDepths = scope === activeMutable ? activeDepths : depths;
+    const depth = scopeDepths[scope.startToken] ?? 0;
     for (let i = scope.startToken + 1; i < scope.endToken; i++) {
-      if ((depths[i] ?? 0) !== depth) continue;
+      if ((scopeDepths[i] ?? 0) !== depth) continue;
       if (!["from", "join", "apply"].includes(tokens[i]?.normalized ?? ""))
         continue;
       let p = i + 1;
@@ -916,9 +961,6 @@ function queryScopeModel(
       scope.local.push({ source, qualifier, scopeDistance: 0, outer: false });
     }
   }
-  const activeMutable = [...mutable]
-    .filter((scope) => scope.range.start <= cursor && cursor <= scope.range.end)
-    .sort((a, b) => b.range.start - a.range.start)[0];
   const publicScopes: QueryScope[] = mutable.map((scope) => ({
     id: scope.id,
     kind: scope.kind,

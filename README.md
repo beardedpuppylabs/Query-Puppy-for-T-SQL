@@ -13,7 +13,7 @@ In a schema with hundreds or thousands of objects, remembering part of a name sh
 - Query-local scope intelligence for CTEs, temp tables, derived tables, and more
 - Scalar-function and table-valued-function Signature Help
 - Same-server cross-database completion
-- Active `mssql` connection reuse with cached metadata
+- Active `mssql` connection reuse with durable, stale-while-refresh metadata
 
 ## Find objects by what you remember
 
@@ -153,7 +153,7 @@ Set operations—`UNION`, `UNION ALL`, `INTERSECT`, and `EXCEPT`—compose resul
 
 ## Functions, procedures, and DML
 
-Scalar functions and TVFs provide VS Code Signature Help with active-argument tracking. Signature Help opens automatically after `(`, follows commas, and can be reopened with the editor's **Trigger Parameter Hints** command.
+Scalar functions, TVFs, and supported SQL Server built-ins provide VS Code Signature Help with active-argument tracking. Built-in completion, ExpectedType ranking, and return inference currently cover `CHARINDEX`, `DATEADD`, `DATEDIFF`, `DATEFROMPARTS`, `ROUND`, `STRING_AGG`, and `SUBSTRING`. Signature Help opens automatically after `(`, follows commas, and can be reopened with the editor's **Trigger Parameter Hints** command.
 
 Additional context-aware support includes:
 
@@ -208,16 +208,16 @@ Query Puppy for T-SQL does not consume or filter Microsoft's completion output; 
 
 ## Performance and caching
 
-Catalog metadata is loaded with set-based queries and cached in memory per connection and database. Secondary databases load lazily after qualification. Completion and FK relationship lookup use cached indexes—there is no metadata query per keystroke.
+Catalog metadata is loaded with set-based queries and cached per connection and database. A first cold load is shown in the status bar and writes a durable snapshot to VS Code/VSCodium's extension storage. On later sessions, that snapshot is available immediately while one refresh runs in the background. Completion and FK relationship lookup use the in-memory indexes—there is no metadata query or disk read per keystroke.
 
-Run **Query Puppy for T-SQL: Refresh IntelliSense Metadata** after DDL changes.
+After the first session refresh, the fixed 15-minute freshness threshold is checked only when that database is actually used; Query Puppy does not poll every cached database. Secondary databases remain lazy and independently cached. Run **Query Puppy for T-SQL: Refresh Schema Metadata** to pick up a known DDL change immediately.
 
 ## Privacy and database permissions
 
 - No extension-specific database credentials are requested or stored.
 - The active `mssql` connection is reused; no independent SQL connection is opened.
 - Schema metadata discovery is read-only and does not require DDL or DML privileges.
-- Catalog metadata is cached locally in memory for IntelliSense.
+- Allow-listed schema metadata is cached in extension-owned local storage and memory. It contains no database credentials, tokens, query text, or document-local SQL state.
 - The extension contains no telemetry and does not upload query text or database content to an external service.
 
 The connected login still needs permission to read the relevant SQL Server catalog metadata.
@@ -234,7 +234,8 @@ Requires VS Code 1.105 or a compatible VSCodium release.
 ## Commands
 
 - **Query Puppy for T-SQL: Expand SELECT \* to Columns**
-- **Query Puppy for T-SQL: Refresh IntelliSense Metadata**
+- **Query Puppy for T-SQL: Refresh Schema Metadata**
+- **Query Puppy for T-SQL: Clear Schema Cache for Active Database**
 - **Query Puppy for T-SQL: Show Status**
 - **Query Puppy for T-SQL: Disable Microsoft SQL Suggestions**
 - **Query Puppy for T-SQL: Diagnose Signature Help**
@@ -254,10 +255,10 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 - Linked Servers and four-part object names are out of scope. Cross-database support is limited to databases on the active SQL Server connection.
 - The defensive parser is not a complete T-SQL compiler; unusually exotic or incomplete grammar can reduce context accuracy.
 - Type inference is conservative. Unnamed computed projections may be omitted, and recursive CTE/set-branch type reconciliation is best-effort.
-- Type-aware ranking does not implement SQL Server's complete conversion and datatype-precedence engine. Built-in function parameter typing remains limited to constructs with reliable metadata; a full built-in signature catalog is not included.
+- Type-aware ranking does not implement SQL Server's complete conversion and datatype-precedence engine. Built-in intelligence is intentionally limited to the documented supported set rather than a complete SQL Server function catalog.
 - Stored-procedure result-set discovery is not performed, so the extension does not fabricate procedure result columns.
 - JOIN predicates require real, enabled FK metadata. The extension does not infer relationships from naming conventions or similar datatypes.
-- Metadata refresh after DDL is explicit.
+- Background refresh is intentionally a full snapshot refresh, not true incremental schema synchronization. Use the manual refresh command when a just-applied DDL change must appear immediately.
 - Completion detail width is controlled by the native Suggest Widget and may be truncated in narrow layouts.
 
 ## Development and support

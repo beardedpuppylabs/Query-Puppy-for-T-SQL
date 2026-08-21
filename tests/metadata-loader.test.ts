@@ -16,6 +16,17 @@ const cell = (displayValue?: string): DbCellValue => ({
 const row = (...values: (string | undefined)[]): DbCellValue[] =>
   values.map(cell);
 
+const metadataConnection = (
+  query: (
+    connection: unknown,
+    sql: string,
+  ) => Promise<{ rowCount: number; rows: readonly DbCellValue[][] }>,
+): ConnectionService =>
+  ({
+    queryMany: async (connection: unknown, sqlStatements: readonly string[]) =>
+      Promise.all(sqlStatements.map((sql) => query(connection, sql))),
+  }) as unknown as ConnectionService;
+
 test("metadata assembly is independent of result row order", async () => {
   const rows = [
     row("D", "25", "IntelliSenseLab"),
@@ -56,12 +67,12 @@ test("metadata assembly is independent of result row order", async () => {
     row("S", undefined, "dbo"),
   ];
   let executedSql = "";
-  const connections = {
-    query: async (_connection: unknown, sql: string) => {
+  const connections = metadataConnection(
+    async (_connection: unknown, sql: string) => {
       executedSql = sql;
       return { rowCount: rows.length, rows };
     },
-  } as unknown as ConnectionService;
+  );
   const index = await new MetadataLoader(connections).load({
     connectionId: "c",
     database: "IntelliSenseLab",
@@ -94,9 +105,10 @@ test("scalar return metadata supports the unnamed return parameter", async () =>
       "0",
     ),
   ];
-  const connections = {
-    query: async () => ({ rowCount: rows.length, rows }),
-  } as unknown as ConnectionService;
+  const connections = metadataConnection(async () => ({
+    rowCount: rows.length,
+    rows,
+  }));
   const index = await new MetadataLoader(connections).load({
     connectionId: "c",
     database: "db",
@@ -132,9 +144,10 @@ test("developer-facing system views are mapped without enabling all system noise
       "1",
     ),
   ];
-  const connections = {
-    query: async () => ({ rowCount: rows.length, rows }),
-  } as unknown as ConnectionService;
+  const connections = metadataConnection(async () => ({
+    rowCount: rows.length,
+    rows,
+  }));
   const index = await new MetadataLoader(connections).load({
     connectionId: "c",
     database: "db",
@@ -221,9 +234,10 @@ test("column writability flags are retained from catalog metadata", async () => 
       "True",
     ),
   ];
-  const connections = {
-    query: async () => ({ rowCount: rows.length, rows }),
-  } as unknown as ConnectionService;
+  const connections = metadataConnection(async () => ({
+    rowCount: rows.length,
+    rows,
+  }));
   const object = (
     await new MetadataLoader(connections).load({
       connectionId: "c",
@@ -343,15 +357,15 @@ test("keys and foreign keys are assembled set-wise without duplicate constraint 
     ),
   ];
   let queryCount = 0;
-  const connections = {
-    query: async (_connection: unknown, sql: string) => {
+  const connections = metadataConnection(
+    async (_connection: unknown, sql: string) => {
       queryCount++;
       const rows = sql.includes("FROM sys.foreign_keys")
         ? relationships
         : catalog;
       return { rowCount: rows.length, rows };
     },
-  } as unknown as ConnectionService;
+  );
   const index = await new MetadataLoader(connections).load({
     connectionId: "c",
     database: "IntelliSenseLab",
@@ -380,16 +394,24 @@ test("keys and foreign keys are assembled set-wise without duplicate constraint 
 
 test("Schema Intelligence runtime initialization is catalog-read-only", async () => {
   const statements: string[] = [];
+  let metadataOperations = 0;
   const connections = {
-    query: async (_connection: unknown, sql: string) => {
-      statements.push(sql);
-      return { rowCount: 0, rows: [] };
+    queryMany: async (
+      _connection: unknown,
+      sqlStatements: readonly string[],
+    ) => {
+      metadataOperations++;
+      return sqlStatements.map((sql) => {
+        statements.push(sql);
+        return { rowCount: 0, rows: [] };
+      });
     },
   } as unknown as ConnectionService;
   await new MetadataLoader(connections).load({
     connectionId: "restricted-metadata-login",
     database: "IntelliSenseLab",
   });
+  assert.equal(metadataOperations, 1);
   assert.equal(statements.length, 2);
   for (const sql of statements) {
     assert.match(

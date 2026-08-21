@@ -10,24 +10,6 @@ const identifier = (token: SqlToken | undefined): token is SqlToken =>
   token?.kind === "identifier" ||
   token?.kind === "temp" ||
   token?.kind === "variable";
-const terminators = new Set([
-  "where",
-  "join",
-  "on",
-  "group",
-  "order",
-  "having",
-  "cross",
-  "outer",
-  "left",
-  "right",
-  "inner",
-  "full",
-  "union",
-  "from",
-  "apply",
-]);
-
 export function aliasFromObjectName(name: string): string {
   const words = name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -43,7 +25,7 @@ export function aliasFromObjectName(name: string): string {
 export interface SmartAliasContext {
   readonly objectName: string;
   readonly alias: string;
-  readonly leadingSpace: boolean;
+  readonly explicitAs: boolean;
 }
 
 export function isPotentialSmartAliasTrigger(
@@ -52,6 +34,19 @@ export function isPotentialSmartAliasTrigger(
 ): boolean {
   if (!/\s/.test(sql[cursor - 1] ?? "")) return false;
   const tokens = tokenizeSql(sql.slice(0, cursor));
+  return Boolean(resolveAliasTarget(sql, cursor, tokens));
+}
+
+interface AliasTarget {
+  readonly parts: readonly string[];
+  readonly explicitAs: boolean;
+}
+
+function resolveAliasTarget(
+  sql: string,
+  cursor: number,
+  tokens: readonly SqlToken[],
+): AliasTarget | undefined {
   let keyword = -1;
   for (let i = tokens.length - 1; i >= 0; i--) {
     if (tokens[i]?.text === ";" || tokens[i]?.normalized === "go") break;
@@ -60,34 +55,9 @@ export function isPotentialSmartAliasTrigger(
       break;
     }
   }
-  if (keyword < 0 || !identifier(tokens[keyword + 1])) return false;
-  return !tokens
-    .slice(keyword + 1)
-    .some((token) => terminators.has(token.normalized));
-}
-
-export function resolveSmartAliasContext(
-  sql: string,
-  cursor: number,
-  semantics: DocumentSemanticModel,
-  catalog?: SemanticCatalog,
-): SmartAliasContext | undefined {
-  if (cursor <= 0) return undefined;
-  const leadingSpace = !/\s/.test(sql[cursor - 1] ?? "");
-  const tokens = tokenizeSql(sql.slice(0, cursor));
-  let keyword = -1;
-  for (let i = tokens.length - 1; i >= 0; i--) {
-    const token = tokens[i];
-    if (token?.text === ";" || token?.normalized === "go") break;
-    if (["from", "join", "apply"].includes(token?.normalized ?? "")) {
-      keyword = i;
-      break;
-    }
-  }
   if (keyword < 0) return undefined;
   let p = keyword + 1;
-  if (tokens[p]?.text === "(") return undefined;
-  if (!identifier(tokens[p])) return undefined;
+  if (tokens[p]?.text === "(" || !identifier(tokens[p])) return undefined;
   const parts = [tokens[p]?.text ?? ""];
   while (tokens[p + 1]?.text === "." && identifier(tokens[p + 2])) {
     parts.push(tokens[p + 2]?.text ?? "");
@@ -102,8 +72,29 @@ export function resolveSmartAliasContext(
     } while (p < tokens.length && depth > 0);
   }
   const trailing = tokens.slice(p + 1);
-  if (trailing.length || terminators.has(tokens[p]?.normalized ?? ""))
+  const explicitAs = trailing.length === 1 && trailing[0]?.normalized === "as";
+  if (trailing.length > (explicitAs ? 1 : 0)) return undefined;
+  const boundary = explicitAs ? trailing[0]?.end : tokens[p]?.end;
+  if (
+    boundary === undefined ||
+    boundary >= cursor ||
+    !/^\s+$/.test(sql.slice(boundary, cursor))
+  )
     return undefined;
+  return { parts, explicitAs };
+}
+
+export function resolveSmartAliasContext(
+  sql: string,
+  cursor: number,
+  semantics: DocumentSemanticModel,
+  catalog?: SemanticCatalog,
+): SmartAliasContext | undefined {
+  if (cursor <= 0) return undefined;
+  const tokens = tokenizeSql(sql.slice(0, cursor));
+  const target = resolveAliasTarget(sql, cursor, tokens);
+  if (!target) return undefined;
+  const { parts, explicitAs } = target;
   const objectName = parts.at(-1) ?? "";
   const known = semantics.aliases.get(normalizeName(objectName));
   const database = parts.length === 3 ? parts[0] : catalog?.activeDatabase;
@@ -137,5 +128,5 @@ export function resolveSmartAliasContext(
   let alias = base;
   for (let suffix = 2; used.has(normalizeName(alias)); suffix++)
     alias = `${base}${String(suffix)}`;
-  return { objectName, alias, leadingSpace };
+  return { objectName, alias, explicitAs };
 }

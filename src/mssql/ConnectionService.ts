@@ -8,11 +8,25 @@ export interface ActiveConnection {
 }
 
 export class ConnectionService {
+  private sharingApi: ConnectionSharingApi | undefined;
+  private sharingRequest: Promise<ConnectionSharingApi | undefined> | undefined;
+  private activeRequest: Promise<ActiveConnection | undefined> | undefined;
+
   constructor(
     private readonly extensionId: string,
     private readonly getApi: () => Promise<MssqlExtensionApi | undefined>,
   ) {}
   async active(): Promise<ActiveConnection | undefined> {
+    if (this.activeRequest) return this.activeRequest;
+    const pending = this.resolveActive();
+    this.activeRequest = pending;
+    try {
+      return await pending;
+    } finally {
+      if (this.activeRequest === pending) this.activeRequest = undefined;
+    }
+  }
+  private async resolveActive(): Promise<ActiveConnection | undefined> {
     const sharing = await this.sharing();
     if (!sharing) return undefined;
     const connectionId = await sharing.getActiveEditorConnectionId(
@@ -31,6 +45,15 @@ export class ConnectionService {
     connection: ActiveConnection,
     sql: string,
   ): Promise<SimpleExecuteResult> {
+    const result = (await this.queryMany(connection, [sql]))[0];
+    if (!result) throw new Error("mssql query returned no result.");
+    return result;
+  }
+  async queryMany(
+    connection: ActiveConnection,
+    sqlStatements: readonly string[],
+  ): Promise<SimpleExecuteResult[]> {
+    if (sqlStatements.length === 0) return [];
     const sharing = await this.sharing();
     if (!sharing)
       throw new Error("Microsoft mssql connection sharing is unavailable.");
@@ -43,9 +66,14 @@ export class ConnectionService {
     try {
       if (!sharing.isConnected(uri))
         throw new Error("The shared mssql connection is not connected.");
-      return validateSimpleExecuteResult(
-        await sharing.executeSimpleQuery(uri, sql),
-      );
+      const results: SimpleExecuteResult[] = [];
+      for (const sql of sqlStatements)
+        results.push(
+          validateSimpleExecuteResult(
+            await sharing.executeSimpleQuery(uri, sql),
+          ),
+        );
+      return results;
     } finally {
       sharing.disconnect(uri);
     }
@@ -80,6 +108,16 @@ export class ConnectionService {
     }
   }
   private async sharing(): Promise<ConnectionSharingApi | undefined> {
-    return (await this.getApi())?.connectionSharing;
+    if (this.sharingApi) return this.sharingApi;
+    if (this.sharingRequest) return this.sharingRequest;
+    const pending = this.getApi().then((api) => api?.connectionSharing);
+    this.sharingRequest = pending;
+    try {
+      const sharing = await pending;
+      if (sharing) this.sharingApi = sharing;
+      return sharing;
+    } finally {
+      if (this.sharingRequest === pending) this.sharingRequest = undefined;
+    }
   }
 }

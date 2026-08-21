@@ -294,17 +294,35 @@ Do not provision integration fixtures from extension runtime code.
 Persistent SQL Server metadata is cached by the appropriate connection/database
 context.
 
-A first access to an uncached database may trigger the project's existing
-coalesced lazy metadata load.
+A first access to an uncached database checks its versioned snapshot in
+`ExtensionContext.globalStorageUri`. A valid snapshot is hydrated into a rebuilt
+`DatabaseIndex` and returned before its first-session background refresh completes.
+With no valid snapshot, the database uses the visible coalesced cold-load path.
+
+Refresh is stale-while-revalidate: a usable snapshot remains active until a
+complete replacement has loaded, validated, and been atomically persisted. A
+refresh failure retains the stale snapshot. Automatic refresh is demand-driven:
+one first-use attempt per cached database per extension-host session, then a fixed
+15-minute freshness/retry threshold evaluated on later database use. Do not add a
+global refresh timer.
 
 Concurrent requests for the same not-yet-loaded catalog must share or coalesce that
 load rather than starting duplicate loads for the same metadata state.
+
+Concurrent automatic or manual refresh requests for the same cache identity must
+share one refresh. Manual refresh bypasses freshness but uses the same canonical
+pipeline.
 
 Once the relevant catalog has been loaded, the steady-state completion hot path
 uses cached metadata and performs no repeated SQL catalog access for each
 keystroke.
 
 Do not turn lazy loading into repeated per-completion metadata access.
+
+Persistent storage is session hydration, not the per-keystroke hot path. Persist
+only allow-listed canonical catalog metadata, never credentials, CompletionItems,
+static built-ins, QueryScopes, or document-local RowSources. Rebuild runtime indexes
+from the serialized canonical graph.
 
 Hot-path completion operates from:
 
@@ -860,6 +878,14 @@ Do not rewrite Git history.
 
 Do not publish automatically.
 
+For normal Codex development work, do not run production builds, bundle commands,
+VSIX packaging, or publication. The user owns those steps unless they explicitly
+delegate them for the current task. Codex should still run relevant tests, ESLint,
+strict TypeScript checking, Prettier checking, and `git diff --check`.
+
+Keep human build and packaging instructions available in the maintained developer
+and publishing documentation.
+
 VSIX packaging for verification is allowed when requested or part of the
 established test flow.
 
@@ -952,7 +978,8 @@ Before considering a development task complete:
 5. confirm semantic metadata remains lossless through affected pipelines
 6. run relevant provider/unit tests
 7. run Extension Host/integration tests when applicable
-8. run formatting, lint, strict TypeScript, and production build when applicable
+8. run formatting, lint, and strict TypeScript; run a production build only when
+   the user explicitly delegates it
 9. perform installed VSCodium acceptance when native UI behavior requires it
 10. inspect the final diff
 11. remove temporary diagnostics/debugging

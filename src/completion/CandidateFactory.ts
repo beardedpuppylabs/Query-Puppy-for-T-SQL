@@ -28,6 +28,7 @@ import {
   compareSqlTypes,
   describeSqlType,
 } from "../metadata/SqlTypeDescriptor.js";
+import { BUILTIN_FUNCTIONS } from "../parser/BuiltinFunctionCatalog.js";
 
 export interface CompletionScope {
   readonly activeDatabase: string;
@@ -269,6 +270,21 @@ export function createCandidates(
       );
     if (context.kind === "expression")
       candidates.push(
+        ...BUILTIN_FUNCTIONS.map((builtin) => ({
+          name: builtin.name,
+          normalizedName: builtin.normalizedName,
+          kind: "builtinFunction" as const,
+          parameters: builtin.parameters.map((parameter) => ({
+            ...parameter,
+            output: false,
+          })),
+          returnRule: builtin.returnRule,
+          documentation: builtin.description,
+          ...(builtin.returnRule.kind === "fixed"
+            ? { returnType: builtin.returnRule.type }
+            : {}),
+          priority: 100,
+        })),
         ...["NULL", "CASE", "CAST", "CONVERT"].map((name) => ({
           name,
           normalizedName: normalizeName(name),

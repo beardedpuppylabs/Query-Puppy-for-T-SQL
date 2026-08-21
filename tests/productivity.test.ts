@@ -8,6 +8,7 @@ import {
 } from "../src/parser/DocumentSemanticAnalyzer.js";
 import {
   aliasFromObjectName,
+  isPotentialSmartAliasTrigger,
   resolveSmartAliasContext,
 } from "../src/parser/SmartAlias.js";
 
@@ -55,6 +56,16 @@ const index = new DatabaseIndex({
       parameters: [],
       columns: columns.slice(0, 4),
     },
+    ...["Belege", "BelegePositionen", "BelegePositionenDetails"].map(
+      (name) => ({
+        schema: "dbo",
+        name,
+        normalizedName: name.toLocaleLowerCase("en-US"),
+        kind: "table" as const,
+        parameters: [],
+        columns: columns.slice(0, 2),
+      }),
+    ),
   ],
 });
 const catalog = { activeDatabase: "Db", indexes: new Map([["db", index]]) };
@@ -199,7 +210,7 @@ test("smart aliases split names and avoid visible collisions", () => {
     {
       objectName: "CustomerOrders",
       alias: "co2",
-      leadingSpace: false,
+      explicitAs: false,
     },
   );
   assert.equal(
@@ -208,8 +219,115 @@ test("smart aliases split names and avoid visible collisions", () => {
   );
 });
 
+test("smart aliases start only after a row-source identifier is syntactically complete", () => {
+  for (const sql of [
+    "SELECT * FROM dbo.Belege",
+    "SELECT * FROM dbo.BelegePos",
+    "SELECT * FROM dbo.BelegePositionen",
+  ])
+    assert.equal(
+      resolveSmartAliasContext(
+        sql,
+        sql.length,
+        analyzeDocumentSemantics(sql, sql.length, catalog),
+        catalog,
+      ),
+      undefined,
+    );
+
+  for (const [sql, objectName, alias, explicitAs] of [
+    ["SELECT * FROM dbo.BelegePositionen ", "BelegePositionen", "bp", false],
+    ["SELECT * FROM dbo.BelegePositionen AS ", "BelegePositionen", "bp", true],
+    [
+      "SELECT * FROM dbo.BelegePositionenDetails ",
+      "BelegePositionenDetails",
+      "bpd",
+      false,
+    ],
+    ["SELECT * FROM Db.dbo.BelegePositionen ", "BelegePositionen", "bp", false],
+  ] as const) {
+    assert.deepEqual(
+      resolveSmartAliasContext(
+        sql,
+        sql.length,
+        analyzeDocumentSemantics(sql, sql.length, catalog),
+        catalog,
+      ),
+      { objectName, alias, explicitAs },
+    );
+  }
+
+  for (const sql of [
+    "SELECT * FROM dbo.BelegePositionen AS bp",
+    "SELECT * FROM dbo.BelegePositionen bp",
+  ])
+    assert.equal(
+      resolveSmartAliasContext(
+        sql,
+        sql.length,
+        analyzeDocumentSemantics(sql, sql.length, catalog),
+        catalog,
+      ),
+      undefined,
+    );
+
+  const activeIdentifier = "SELECT * FROM dbo.BelegePositionen";
+  assert.equal(
+    isPotentialSmartAliasTrigger(activeIdentifier, activeIdentifier.length),
+    false,
+  );
+  for (const sql of [
+    "SELECT * FROM dbo.BelegePositionen ",
+    "SELECT * FROM dbo.BelegePositionen AS ",
+  ])
+    assert.equal(isPotentialSmartAliasTrigger(sql, sql.length), true);
+  for (const sql of [
+    "SELECT ",
+    "SELECT * FROM dbo.BelegePositionen WHERE ",
+    "SELECT b.BelegId ",
+    "SELECT * FROM dbo.BelegePositionen -- comment ",
+    "SELECT 'text '",
+  ])
+    assert.equal(isPotentialSmartAliasTrigger(sql, sql.length), false);
+});
+
+test("smart alias phase boundaries apply to supported JOIN source forms", () => {
+  for (const join of [
+    "JOIN",
+    "CROSS JOIN",
+    "LEFT JOIN",
+    "RIGHT JOIN",
+    "FULL JOIN",
+  ]) {
+    const sql = `SELECT * FROM dbo.Customers c ${join} dbo.BelegePositionen `;
+    assert.equal(
+      resolveSmartAliasContext(
+        sql,
+        sql.length,
+        analyzeDocumentSemantics(sql, sql.length, catalog),
+        catalog,
+      )?.alias,
+      "bp",
+    );
+  }
+});
+
+test("smart alias collision fallback remains deterministic in visible scope", () => {
+  const sql =
+    "SELECT * FROM dbo.Belege AS bpd JOIN dbo.BelegePositionenDetails ";
+  assert.equal(
+    resolveSmartAliasContext(
+      sql,
+      sql.length,
+      analyzeDocumentSemantics(sql, sql.length, catalog),
+      catalog,
+    )?.alias,
+    "bpd2",
+  );
+});
+
 test("smart alias collisions are limited to the current visible query scope", () => {
-  const isolated = "SELECT * FROM dbo.Customers";
+  const isolated = "SELECT * FROM dbo.Customers ";
   assert.equal(
     resolveSmartAliasContext(
       isolated,
@@ -220,7 +338,7 @@ test("smart alias collisions are limited to the current visible query scope", ()
     "c",
   );
   const separate =
-    "SELECT * FROM dbo.Customers AS c; SELECT * FROM dbo.Customers";
+    "SELECT * FROM dbo.Customers AS c; SELECT * FROM dbo.Customers ";
   assert.equal(
     resolveSmartAliasContext(
       separate,
@@ -230,7 +348,7 @@ test("smart alias collisions are limited to the current visible query scope", ()
     )?.alias,
     "c",
   );
-  const collision = "SELECT * FROM dbo.Customers AS c JOIN dbo.Contacts";
+  const collision = "SELECT * FROM dbo.Customers AS c JOIN dbo.Contacts ";
   assert.equal(
     resolveSmartAliasContext(
       collision,
@@ -244,7 +362,7 @@ test("smart alias collisions are limited to the current visible query scope", ()
     ["sales", "CustomerOrders", "co"],
     ["dbo", "CustomerAddresses", "ca"],
   ] as const) {
-    const sql = `SELECT * FROM ${schema}.${objectName}`;
+    const sql = `SELECT * FROM ${schema}.${objectName} `;
     assert.equal(
       resolveSmartAliasContext(
         sql,

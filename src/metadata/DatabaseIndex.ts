@@ -21,6 +21,7 @@ const append = <T>(
 
 export class DatabaseIndex {
   readonly metadata: DatabaseMetadata;
+  readonly columnCount: number;
   private readonly qualified = new Map<string, DatabaseObject>();
   private readonly byId = new Map<number, DatabaseObject>();
   private readonly schemas = new Set<string>();
@@ -39,12 +40,15 @@ export class DatabaseIndex {
 
   constructor(metadata: DatabaseMetadata) {
     this.metadata = metadata;
+    let columnCount = 0;
     for (const schema of metadata.schemas)
       this.schemas.add(schema.toLowerCase());
     for (const object of metadata.objects) {
       this.qualified.set(objectKey(object.schema, object.name), object);
       if (object.id !== undefined) this.byId.set(object.id, object);
+      columnCount += object.columns.length;
     }
+    this.columnCount = columnCount;
     for (const key of metadata.keys ?? []) {
       append(this.keysByObject, key.objectId, key);
       for (const column of key.columns)

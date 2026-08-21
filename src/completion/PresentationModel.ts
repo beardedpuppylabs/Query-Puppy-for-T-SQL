@@ -1,6 +1,7 @@
 import { friendlyKind } from "../metadata/MetadataModels.js";
 import { formatSqlType } from "../metadata/SqlTypeFormatter.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
+import { callableParameterLabel } from "../parser/CallableAnalyzer.js";
 
 export interface PresentationModel {
   readonly detail: string;
@@ -60,10 +61,7 @@ export function presentationModel(
   mixed: boolean,
 ): PresentationModel {
   const params = (candidate.parameters ?? [])
-    .map(
-      (parameter) =>
-        `${parameter.name} ${formatSqlType(parameter.type)}${parameter.output ? " OUTPUT" : ""}`,
-    )
+    .map((parameter) => callableParameterLabel(parameter))
     .join(", ");
   let detail = "";
   if (
@@ -73,7 +71,10 @@ export function presentationModel(
     detail = ` ${formatColumnRoles(candidate.keyRoles) ? `${formatColumnRoles(candidate.keyRoles)} ` : ""}${formatSqlType(candidate.sqlType)} ${candidate.nullable ? "NULL" : "NOT NULL"}`;
   if (candidate.kind === "procedureParameter" && candidate.sqlType)
     detail = ` ${formatSqlType(candidate.sqlType)}${candidate.parameterOutput ? " OUTPUT" : ""}`;
-  else if (candidate.kind === "scalarFunction")
+  else if (
+    candidate.kind === "scalarFunction" ||
+    candidate.kind === "builtinFunction"
+  )
     detail = `(${params})${candidate.returnType ? ` → ${formatSqlType(candidate.returnType)}` : ""}`;
   else if (candidate.kind === "tableValuedFunction")
     detail = `(${params}) → table`;

@@ -5,6 +5,7 @@ export type SqlObjectKind =
   | "view"
   | "procedure"
   | "scalarFunction"
+  | "builtinFunction"
   | "tableValuedFunction"
   | "synonym"
   | "sequence"
@@ -109,6 +110,7 @@ export interface DatabaseObject {
     SqlObjectKind,
     | "database"
     | "schema"
+    | "builtinFunction"
     | "column"
     | "joinPredicate"
     | "rowSourceAlias"
@@ -150,6 +152,7 @@ export const friendlyKind = (kind: SqlObjectKind): string =>
     view: "view",
     procedure: "stored procedure",
     scalarFunction: "scalar function",
+    builtinFunction: "built-in function",
     tableValuedFunction: "table-valued function",
     synonym: "synonym",
     sequence: "sequence",

@@ -142,6 +142,48 @@ test("an ambiguous unqualified alias source returns no columns", () => {
   );
 });
 
+test("prefix-family row sources remain independent Contains candidates and canonical bindings", () => {
+  const family = new DatabaseIndex({
+    database: "Db",
+    schemas: ["dbo"],
+    loadedAt: 0,
+    objects: ["Foo", "FooBar", "FooBarBaz"].map((name, index) => ({
+      id: 100 + index,
+      schema: "dbo",
+      name,
+      normalizedName: name.toLocaleLowerCase("en-US"),
+      kind: "table" as const,
+      parameters: [],
+      columns: [
+        {
+          name: `${name}Id`,
+          normalizedName: `${name.toLocaleLowerCase("en-US")}id`,
+          type,
+          nullable: false,
+          ordinal: 1,
+        },
+      ],
+    })),
+  });
+  for (const sql of ["SELECT * FROM Foo", "SELECT * FROM dbo.Foo"]) {
+    const context = resolveSqlContext(sql);
+    assert.equal(sql.slice(context.replacementStart), "Foo");
+    assert.deepEqual(
+      createCandidates(context, family).map((candidate) => candidate.name),
+      ["Foo", "FooBar", "FooBarBaz"],
+    );
+  }
+  for (const name of ["FooBar", "FooBarBaz"]) {
+    const sql = `SELECT * FROM dbo.${name} AS f WHERE f.`;
+    const candidates = createCandidates(resolveSqlContext(sql), family);
+    assert.deepEqual(
+      candidates.map((candidate) => candidate.name),
+      [`${name}Id`],
+    );
+    assert.equal(candidates[0]?.sourceObject?.name, name);
+  }
+});
+
 const reportingIndex = new DatabaseIndex({
   database: "ReportingDb",
   schemas: ["dbo", "reporting", "sales"],

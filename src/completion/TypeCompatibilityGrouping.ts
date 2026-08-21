@@ -19,11 +19,14 @@ export const typeDisplayGroup = (
 const expectedTypeLabel = (candidate: CompletionCandidate): string => {
   const expected = candidate.expectedType;
   if (!expected) return "type";
+  if (expected.kind === "family") return expected.sqlName;
   return formatSqlTypeDescriptorForDisplay(expected);
 };
 
 const compatibleFamilyLabel = (candidate: CompletionCandidate): string => {
-  const family = candidate.expectedType?.family;
+  const expected = candidate.expectedType;
+  if (expected?.kind === "family") return expected.sqlName;
+  const family = expected?.family;
   if (["integer", "decimal", "floatingPoint"].includes(family ?? ""))
     return "numeric";
   if (["string", "unicodeString"].includes(family ?? "")) return "string";

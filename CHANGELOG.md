@@ -1,8 +1,33 @@
 # Changelog
 
+## 0.11.0
+
+- Added versioned, secret-free persistent schema snapshots in extension-owned
+  storage, with runtime catalog and relationship indexes rebuilt on warm start.
+- Added immediate warm-cache completion plus one coalesced first-session background
+  refresh and a demand-driven 15-minute freshness threshold.
+- Added stale-while-revalidate refresh behavior: complete replacements are persisted
+  and swapped atomically, while failures preserve the last usable snapshot.
+- Added visible cold/background metadata status, a canonical manual refresh path,
+  and a confirmed active-database cache-clear command.
+- Preserved lazy cross-database loading, read-only mssql connection sharing, static
+  built-in metadata, and memory-only document semantics.
+
+## 0.10.0
+
+- Added static SQL Server built-in completion and native Signature Help for
+  `CHARINDEX`, `DATEADD`, `DATEDIFF`, `DATEFROMPARTS`, `ROUND`, `STRING_AGG`, and
+  `SUBSTRING`.
+- Added shared type-family parameter expectations and fixed, argument-derived,
+  and datatype-dependent built-in return inference without database queries.
+- Preserved catalog UDF/TVF resolution, Contains matching, qualification, and
+  SQL Server 2022 semantics, including pre-preview `DATEADD` integer behavior.
+
 ## 0.9.2
 
 - Updated the Query Puppy for T-SQL extension and Marketplace logo.
+- Fixed exact RowSource names suppressing longer valid Contains matches when one
+  complete SQL object name is a prefix of another.
 
 ## 0.9.1
 

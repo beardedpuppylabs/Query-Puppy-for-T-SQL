@@ -39,6 +39,7 @@ export const TYPE_ORDER: Readonly<
     "procedureParameter",
     "variable",
     "scalarFunction",
+    "builtinFunction",
     "sequence",
     "keyword",
   ],

@@ -7,9 +7,11 @@ import { normalizeName } from "../metadata/MetadataModels.js";
 import type { CompletionScope } from "./CandidateFactory.js";
 import {
   callableDatabase,
+  callableParameterLabel,
   callableSignatureLabel,
   parseCallSite,
   resolveCallable,
+  resolveBuiltinCallable,
   resolveCallableAtCursor,
 } from "../parser/CallableAnalyzer.js";
 
@@ -71,8 +73,9 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     const sql = document.getText();
     const cursor = document.offsetAt(position);
     const callSite = parseCallSite(sql, cursor);
+    const builtin = callSite ? resolveBuiltinCallable(callSite) : undefined;
     let scope = this.testScope;
-    if (!scope) {
+    if (!scope && !builtin) {
       const active = await this.connections.active();
       if (!active || token.isCancellationRequested) {
         this.diagnostics.set(
@@ -102,7 +105,9 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
       }
       scope = { activeDatabase: active.database, indexes };
     }
-    const resolution = callSite ? resolveCallable(callSite, scope) : undefined;
+    const resolution =
+      builtin ??
+      (callSite && scope ? resolveCallable(callSite, scope) : undefined);
     if (!resolution) {
       this.diagnostics.set(
         document.uri.toString(),
@@ -116,14 +121,14 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     const signatureModel = resolution.signature;
     const parameters = signatureModel.parameters.map(
       (parameter) =>
-        new vscode.ParameterInformation(
-          `${parameter.name} ${formatSqlType(parameter.type)}${parameter.output ? " OUTPUT" : ""}`,
-        ),
+        new vscode.ParameterInformation(callableParameterLabel(parameter)),
     );
     const signature = new vscode.SignatureInformation(
       callableSignatureLabel(signatureModel),
     );
     signature.parameters = parameters;
+    if (signatureModel.documentation)
+      signature.documentation = signatureModel.documentation;
     const help = new vscode.SignatureHelp();
     help.signatures = [signature];
     help.activeSignature = 0;
@@ -136,7 +141,7 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     };
     this.diagnostics.set(
       document.uri.toString(),
-      `parsed call:\n  database: ${signatureModel.database ?? scope.activeDatabase}\n  schema: ${signatureModel.schema ?? "none"}\n  object: ${signatureModel.name}\nmetadata match:\n  found: yes\n  kind: ${signatureModel.kind === "scalar" ? "scalar function" : "table-valued function"}\n  parameters: ${String(signatureModel.parameters.length)}\n  return: ${signatureModel.kind === "tableValued" ? "table" : signatureModel.returnType ? formatSqlType(signatureModel.returnType) : "unknown"}\nprovider result:\n  returned: yes\n  signatures: 1\n  activeParameter: ${String(resolution.activeParameter)}`,
+      `parsed call:\n  database: ${signatureModel.database ?? scope?.activeDatabase ?? "language metadata"}\n  schema: ${signatureModel.schema ?? "none"}\n  object: ${signatureModel.name}\nmetadata match:\n  found: yes\n  kind: ${signatureModel.kind === "tableValued" ? "table-valued function" : signatureModel.kind === "aggregate" ? "aggregate function" : "scalar function"}\n  parameters: ${String(signatureModel.parameters.length)}\n  return: ${signatureModel.kind === "tableValued" ? "table" : signatureModel.returnType ? formatSqlType(signatureModel.returnType) : "dynamic"}\nprovider result:\n  returned: yes\n  signatures: 1\n  activeParameter: ${String(resolution.activeParameter)}`,
     );
     this.debug(
       `Signature Help invoked: language=${document.languageId}; triggerKind=${vscode.SignatureHelpTriggerKind[context.triggerKind]}; triggerCharacter=${context.triggerCharacter ?? "none"}; function=${signatureModel.schema ? `${signatureModel.schema}.` : ""}${signatureModel.name}; resolved=yes; activeParameter=${String(resolution.activeParameter)}.`,
@@ -158,6 +163,8 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
   ): Promise<boolean> {
     const sql = document.getText();
     const cursor = document.offsetAt(position);
+    const parsed = parseCallSite(sql, cursor);
+    if (parsed && resolveBuiltinCallable(parsed)) return true;
     if (this.testScope)
       return Boolean(resolveCallableAtCursor(sql, cursor, this.testScope));
     const active = await this.connections.active();

@@ -32,6 +32,34 @@ Use for isolated logic such as:
 
 Unit tests should be fast and deterministic.
 
+Connection-boundary tests also verify session API reuse, concurrent active-context
+coalescing, transient shared-connection reuse within one metadata operation,
+failure/retry behavior, and dynamic connection/database switching.
+
+### Persistent metadata lifecycle tests
+
+Protect the cache lifecycle with deterministic stores and an injectable clock:
+
+- canonical metadata survives serialization/deserialization and rebuilds equivalent
+  object, callable, key, writable-column, and relationship indexes
+- concurrent cold consumers issue one loader call and one persistent write
+- warm hydration returns the persisted snapshot before its SQL refresh resolves
+- the first cached use in each session schedules only one refresh
+- stale metadata remains available until a complete replacement has been persisted
+  and atomically swapped
+- refresh failure retains memory and disk snapshots and uses a bounded retry point
+- 14 minutes 59 seconds is not stale; 15 minutes becomes eligible on the next use
+- manual and automatic refreshes use and coalesce through the same cache path
+- server/database identities remain isolated and secondary databases remain lazy
+- corrupt or format-incompatible cache files fall back to a cold load
+- serialized snapshots exclude secrets, static built-ins, CompletionItems, and
+  document-local state
+- the memory index remains the hot path with no repeated SQL load or disk
+  deserialization
+
+Do not sleep for the refresh interval in tests and do not provision SQL fixtures
+from runtime or test extension code.
+
 ### CompletionProvider tests
 
 Use the actual CompletionItemProvider for user-facing completion behavior.
@@ -185,6 +213,28 @@ may match:
     PrimaryAddressId
     ShippingAddressId
 
+An exact object name that is also a prefix of longer object names must affect only
+ranking. The exact object and every longer legal Contains match remain independent
+completion candidates with complete replacement ranges and canonical RowSource
+identity.
+
+## Smart Alias boundary tests
+
+Protect the semantic phase boundary between RowSource-name completion and Smart
+Alias Suggestions:
+
+- an identifier touching the cursor remains object-name completion
+- separating whitespace after a resolved RowSource enables alias completion
+- separating whitespace after `AS` enables the same preferred alias
+- an already supplied alias does not receive a redundant alias suggestion
+- replacement ranges at alias positions are empty and never replace the RowSource
+- deterministic collision fallback considers only legally visible QueryScopes
+- automatic whitespace triggering waits for the post-edit cursor and occurs only
+  when the provider resolves a semantic Smart Alias candidate
+
+Prefix-family fixtures must prove that an exact shorter object never suppresses
+longer Contains candidates while its identifier token is still active.
+
 ## No-ExpectedType regression
 
 A query with no reliable ExpectedType must preserve the previous semantic ordering.
@@ -321,6 +371,12 @@ Protect:
 - incomplete calls while typing
 - catalog scalar UDF parameters and return type
 - catalog TVF parameters and non-scalar semantics
+- static built-in lookup, availability, optionality, and callable kind
+- built-in completion without RowSource pollution or database I/O
+- built-in family ExpectedType and fixed/derived/datatype-dependent returns
+- built-in Signature Help for every supported definition, including nesting
+- qualified physical members inside incomplete built-in and catalog callable
+  arguments, including a `FROM` clause after the cursor
 - same-server database-qualified resolution
 
 Helper coverage for the call site is necessary, but provider or Extension Host
@@ -406,6 +462,11 @@ Use the project's existing package scripts/tooling for:
 
 Do not invent alternative commands if the repository already defines authoritative
 ones.
+
+For normal Codex tasks, run the non-production checks relevant to the change but do
+not run a production build, bundle, VSIX package, or publication unless the user
+explicitly delegates that step. Human developers retain the full build and package
+workflow documented in [Development](DEVELOPMENT.md).
 
 ## Publishing
 

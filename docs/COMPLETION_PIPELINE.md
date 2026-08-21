@@ -407,13 +407,37 @@ FROM/JOIN source completion may include context-appropriate:
 
 Do not reuse physical-column formatting for mixed object domains.
 
+Smart Alias Suggestions begin only after the RowSource identifier is syntactically
+complete and the cursor is in a legal alias position, either after separating
+whitespace or after `AS` and separating whitespace. While the cursor remains part
+of the identifier token, normal RowSource completion remains active even when the
+typed text exactly matches a catalog object. An already supplied alias ends the
+alias-suggestion phase.
+
+Alias eligibility is derived from SQL token boundaries, not catalog candidate
+cardinality. Alias generation and deterministic collision fallback use the resolved
+semantic object name and visible QueryScope.
+
+The alias CompletionItem inserts only the generated alias at an empty cursor range;
+it never replaces the RowSource or inserts `AS` on the user's behalf. Typing the
+whitespace that establishes a legal alias position may open the native Suggest
+Widget. This automatic trigger is limited to syntactically valid, resolved,
+unaliased RowSources and is synchronized with the post-edit cursor; arbitrary SQL
+whitespace does not trigger it.
+
 ## Functions and procedures
 
 Functions/procedures use their domain-specific CompletionItem presentation.
 
+Supported SQL Server built-ins are static language candidates in expression
+contexts. They use the same Contains filter, deterministic type ordering,
+callable presentation, parsed call site, and semantic deduplication as catalog
+functions, but they are not database objects and never appear as RowSources.
+
 Do not force the physical-column fixed-width row format onto:
 
 - scalar functions
+- built-in scalar and aggregate functions
 - TVFs
 - procedures
 - schemas

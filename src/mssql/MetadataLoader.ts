@@ -174,14 +174,14 @@ export class MetadataLoader {
     private readonly log: (message: string) => void = () => undefined,
   ) {}
   async load(connection: ActiveConnection): Promise<DatabaseIndex> {
-    const result = await this.connections.query(
-      connection,
+    const results = await this.connections.queryMany(connection, [
       `USE ${quoteDatabaseIdentifier(connection.database)};\n${METADATA_QUERY}`,
-    );
-    const relationshipResult = await this.connections.query(
-      connection,
       `USE ${quoteDatabaseIdentifier(connection.database)};\n${RELATIONSHIP_QUERY}`,
-    );
+    ]);
+    const result = results[0];
+    const relationshipResult = results[1];
+    if (!result || !relationshipResult)
+      throw new Error("Metadata loading did not return both catalog results.");
     this.log(
       `Metadata query returned ${String(result.rows.length)} mapped rows (reported rowCount ${String(result.rowCount)}).`,
     );

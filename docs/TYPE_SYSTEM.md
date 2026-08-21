@@ -226,6 +226,14 @@ Parenthesized expressions preserve the inferred inner type.
 Catalog-backed scalar UDF return metadata should be used when inferring the type of
 a function call.
 
+Supported built-ins use the same callable-signature path. Parameters may express
+an exact type, an accepted normalized type-family set, or special SQL syntax with
+no ExpectedType. Return rules are fixed, argument-derived, datatype-dependent, or
+Unknown. The initial catalog covers `CHARINDEX`, `DATEADD`, `DATEDIFF`,
+`DATEFROMPARTS`, `ROUND`, `STRING_AGG`, and `SUBSTRING` with SQL Server 2022
+semantics. In particular, `DATEADD` number is integer-family; the later bigint
+preview behavior is not treated as SQL Server 2022 behavior.
+
 TVFs are RowSources, not scalar expressions.
 
 ## Arithmetic

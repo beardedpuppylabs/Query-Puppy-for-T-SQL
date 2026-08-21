@@ -15,6 +15,7 @@ import {
   formatColumnRoles,
   visibleCandidateName,
 } from "./PresentationModel.js";
+import { callableParameterLabel } from "../parser/CallableAnalyzer.js";
 
 const kinds: Record<SqlObjectKind, vscode.CompletionItemKind> = {
   database: vscode.CompletionItemKind.Module,
@@ -23,6 +24,7 @@ const kinds: Record<SqlObjectKind, vscode.CompletionItemKind> = {
   view: vscode.CompletionItemKind.Interface,
   procedure: vscode.CompletionItemKind.Method,
   scalarFunction: vscode.CompletionItemKind.Function,
+  builtinFunction: vscode.CompletionItemKind.Function,
   tableValuedFunction: vscode.CompletionItemKind.Function,
   synonym: vscode.CompletionItemKind.Reference,
   sequence: vscode.CompletionItemKind.Value,
@@ -64,6 +66,7 @@ export function presentCandidate(
   };
   const item = new vscode.CompletionItem(label, kinds[candidate.kind]);
   configureCandidateItem(item, candidate, replacement, search, rank);
+  if (candidate.documentation) item.documentation = candidate.documentation;
   if (candidate.kind === "joinPredicate" && separatorCharacter)
     item.additionalTextEdits = [
       vscode.TextEdit.replace(
@@ -174,9 +177,7 @@ export function documentation(
   if (candidate.parameters?.length) {
     md.appendMarkdown("Parameters:\n");
     for (const parameter of candidate.parameters)
-      md.appendMarkdown(
-        `- \`${parameter.name} ${formatSqlType(parameter.type)}${parameter.output ? " OUTPUT" : ""}\`\n`,
-      );
+      md.appendMarkdown(`- \`${callableParameterLabel(parameter)}\`\n`);
   }
   if (candidate.returnType)
     md.appendMarkdown(

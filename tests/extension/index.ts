@@ -380,6 +380,69 @@ const index = new DatabaseIndex({
         ordinal: ordinal + 1,
       })),
     },
+    {
+      id: 30,
+      schema: "dbo",
+      name: "Belege",
+      normalizedName: "belege",
+      kind: "table",
+      parameters: [],
+      columns: [
+        ["BelegId", { name: "bigint" }, false],
+        ["Belegnummer", { name: "varchar", maxLength: 50 }, false],
+        ["KundenId", { name: "bigint" }, true],
+        ["Belegdatum", { name: "datetime2", scale: 3 }, false],
+        ["Gesamtbetrag", { name: "decimal", precision: 18, scale: 2 }, true],
+      ].map(([name, type, nullable], ordinal) => ({
+        name: name as string,
+        normalizedName: (name as string).toLocaleLowerCase("en-US"),
+        type: type as SqlType,
+        nullable: nullable as boolean,
+        ordinal: ordinal + 1,
+      })),
+    },
+    {
+      id: 31,
+      schema: "dbo",
+      name: "BelegePositionen",
+      normalizedName: "belegepositionen",
+      kind: "table",
+      parameters: [],
+      columns: [
+        ["BelegPositionId", { name: "bigint" }, false],
+        ["BelegId", { name: "bigint" }, false],
+        ["Positionsnummer", { name: "int" }, false],
+        ["Artikelnummer", { name: "varchar", maxLength: 50 }, true],
+        ["Menge", { name: "decimal", precision: 18, scale: 4 }, true],
+        ["Einzelpreis", { name: "decimal", precision: 18, scale: 2 }, true],
+      ].map(([name, type, nullable], ordinal) => ({
+        name: name as string,
+        normalizedName: (name as string).toLocaleLowerCase("en-US"),
+        type: type as SqlType,
+        nullable: nullable as boolean,
+        ordinal: ordinal + 1,
+      })),
+    },
+    {
+      id: 32,
+      schema: "dbo",
+      name: "BelegePositionenDetails",
+      normalizedName: "belegepositionendetails",
+      kind: "table",
+      parameters: [],
+      columns: [
+        ["BelegPositionDetailId", { name: "bigint" }, false],
+        ["BelegPositionId", { name: "bigint" }, false],
+        ["DetailCode", { name: "varchar", maxLength: 50 }, false],
+        ["DetailValue", { name: "nvarchar", maxLength: 400 }, true],
+      ].map(([name, type, nullable], ordinal) => ({
+        name: name as string,
+        normalizedName: (name as string).toLocaleLowerCase("en-US"),
+        type: type as SqlType,
+        nullable: nullable as boolean,
+        ordinal: ordinal + 1,
+      })),
+    },
   ],
   keys: [
     {
@@ -424,6 +487,51 @@ const index = new DatabaseIndex({
       columns: [
         { columnId: 1, columnName: "CompanyId", ordinal: 1 },
         { columnId: 2, columnName: "OrderId", ordinal: 2 },
+      ],
+    },
+    {
+      database,
+      objectId: 30,
+      schema: "dbo",
+      objectName: "Belege",
+      name: "PK_Belege",
+      kind: "primaryKey",
+      filtered: false,
+      columns: [{ columnId: 1, columnName: "BelegId", ordinal: 1 }],
+    },
+    {
+      database,
+      objectId: 31,
+      schema: "dbo",
+      objectName: "BelegePositionen",
+      name: "PK_BelegePositionen",
+      kind: "primaryKey",
+      filtered: false,
+      columns: [{ columnId: 1, columnName: "BelegPositionId", ordinal: 1 }],
+    },
+    {
+      database,
+      objectId: 31,
+      schema: "dbo",
+      objectName: "BelegePositionen",
+      name: "UQ_BelegePositionen_Beleg_Position",
+      kind: "uniqueConstraint",
+      filtered: false,
+      columns: [
+        { columnId: 2, columnName: "BelegId", ordinal: 1 },
+        { columnId: 3, columnName: "Positionsnummer", ordinal: 2 },
+      ],
+    },
+    {
+      database,
+      objectId: 32,
+      schema: "dbo",
+      objectName: "BelegePositionenDetails",
+      name: "PK_BelegePositionenDetails",
+      kind: "primaryKey",
+      filtered: false,
+      columns: [
+        { columnId: 1, columnName: "BelegPositionDetailId", ordinal: 1 },
       ],
     },
   ],
@@ -555,6 +663,54 @@ const index = new DatabaseIndex({
       disabled: false,
       notTrusted: false,
     },
+    {
+      database,
+      id: 30,
+      name: "FK_BelegePositionen_Belege",
+      parentObjectId: 31,
+      parentSchema: "dbo",
+      parentObjectName: "BelegePositionen",
+      referencedObjectId: 30,
+      referencedSchema: "dbo",
+      referencedObjectName: "Belege",
+      columns: [
+        {
+          parentColumnId: 2,
+          parentColumnName: "BelegId",
+          referencedColumnId: 1,
+          referencedColumnName: "BelegId",
+          ordinal: 1,
+        },
+      ],
+      deleteAction: "NO_ACTION",
+      updateAction: "NO_ACTION",
+      disabled: false,
+      notTrusted: false,
+    },
+    {
+      database,
+      id: 31,
+      name: "FK_BelegePositionenDetails_BelegePositionen",
+      parentObjectId: 32,
+      parentSchema: "dbo",
+      parentObjectName: "BelegePositionenDetails",
+      referencedObjectId: 31,
+      referencedSchema: "dbo",
+      referencedObjectName: "BelegePositionen",
+      columns: [
+        {
+          parentColumnId: 2,
+          parentColumnName: "BelegPositionId",
+          referencedColumnId: 1,
+          referencedColumnName: "BelegPositionId",
+          ordinal: 1,
+        },
+      ],
+      deleteAction: "NO_ACTION",
+      updateAction: "NO_ACTION",
+      disabled: false,
+      notTrusted: false,
+    },
   ],
 });
 const reportingDatabase = "IntelliSenseLabReporting";
@@ -581,6 +737,47 @@ const reportingIndex = new DatabaseIndex({
           name: "CustomerDisplayName",
           normalizedName: "customerdisplayname",
           type: { name: "nvarchar", maxLength: 200 },
+          nullable: false,
+          ordinal: 2,
+        },
+      ],
+    },
+    {
+      id: 40,
+      schema: "dbo",
+      name: "Auftraege",
+      normalizedName: "auftraege",
+      kind: "table",
+      parameters: [],
+      columns: [
+        {
+          name: "AuftragId",
+          normalizedName: "auftragid",
+          type: { name: "bigint" },
+          nullable: false,
+          ordinal: 1,
+        },
+      ],
+    },
+    {
+      id: 41,
+      schema: "dbo",
+      name: "AuftraegePositionen",
+      normalizedName: "auftraegepositionen",
+      kind: "table",
+      parameters: [],
+      columns: [
+        {
+          name: "AuftragPositionId",
+          normalizedName: "auftragpositionid",
+          type: { name: "bigint" },
+          nullable: false,
+          ordinal: 1,
+        },
+        {
+          name: "AuftragId",
+          normalizedName: "auftragid",
+          type: { name: "bigint" },
           nullable: false,
           ordinal: 2,
         },
@@ -674,6 +871,24 @@ async function semanticCompletion(
   );
   return items;
 }
+async function registeredSemanticCompletion(
+  sql: string,
+  cursor = sql.length,
+): Promise<readonly MarkedCompletionItem[]> {
+  const document = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: sql,
+  });
+  const result = await vscode.commands.executeCommand<
+    vscode.CompletionList | readonly vscode.CompletionItem[]
+  >(
+    "vscode.executeCompletionItemProvider",
+    document.uri,
+    document.positionAt(cursor),
+  );
+  const items = result instanceof vscode.CompletionList ? result.items : result;
+  return items as readonly MarkedCompletionItem[];
+}
 const labels = (items: readonly vscode.CompletionItem[]) =>
   items.map((item) =>
     (item as MarkedCompletionItem).data?.semanticKind === "column" &&
@@ -692,6 +907,18 @@ const takeInvocations = () =>
   vscode.commands.executeCommand<readonly Invocation[]>(
     "queryPuppyForTSql.test.takeSignatureInvocations",
   );
+const takeAutomaticAliasSuggestInvocations = () =>
+  vscode.commands.executeCommand<number>(
+    "queryPuppyForTSql.test.takeAutomaticAliasSuggestInvocations",
+  );
+async function waitForAutomaticAliasSuggest(): Promise<number> {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const count = await takeAutomaticAliasSuggestInvocations();
+    if (count > 0) return count;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return 0;
+}
 async function waitForInvocation(
   character?: string,
   allowFallback = false,
@@ -1012,6 +1239,70 @@ export async function run(): Promise<void> {
     "SELECT billing.CalculateBillingTotal_0001(c.|, 0.19) FROM reltest.Customers c",
   );
   assert.equal(functionMembers[0], "Amount");
+  const incompleteBuiltinTemporal = await markedTypeItems(
+    "SELECT DATEADD(day, 1, s.|\nFROM reltest.CompletionLayoutStress AS s CROSS JOIN reltest.Customers AS c;",
+  );
+  const temporalSemantic = incompleteBuiltinTemporal.filter(
+    (item) => item.data?.semanticKind === "column",
+  );
+  assert.deepEqual(labels(temporalSemantic), [
+    "OccurredAt",
+    "Amount",
+    "BinaryPayload",
+    "Code",
+    "CustomerId",
+    "DisplayName",
+    "ExternalReference",
+    "Id",
+    "Payload",
+    "UniqueCustomerId",
+    "VeryLongERPBusinessTransactionPostingReferenceIdentifier",
+  ]);
+  assert.equal(
+    temporalSemantic.some((item) => item.filterText === "ExternalKey"),
+    false,
+  );
+  const occurredAt = temporalSemantic[0];
+  assert.ok(occurredAt && typeof occurredAt.label === "string");
+  assert.match(occurredAt.label, /datetimeoffset\(7\)\s+NOT NULL/);
+  assert.equal(occurredAt.filterText, "OccurredAt");
+  assert.equal(occurredAt.insertText, "OccurredAt");
+  assert.ok(occurredAt.documentation instanceof vscode.MarkdownString);
+  assert.match(occurredAt.documentation.value, /datetimeoffset\(7\)/);
+  assert.ok(
+    labels(incompleteBuiltinTemporal).some((label) =>
+      label.includes("Compatible date/time"),
+    ),
+  );
+
+  const incompleteBuiltinNumeric = await typeAwareLabels(
+    "SELECT DATEADD(day, c.|\nFROM reltest.Customers AS c;",
+  );
+  assert.ok(
+    incompleteBuiltinNumeric.indexOf("RegionId") <
+      incompleteBuiltinNumeric.indexOf("CustomerCode"),
+  );
+  assert.ok(incompleteBuiltinNumeric.includes("ExternalKey"));
+
+  const incompleteBuiltinString = await typeAwareLabels(
+    "SELECT SUBSTRING(c.|\nFROM reltest.Customers AS c;",
+  );
+  assert.deepEqual(incompleteBuiltinString.slice(0, 2), [
+    "CustomerCode",
+    "DisplayName",
+  ]);
+  assert.ok(incompleteBuiltinString.includes("ExternalKey"));
+
+  const incompleteBuiltinNested = await typeAwareLabels(
+    "SELECT DATEADD(day, DATEDIFF(day, s.|\nFROM reltest.CompletionLayoutStress AS s;",
+  );
+  assert.equal(incompleteBuiltinNested[0], "OccurredAt");
+
+  const incompleteUdf = await typeAwareLabels(
+    "SELECT billing.CalculateBillingTotal_0001(s.|\nFROM reltest.CompletionLayoutStress AS s;",
+  );
+  assert.equal(incompleteUdf[0], "Amount");
+  assert.ok(incompleteUdf.includes("OccurredAt"));
   const updateMembers = await typeAwareLabels(
     "UPDATE c SET ExternalKey = c.| FROM reltest.Customers c",
   );
@@ -1702,36 +1993,275 @@ FROM ${database}.dbo.Customers c`;
       await semanticCompletion(`SELECT * FROM ${database}.dbo.Cust`),
     ).includes("Customers"),
   );
+  const prefixFamilyItems = await semanticCompletion(
+    `SELECT * FROM ${database}.dbo.Belege`,
+  );
+  assert.deepEqual(labels(prefixFamilyItems), [
+    "Belege",
+    "BelegePositionen",
+    "BelegePositionenDetails",
+  ]);
+  for (const name of ["BelegePositionen", "BelegePositionenDetails"]) {
+    const item = prefixFamilyItems.find(
+      (candidate) => candidate.insertText === name,
+    );
+    assert.ok(item);
+    assert.equal(item.data?.semanticKind, "table");
+    assert.equal(item.filterText, `Belege ${name}`);
+    assert.equal(item.insertText, name);
+    assert.ok(item.range instanceof vscode.Range);
+  }
+  assert.equal(
+    prefixFamilyItems.some(
+      (item) => item.data?.semanticKind === "rowSourceAlias",
+    ),
+    false,
+  );
+  const aliasAfterWhitespaceSql = `SELECT * FROM ${database}.dbo.BelegePositionen `;
+  const aliasAfterWhitespace = (
+    await semanticCompletion(aliasAfterWhitespaceSql)
+  ).filter((item) => item.data?.semanticKind === "rowSourceAlias");
+  assert.deepEqual(labels(aliasAfterWhitespace), ["bp"]);
+  const aliasAfterWhitespaceItem = aliasAfterWhitespace[0];
+  assert.ok(aliasAfterWhitespaceItem);
+  assert.equal(aliasAfterWhitespaceItem.filterText, "bp");
+  assert.ok(
+    aliasAfterWhitespaceItem.insertText instanceof vscode.SnippetString,
+  );
+  assert.equal(aliasAfterWhitespaceItem.insertText.value, "${1:bp}");
   assert.deepEqual(
-    labels(await semanticCompletion(`SELECT * FROM ${database}.dbo.Customers`)),
-    ["AS c"],
+    aliasAfterWhitespaceItem.range,
+    new vscode.Range(
+      0,
+      aliasAfterWhitespaceSql.length,
+      0,
+      aliasAfterWhitespaceSql.length,
+    ),
+  );
+  assert.deepEqual(
+    labels(
+      (await registeredSemanticCompletion(aliasAfterWhitespaceSql)).filter(
+        (item) => item.detail === "alias for BelegePositionen",
+      ),
+    ),
+    ["bp"],
+  );
+
+  const aliasAfterAsSql = `SELECT * FROM ${database}.dbo.BelegePositionen AS `;
+  const aliasAfterAs = (await semanticCompletion(aliasAfterAsSql)).filter(
+    (item) => item.data?.semanticKind === "rowSourceAlias",
+  );
+  assert.deepEqual(labels(aliasAfterAs), ["bp"]);
+  const aliasAfterAsItem = aliasAfterAs[0];
+  assert.ok(aliasAfterAsItem);
+  assert.equal(aliasAfterAsItem.filterText, "bp");
+  assert.ok(aliasAfterAsItem.insertText instanceof vscode.SnippetString);
+  assert.equal(aliasAfterAsItem.insertText.value, "${1:bp}");
+  assert.deepEqual(
+    aliasAfterAsItem.range,
+    new vscode.Range(0, aliasAfterAsSql.length, 0, aliasAfterAsSql.length),
+  );
+  assert.deepEqual(
+    labels(
+      (await registeredSemanticCompletion(aliasAfterAsSql)).filter(
+        (item) => item.detail === "alias for BelegePositionen",
+      ),
+    ),
+    ["bp"],
+  );
+
+  const deepAlias = (
+    await semanticCompletion(
+      `SELECT * FROM ${database}.dbo.BelegePositionenDetails `,
+    )
+  ).filter((item) => item.data?.semanticKind === "rowSourceAlias");
+  assert.deepEqual(labels(deepAlias), ["bpd"]);
+
+  const collisionAlias = (
+    await semanticCompletion(
+      `SELECT * FROM ${database}.dbo.Belege AS bpd JOIN ${database}.dbo.BelegePositionenDetails `,
+    )
+  ).filter((item) => item.data?.semanticKind === "rowSourceAlias");
+  assert.deepEqual(labels(collisionAlias), ["bpd2"]);
+
+  for (const sql of [
+    `SELECT * FROM ${database}.dbo.BelegePositionen AS bp`,
+    `SELECT * FROM ${database}.dbo.BelegePositionen bp`,
+  ])
+    assert.equal(
+      (await semanticCompletion(sql)).some(
+        (item) => item.data?.semanticKind === "rowSourceAlias",
+      ),
+      false,
+    );
+
+  const crossDatabaseAlias = (
+    await semanticCompletion(
+      `SELECT * FROM ${reportingDatabase}.dbo.AuftraegePositionen `,
+    )
+  ).filter((item) => item.data?.semanticKind === "rowSourceAlias");
+  assert.deepEqual(labels(crossDatabaseAlias), ["ap"]);
+
+  for (const sql of [
+    `SELECT * FROM ${database}.dbo.BelegePositionen`,
+    `SELECT * FROM ${database}.dbo.BelegePositionen AS`,
+  ]) {
+    const document = await vscode.workspace.openTextDocument({
+      language: "sql",
+      content: sql,
+    });
+    const editor = await vscode.window.showTextDocument(document);
+    const end = document.positionAt(document.getText().length);
+    editor.selection = new vscode.Selection(end, end);
+    await takeAutomaticAliasSuggestInvocations();
+    await vscode.commands.executeCommand("type", { text: " " });
+    assert.ok(
+      (await waitForAutomaticAliasSuggest()) > 0,
+      `typing alias-position whitespace did not trigger suggestions for ${sql}`,
+    );
+    await vscode.commands.executeCommand("hideSuggestWidget");
+  }
+
+  const unrelatedWhitespace = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: "SELECT",
+  });
+  const unrelatedEditor =
+    await vscode.window.showTextDocument(unrelatedWhitespace);
+  const unrelatedEnd = unrelatedWhitespace.positionAt(
+    unrelatedWhitespace.getText().length,
+  );
+  unrelatedEditor.selection = new vscode.Selection(unrelatedEnd, unrelatedEnd);
+  await takeAutomaticAliasSuggestInvocations();
+  await vscode.commands.executeCommand("type", { text: " " });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal(await takeAutomaticAliasSuggestInvocations(), 0);
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        `SELECT * FROM ${database}.dbo.Belege AS b WHERE b.`,
+      ),
+    ),
+    ["Belegdatum", "BelegId", "Belegnummer", "Gesamtbetrag", "KundenId"],
+  );
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        `SELECT * FROM ${database}.dbo.BelegePositionen`,
+      ),
+    ),
+    ["BelegePositionen", "BelegePositionenDetails"],
+  );
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(`SELECT * FROM ${database}.dbo.Positionen`),
+    ),
+    ["BelegePositionen", "BelegePositionenDetails"],
+  );
+  assert.deepEqual(
+    labels(await semanticCompletion(`SELECT * FROM ${database}.dbo.DETAILS`)),
+    ["BelegePositionenDetails"],
+  );
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        `SELECT * FROM ${database}.dbo.BelegePositionen AS p WHERE p.`,
+      ),
+    ),
+    [
+      "Artikelnummer",
+      "BelegId",
+      "BelegPositionId",
+      "Einzelpreis",
+      "Menge",
+      "Positionsnummer",
+    ],
+  );
+  const simultaneousFamily = `SELECT * FROM ${database}.dbo.Belege AS b
+JOIN ${database}.dbo.BelegePositionen AS p ON p.BelegId = b.BelegId
+WHERE b. AND p.`;
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        simultaneousFamily,
+        simultaneousFamily.indexOf("b.", simultaneousFamily.indexOf("WHERE")) +
+          2,
+      ),
+    ),
+    ["Belegdatum", "BelegId", "Belegnummer", "Gesamtbetrag", "KundenId"],
+  );
+  assert.deepEqual(labels(await semanticCompletion(simultaneousFamily)), [
+    "Artikelnummer",
+    "BelegId",
+    "BelegPositionId",
+    "Einzelpreis",
+    "Menge",
+    "Positionsnummer",
+  ]);
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        `SELECT * FROM ${database}.dbo.BelegePositionenDetails AS d WHERE d.`,
+      ),
+    ),
+    ["BelegPositionDetailId", "BelegPositionId", "DetailCode", "DetailValue"],
+  );
+  assert.deepEqual(
+    predicateLabels(
+      await joinPredicates(
+        `SELECT * FROM ${database}.dbo.Belege AS b JOIN ${database}.dbo.BelegePositionen AS p ON`,
+      ),
+    ),
+    ["p.BelegId = b.BelegId"],
+  );
+  assert.deepEqual(
+    predicateLabels(
+      await joinPredicates(
+        `SELECT * FROM ${database}.dbo.BelegePositionen AS p JOIN ${database}.dbo.BelegePositionenDetails AS d ON`,
+      ),
+    ),
+    ["d.BelegPositionId = p.BelegPositionId"],
+  );
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(
+        `SELECT * FROM ${reportingDatabase}.dbo.Auftraege`,
+      ),
+    ),
+    ["Auftraege", "AuftraegePositionen"],
+  );
+  assert.deepEqual(
+    labels(
+      await semanticCompletion(`SELECT * FROM ${database}.dbo.Customers `),
+    ),
+    ["c"],
   );
   assert.deepEqual(
     labels(
       await semanticCompletion(
         `SELECT * FROM ${database}.dbo.Customers AS c;
-SELECT * FROM ${database}.dbo.Customers`,
+SELECT * FROM ${database}.dbo.Customers `,
       ),
     ),
-    ["AS c"],
+    ["c"],
   );
   assert.deepEqual(
     labels(
       await semanticCompletion(
         `SELECT * FROM ${database}.dbo.Customers AS c
-JOIN ${database}.dbo.CustomerAddresses`,
+JOIN ${database}.dbo.CustomerAddresses `,
       ),
     ),
-    ["AS ca"],
+    ["ca"],
   );
   assert.deepEqual(
     labels(
       await semanticCompletion(
         `SELECT * FROM ${database}.dbo.Customers AS c
-JOIN ${database}.dbo.Customers`,
+JOIN ${database}.dbo.Customers `,
       ),
     ),
-    ["AS c2"],
+    ["c2"],
   );
   const setDerived = `SELECT x. FROM
 (
@@ -1888,6 +2418,59 @@ SELECT x. FROM X x`;
     `SELECT ${database}.billing.CalculateBillingTotal_0001(`,
   );
   assert.equal(explicit.activeParameter, 0);
+
+  const builtinItems = await semanticCompletion("SELECT dat");
+  assert.deepEqual(
+    labels(
+      builtinItems.filter(
+        (item) => item.data?.semanticKind === "builtinFunction",
+      ),
+    ),
+    ["DATEADD", "DATEDIFF", "DATEFROMPARTS"],
+  );
+  assert.equal(
+    (await semanticCompletion("SELECT * FROM dat")).some(
+      (item) => item.data?.semanticKind === "builtinFunction",
+    ),
+    false,
+  );
+  for (const name of [
+    "CHARINDEX",
+    "DATEADD",
+    "DATEDIFF",
+    "DATEFROMPARTS",
+    "ROUND",
+    "STRING_AGG",
+    "SUBSTRING",
+  ]) {
+    const builtin = await signature(`SELECT ${name}(`, "(");
+    assert.equal(builtin.activeParameter, 0, name);
+    assert.match(builtin.signatures[0]?.label ?? "", new RegExp(`^${name}\\(`));
+  }
+  const builtinSecond = await signature("SELECT SUBSTRING(Name,", ",");
+  assert.equal(builtinSecond.activeParameter, 1);
+  const builtinNested = await signature(
+    "SELECT DATEADD(day, DATEDIFF(day, StartDate, EndDate),",
+    ",",
+  );
+  assert.equal(builtinNested.activeParameter, 2);
+
+  const automaticBuiltin = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: "SELECT DATEADD",
+  });
+  const automaticBuiltinEditor =
+    await vscode.window.showTextDocument(automaticBuiltin);
+  automaticBuiltinEditor.selection = new vscode.Selection(
+    automaticBuiltin.positionAt(automaticBuiltin.getText().length),
+    automaticBuiltin.positionAt(automaticBuiltin.getText().length),
+  );
+  await takeInvocations();
+  await vscode.commands.executeCommand("type", { text: "(" });
+  assert.ok(
+    (await waitForInvocation("(", true)).length > 0,
+    "typing '(' did not automatically invoke built-in Signature Help",
+  );
 
   const interactive = await vscode.workspace.openTextDocument({
     language: "sql",

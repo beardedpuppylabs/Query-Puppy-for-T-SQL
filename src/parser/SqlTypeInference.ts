@@ -2,6 +2,7 @@ import type { ColumnMetadata, SqlType } from "../metadata/MetadataModels.js";
 import { normalizeName } from "../metadata/MetadataModels.js";
 import {
   describeSqlType,
+  describeSqlTypeFamilies,
   UNKNOWN_SQL_TYPE,
   type SqlTypeDescriptor,
 } from "../metadata/SqlTypeDescriptor.js";
@@ -355,8 +356,84 @@ export function inferExpressionType(
     const callable = resolveCompletedScalarCallable(sql, start, end, scope);
     if (callable?.signature.returnType)
       return known(callable.signature.returnType);
+    if (callable?.signature.returnRule)
+      return inferCallableReturnType(callable, sql, scope, semantics);
   }
   return known(findColumn(tokens, semantics)?.type);
+}
+
+const argumentType = (
+  resolution: NonNullable<ReturnType<typeof resolveCompletedScalarCallable>>,
+  ordinal: number,
+  sql: string,
+  scope: CompletionScope,
+  semantics: DocumentSemanticModel,
+): SqlTypeDescriptor => {
+  const range = resolution.callSite.arguments[ordinal];
+  return range
+    ? inferExpressionType(sql, range.start, range.end, scope, semantics)
+    : unknown();
+};
+
+function inferCallableReturnType(
+  resolution: NonNullable<ReturnType<typeof resolveCompletedScalarCallable>>,
+  sql: string,
+  scope: CompletionScope,
+  semantics: DocumentSemanticModel,
+): SqlTypeDescriptor {
+  const rule = resolution.signature.returnRule;
+  if (!rule) return unknown();
+  if (rule.kind === "fixed") return known(rule.type);
+  const first = argumentType(resolution, 0, sql, scope, semantics);
+  if (rule.kind === "dateadd") {
+    const range = resolution.callSite.arguments[2];
+    if (
+      range &&
+      /^\s*'(?:''|[^'])*'\s*$/.test(sql.slice(range.start, range.end))
+    )
+      return known({ name: "datetime" });
+    return argumentType(resolution, 2, sql, scope, semantics);
+  }
+  if (rule.kind === "substring") {
+    if (first.kind !== "known") return unknown();
+    if (first.family === "unicodeString")
+      return { ...first, sqlName: "nvarchar", normalizedName: "nvarchar" };
+    if (first.family === "string")
+      return { ...first, sqlName: "varchar", normalizedName: "varchar" };
+    if (first.family === "binary")
+      return { ...first, sqlName: "varbinary", normalizedName: "varbinary" };
+    return unknown();
+  }
+  if (rule.kind === "charindex") {
+    const searched = argumentType(resolution, 1, sql, scope, semantics);
+    return known({
+      name:
+        searched.kind === "known" &&
+        searched.length === -1 &&
+        ["varchar", "nvarchar", "varbinary"].includes(searched.normalizedName)
+          ? "bigint"
+          : "int",
+    });
+  }
+  if (rule.kind === "round") {
+    if (first.kind !== "known") return unknown();
+    if (["tinyint", "smallint"].includes(first.normalizedName))
+      return known({ name: "int" });
+    if (first.normalizedName === "real") return known({ name: "float" });
+    return first;
+  }
+  if (first.kind !== "known") return unknown();
+  if (first.family === "unicodeString")
+    return known({
+      name: "nvarchar",
+      maxLength: first.length === -1 ? -1 : 8000,
+    });
+  if (first.family === "string")
+    return known({
+      name: "varchar",
+      maxLength: first.length === -1 ? -1 : 8000,
+    });
+  return known({ name: "nvarchar", maxLength: 8000 });
 }
 
 const contextResult = (
@@ -364,7 +441,7 @@ const contextResult = (
   source: ExpectedTypeSource,
   confidence: ExpectedTypeContext["confidence"] = "catalog",
 ): ExpectedTypeContext | undefined =>
-  type.kind === "known"
+  type.kind !== "unknown"
     ? { expectedType: type, source, confidence }
     : undefined;
 
@@ -388,8 +465,13 @@ export function inferExpectedTypeAtCursor(
 ): ExpectedTypeContext | undefined {
   const signature = resolveCallableAtCursor(sql, cursor, scope);
   const parameter = signature?.signature.parameters[signature.activeParameter];
-  if (parameter)
+  if (parameter?.type)
     return contextResult(known(parameter.type), "functionParameter");
+  if (parameter?.families?.length)
+    return contextResult(
+      describeSqlTypeFamilies(parameter.families),
+      "functionParameter",
+    );
 
   const before = sql.slice(0, cursor);
   // Resolve the current SET assignment before generic comparison operators.

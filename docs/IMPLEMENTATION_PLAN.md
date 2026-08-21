@@ -22,6 +22,48 @@ that milestone and later superseded.
 When historical text conflicts with the current architecture documents, the current
 architecture documents describe the intended present-day design.
 
+## 0.9.2 prefix-collision completion repair
+
+- [x] Prevent smart-alias takeover from hiding longer legal Contains matches when
+      the typed fragment is also an exact RowSource name.
+- [x] Preserve complete identifier replacement, canonical RowSource binding,
+      alias/member completion, FK JOIN intelligence, and secondary-database
+      identity for prefix-related object families.
+- [x] Add synthetic, provider, Extension Host, and read-only live-fixture
+      regressions without changing matching or catalog loading.
+
+## 0.10.0 SQL Server Built-in Function Intelligence
+
+- [x] Add one immutable, indexed, version-aware static language catalog for the
+      seven initial SQL Server built-ins.
+- [x] Resolve built-ins through the shared ParsedCallSite and CallableSignature
+      boundary used by catalog UDFs and TVFs.
+- [x] Add expression completion, native Signature Help, family ExpectedType, and
+      fixed/argument-derived/datatype-dependent scalar return rules.
+- [x] Keep built-in resolution connection-independent and free of database I/O.
+- [x] Cover catalog structure, provider ordering, qualification, nested calls,
+      type inference, and native Extension Host behavior.
+
+## 0.11.0 Persistent Schema Metadata Cache / Refresh Lifecycle
+
+- [x] Persist versioned, secret-free canonical database snapshots in extension
+      global storage and rebuild runtime `DatabaseIndex` structures on hydration.
+- [x] Make cold loads visible and coalesce concurrent cold consumers.
+- [x] Serve warm snapshots immediately while one first-session background refresh
+      runs, then use a fixed 15-minute freshness-on-use threshold.
+- [x] Preserve stale snapshots through full background refresh and atomically
+      persist/swap only complete replacements.
+- [x] Route manual refresh through the same per-database pipeline and retain a
+      separately confirmed active-database cache-clear command.
+- [x] Preserve lazy secondary-database scope, server/database isolation, read-only
+      metadata access, static built-ins, and document-local semantic boundaries.
+- [x] Cover round trips, warm/cold behavior, coalescing, failure, retry, freshness,
+      corruption, format mismatch, secret exclusion, and hot-path behavior.
+
+True incremental/delta synchronization, a configurable refresh interval, broader
+Configurability work, and unrelated parser/tokenization optimization remain
+deferred.
+
 ## 0.9.0 Type-aware Expression Intelligence
 
 - [x] Normalize structured SQL types into cached descriptors with explicit families and preserved facets.
@@ -52,9 +94,7 @@ architecture documents describe the intended present-day design.
 - [x] Reuse shared call-site parsing for cross-database discovery and automatic
       Signature Help fallback eligibility.
 
-This is preparation only. SQL Server built-in function metadata, completion,
-Signature Help, and return rules remain unimplemented until the 0.9.1 feature
-milestone.
+This preparation became the common boundary used by the 0.10.0 built-in catalog.
 
 ## Verified contracts
 

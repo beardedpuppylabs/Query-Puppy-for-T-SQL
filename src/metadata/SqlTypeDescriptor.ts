@@ -17,7 +17,7 @@ export type SqlTypeFamily =
   | "unknown";
 
 export interface SqlTypeDescriptor {
-  readonly kind: "known" | "unknown";
+  readonly kind: "known" | "unknown" | "family";
   readonly sqlName: string;
   readonly normalizedName: string;
   readonly family: SqlTypeFamily;
@@ -28,6 +28,7 @@ export interface SqlTypeDescriptor {
   readonly userDefined: boolean;
   readonly userDefinedTypeName?: string;
   readonly underlyingSystemType?: string;
+  readonly acceptedFamilies?: readonly SqlTypeFamily[];
 }
 
 export type TypeCompatibility =
@@ -50,6 +51,29 @@ export const UNKNOWN_SQL_TYPE: SqlTypeDescriptor = Object.freeze({
   family: "unknown",
   userDefined: false,
 });
+
+export function describeSqlTypeFamilies(
+  families: readonly SqlTypeFamily[],
+): SqlTypeDescriptor {
+  const unique = [...new Set(families)];
+  const label = unique.every((family) =>
+    ["integer", "decimal", "floatingPoint"].includes(family),
+  )
+    ? "numeric"
+    : unique.every((family) => ["string", "unicodeString"].includes(family))
+      ? "string"
+      : unique.every((family) => ["dateTime", "time"].includes(family))
+        ? "date/time"
+        : unique.join("/");
+  return Object.freeze({
+    kind: "family",
+    sqlName: label,
+    normalizedName: label,
+    family: unique[0] ?? "unknown",
+    acceptedFamilies: unique,
+    userDefined: false,
+  });
+}
 
 const descriptorCache = new WeakMap<object, SqlTypeDescriptor>();
 const integers = new Set(["tinyint", "smallint", "int", "bigint"]);
@@ -143,6 +167,12 @@ export function compareSqlTypes(
   expected: SqlTypeDescriptor,
   actual: SqlTypeDescriptor,
 ): TypeCompatibility {
+  if (expected.kind === "family")
+    return expected.acceptedFamilies?.includes(actual.family)
+      ? "compatibleFamily"
+      : actual.kind === "unknown"
+        ? "unknown"
+        : "incompatible";
   if (expected.kind === "unknown" || actual.kind === "unknown")
     return "unknown";
   if (expected.userDefined || actual.userDefined) {
@@ -170,7 +200,7 @@ export function compareSqlTypes(
 export function descriptorToSqlType(
   descriptor: SqlTypeDescriptor,
 ): SqlType | undefined {
-  if (descriptor.kind === "unknown") return undefined;
+  if (descriptor.kind !== "known") return undefined;
   return {
     name: descriptor.sqlName,
     ...(descriptor.schema ? { schema: descriptor.schema } : {}),

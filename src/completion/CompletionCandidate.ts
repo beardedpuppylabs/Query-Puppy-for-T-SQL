@@ -7,6 +7,8 @@ import type {
   SqlObjectKind,
   SqlType,
 } from "../metadata/MetadataModels.js";
+import type { CallableParameter } from "../parser/CallableAnalyzer.js";
+import type { BuiltinReturnRule } from "../parser/BuiltinFunctionCatalog.js";
 import type {
   SqlTypeDescriptor,
   TypeCompatibility,
@@ -21,8 +23,10 @@ export interface CompletionCandidate {
   readonly sqlType?: SqlType;
   readonly nullable?: boolean;
   readonly parameterOutput?: boolean;
-  readonly parameters?: readonly ParameterMetadata[];
+  readonly parameters?: readonly (ParameterMetadata | CallableParameter)[];
   readonly returnType?: SqlType;
+  readonly returnRule?: BuiltinReturnRule;
+  readonly documentation?: string;
   readonly sourceObject?: DatabaseObject;
   readonly column?: ColumnMetadata;
   /** True when this column is rebound to a canonical physical table object. */

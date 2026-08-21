@@ -32,6 +32,50 @@ development dependencies.
 Do not assume that the newest globally available Node.js, npm, VS Code, VSCodium,
 or vsce release is automatically the version targeted by this repository.
 
+## Build a publishable VSIX in one command
+
+From the repository root, run:
+
+```bash
+npm ci && npm run package
+```
+
+This single command installs the exact dependencies from `package-lock.json`, runs
+format checking, linting, strict TypeScript compilation, unit/provider tests,
+Extension Host tests, and the production build, then creates the versioned VSIX in
+the repository root.
+
+The command does not publish the extension. Its output file follows this naming
+convention:
+
+```text
+query-puppy-for-t-sql-<version>.vsix
+```
+
+If any verification step fails, the command stops and no successful package should
+be assumed. Live SQL Server integration tests are intentionally separate because
+they require a configured fixture and credentials; see [Integration tests](#integration-tests).
+
+## Install the built VSIX
+
+Replace `<version>` with the version from `package.json` or the generated VSIX
+filename.
+
+Install in Visual Studio Code:
+
+```bash
+code --install-extension query-puppy-for-t-sql-<version>.vsix --force
+```
+
+Install in VSCodium:
+
+```bash
+codium --install-extension query-puppy-for-t-sql-<version>.vsix --force
+```
+
+Restart or reload the editor after installation. These commands install the local
+VSIX only; they do not publish it to a registry or Marketplace.
+
 ## Install dependencies
 
 For ordinary development:
@@ -62,6 +106,19 @@ build.
 
 For details about which verification layer proves which behavior, see
 [Testing Strategy](TESTING.md).
+
+## Codex verification boundary
+
+For normal development tasks, Codex runs the applicable non-production checks:
+
+```bash
+npm run format:check && npm run lint && npm run compile && npm test
+```
+
+Codex does not run production builds, bundle commands, Extension Host scripts that
+implicitly build, VSIX packaging, or publication unless the user explicitly asks
+for that step in the current task. The human build and packaging commands in this
+document remain the supported workflow for developers.
 
 ## Extension Development Host
 
@@ -135,15 +192,48 @@ the appropriate connection/database identity.
 Concurrent requests for the same not-yet-loaded catalog use the project's existing
 coalesced loading path.
 
-After the relevant database metadata has been loaded, steady-state completion uses
-cached catalog and relationship indexes together with document semantic state
-rather than issuing repeated catalog queries for each keystroke.
+Canonical snapshots are persisted in the directory represented by VS Code's
+`ExtensionContext.globalStorageUri`, never in the workspace or source tree. A warm
+session rebuilds the in-memory `DatabaseIndex` from that snapshot before its
+background SQL refresh completes. After hydration, steady-state completion uses
+memory catalog and relationship indexes together with document semantic state,
+without catalog queries or disk deserialization for each keystroke.
 
 The authoritative description of current metadata loading, cache ownership, and
 subsystem boundaries is in [Architecture](ARCHITECTURE.md).
 
 Do not duplicate exact catalog-query-count assumptions here unless they are a
 stable documented contract.
+
+## Testing the persistent metadata lifecycle
+
+Use the active database commands and Extension Host/VSCodium restarts to exercise
+the lifecycle without relying on machine-specific storage paths:
+
+1. Run **Query Puppy for T-SQL: Clear Schema Cache for Active Database**, confirm
+   the prompt, then trigger schema-backed completion. Verify a database-specific
+   cold-load status appears and completion eventually succeeds.
+2. Restart the Extension Host/editor, reconnect the same database, and trigger
+   completion. Verify cached results are available without waiting for the
+   background refresh status to finish.
+3. While refresh is visible, test a known alias such as `c.` and verify stale
+   physical-column completion remains available.
+4. Run **Query Puppy for T-SQL: Refresh Schema Metadata** to exercise the same
+   canonical refresh path while bypassing the freshness threshold.
+5. Reference a secondary database explicitly and verify it starts its own lazy
+   lifecycle without loading unrelated databases.
+
+Corrupt and incompatible payload behavior is intentionally covered with isolated
+temporary directories in `tests/persistent-metadata.test.ts`; contributors should
+not edit their editor's real global storage to test it. The focused command is:
+
+```bash
+node --import tsx --test tests/persistent-metadata.test.ts
+```
+
+Runtime and test code must remain metadata-read-only. If a fixture changes, an
+administrator or user provisions it separately; Query Puppy never executes DDL to
+repair a missing prerequisite.
 
 ## External mssql integration
 
@@ -230,6 +320,12 @@ Writable-column metadata originates in cached catalog metadata.
 
 Catalog lookups remain scoped by the appropriate connection/database identity.
 
+SQL Server built-in definitions are static language metadata in
+`src/parser/BuiltinFunctionCatalog.ts`. They resolve through the common callable
+boundary and require no mssql connection, metadata load, or server-version query.
+Definitions retain minimum-version metadata; runtime filtering is deliberately
+not performed until a trustworthy server version is available without extra I/O.
+
 ## Build
 
 Create the production bundle with:
@@ -266,7 +362,8 @@ possible verification layer.
 At minimum:
 
 1. run the relevant automated tests
-2. run `npm run verify` when appropriate
+2. run `npm run verify` when a human developer wants the complete verification and
+   production-build flow
 3. run integration tests when the change depends on live SQL Server metadata and
    the environment is available
 4. perform Extension Host or installed VSCodium acceptance when native editor

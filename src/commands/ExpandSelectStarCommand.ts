@@ -50,9 +50,10 @@ export class SelectStarExpansionController implements vscode.Disposable {
       !editor.selection.isEmpty
     )
       return;
+    const cursor = editor.document.offsetAt(editor.selection.active);
+    if (editor.document.getText().slice(cursor - 1, cursor) !== "*") return;
     const catalog = await this.cachedCatalog();
     if (generation !== this.generation) return;
-    const cursor = editor.document.offsetAt(editor.selection.active);
     this.expansion = resolveSelectWildcard(
       editor.document.getText(),
       cursor,

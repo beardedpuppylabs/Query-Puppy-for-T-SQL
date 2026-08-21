@@ -164,8 +164,9 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
         scope,
       );
       if (alias) {
+        const label = alias.alias;
         const item = new vscode.CompletionItem(
-          `AS ${alias.alias}`,
+          label,
           vscode.CompletionItemKind.Snippet,
         );
         (item as vscode.CompletionItem & { data?: unknown }).data = {
@@ -173,15 +174,14 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
           semanticKind: "rowSourceAlias",
         };
         item.detail = `alias for ${alias.objectName}`;
-        item.insertText = new vscode.SnippetString(
-          `${alias.leadingSpace ? " " : ""}AS \${1:${alias.alias}}`,
-        );
+        item.insertText = new vscode.SnippetString(`\${1:${alias.alias}}`);
         item.range = new vscode.Range(position, position);
         item.sortText = "00000000";
-        item.filterText = `AS ${alias.alias}`;
+        item.filterText = label;
         return new vscode.CompletionList([item], false);
       }
     }
+    const candidates = createCandidates(context, scope, semantics);
     const memberAlias = context.qualifier?.parts[0];
     const memberSource = memberAlias
       ? semantics.aliases.get(memberAlias.toLocaleLowerCase("en-US"))
@@ -199,7 +199,6 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
         );
       }
     }
-    const candidates = createCandidates(context, scope, semantics);
     const types = new Set(candidates.map((candidate) => candidate.kind));
     const start = document.positionAt(context.replacementStart);
     const range = new vscode.Range(start, position);

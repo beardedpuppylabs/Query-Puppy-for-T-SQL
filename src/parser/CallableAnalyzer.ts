@@ -1,14 +1,15 @@
-import type {
-  DatabaseObject,
-  ParameterMetadata,
-  SqlType,
-} from "../metadata/MetadataModels.js";
+import type { DatabaseObject, SqlType } from "../metadata/MetadataModels.js";
 import { formatSqlType } from "../metadata/SqlTypeFormatter.js";
 import {
   resolveCatalogObject,
   type CatalogScope,
 } from "./CatalogObjectResolver.js";
 import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
+import {
+  findBuiltinFunction,
+  type BuiltinReturnRule,
+} from "./BuiltinFunctionCatalog.js";
+import type { SqlTypeFamily } from "../metadata/SqlTypeDescriptor.js";
 
 export interface CallArgumentRange {
   readonly start: number;
@@ -31,10 +32,30 @@ export interface CallableSignature {
   readonly name: string;
   readonly schema?: string;
   readonly database?: string;
-  readonly kind: "scalar" | "tableValued";
-  readonly parameters: readonly ParameterMetadata[];
+  readonly kind: "scalar" | "aggregate" | "tableValued";
+  readonly parameters: readonly CallableParameter[];
   readonly returnType?: SqlType;
+  readonly returnRule?: BuiltinReturnRule;
+  readonly documentation?: string;
+  readonly minimumServerMajor?: number;
   readonly catalogObject?: DatabaseObject;
+}
+
+export interface CallableParameter {
+  readonly name: string;
+  readonly ordinal: number;
+  readonly output: boolean;
+  readonly optional?: boolean;
+  readonly type?: SqlType;
+  readonly families?: readonly SqlTypeFamily[];
+  readonly semantic?: string;
+}
+
+export function callableParameterLabel(parameter: CallableParameter): string {
+  const expectation = parameter.type
+    ? formatSqlType(parameter.type)
+    : (parameter.semantic ?? parameter.families?.join(" | ") ?? "expression");
+  return `${parameter.name} ${expectation}${parameter.optional ? " [optional]" : ""}${parameter.output ? " OUTPUT" : ""}`;
 }
 
 export interface CallableResolution {
@@ -45,10 +66,7 @@ export interface CallableResolution {
 
 export function callableSignatureLabel(signature: CallableSignature): string {
   const parameters = signature.parameters
-    .map(
-      (parameter) =>
-        `${parameter.name} ${formatSqlType(parameter.type)}${parameter.output ? " OUTPUT" : ""}`,
-    )
+    .map((parameter) => callableParameterLabel(parameter))
     .join(", ");
   const returns =
     signature.kind === "tableValued"
@@ -183,10 +201,48 @@ const catalogSignature = (
   catalogObject: object,
 });
 
+const builtinSignature = (name: string): CallableSignature | undefined => {
+  const builtin = findBuiltinFunction(name);
+  return builtin
+    ? {
+        name: builtin.name,
+        kind: builtin.kind,
+        parameters: builtin.parameters.map((parameter) => ({
+          ...parameter,
+          output: false,
+        })),
+        returnRule: builtin.returnRule,
+        documentation: builtin.description,
+        minimumServerMajor: builtin.minimumServerMajor,
+      }
+    : undefined;
+};
+
+export function resolveBuiltinCallable(
+  callSite: ParsedCallSite,
+): CallableResolution | undefined {
+  const signature =
+    callSite.nameParts.length === 1
+      ? builtinSignature(callSite.name)
+      : undefined;
+  return signature
+    ? {
+        callSite,
+        signature,
+        activeParameter: Math.min(
+          callSite.activeArgument,
+          Math.max(0, signature.parameters.length - 1),
+        ),
+      }
+    : undefined;
+}
+
 export function resolveCallable(
   callSite: ParsedCallSite,
   catalog: CatalogScope,
 ): CallableResolution | undefined {
+  const builtin = resolveBuiltinCallable(callSite);
+  if (builtin) return builtin;
   const object = resolveCatalogObject(callSite.nameParts, catalog, [
     "scalarFunction",
     "tableValuedFunction",
@@ -224,5 +280,5 @@ export function resolveCompletedScalarCallable(
   const callSite = parseCompletedCallSite(sql, start, end);
   if (!callSite) return undefined;
   const resolution = resolveCallable(callSite, catalog);
-  return resolution?.signature.kind === "scalar" ? resolution : undefined;
+  return resolution?.signature.kind !== "tableValued" ? resolution : undefined;
 }
