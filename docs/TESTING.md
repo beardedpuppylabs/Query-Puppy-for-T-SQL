@@ -334,6 +334,10 @@ Alias Suggestions:
 - deterministic collision fallback considers only legally visible QueryScopes
 - automatic whitespace triggering waits for the post-edit cursor and occurs only
   when the provider resolves a semantic Smart Alias candidate
+- native CompletionItem presentation retains the semantic alias as `label`,
+  `insertText`, and `filterText`, identifies the short source name with
+  `label.description`, retains schema-qualified source detail, and uses the stable
+  local-binding kind
 
 Prefix-family fixtures must prove that an exact shorter object never suppresses
 longer Contains candidates while its identifier token is still active.
@@ -481,6 +485,8 @@ Protect:
 - qualified physical members inside incomplete built-in and catalog callable
   arguments, including a `FROM` clause after the cursor
 - same-server database-qualified resolution
+- live supplemental-fixture metadata saved and reloaded through the production
+  persistent snapshot format before catalog-UDF member completion
 
 Helper coverage for the call site is necessary, but provider or Extension Host
 coverage must also prove that native Signature Help consumes the common result.
@@ -499,6 +505,8 @@ Protect:
 - unrelated table negative case
 - positional visibility
 - relationship-aware table ranking
+- relationship-mapped member tie-breaking in both comparison directions
+- no comparison-member reordering without a real relationship
 
 Never treat same-name/type heuristic matches as proof of an FK relationship.
 

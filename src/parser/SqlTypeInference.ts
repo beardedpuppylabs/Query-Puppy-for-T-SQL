@@ -31,6 +31,10 @@ export interface ExpectedTypeContext {
   readonly expectedType: SqlTypeDescriptor;
   readonly source: ExpectedTypeSource;
   readonly confidence: "catalog" | "projection" | "literal" | "reconciled";
+  readonly comparisonColumn?: {
+    readonly source: RowSource;
+    readonly column: ColumnMetadata;
+  };
 }
 
 export interface UpdateAssignment {
@@ -175,10 +179,12 @@ const updateTargetSource = (
     : semantic;
 };
 
-const findColumn = (
+const findColumnReference = (
   tokens: readonly SqlToken[],
   semantics: DocumentSemanticModel,
-): ColumnMetadata | undefined => {
+):
+  | { readonly source: RowSource; readonly column: ColumnMetadata }
+  | undefined => {
   for (let i = tokens.length - 1; i >= 2; i--) {
     const column = tokens[i];
     if (
@@ -188,18 +194,21 @@ const findColumn = (
     )
       continue;
     const source = visibleSource(semantics, tokens[i - 2]?.text ?? "");
-    return source?.columns.find(
+    const resolvedColumn = source?.columns.find(
       (candidate) => candidate.normalizedName === column.normalized,
     );
+    return source && resolvedColumn
+      ? { source, column: resolvedColumn }
+      : undefined;
   }
   const identifier = [...tokens]
     .reverse()
     .find((token) => token.kind === "identifier");
   if (!identifier) return undefined;
   const matches = semantics.visibleRowSources.flatMap((binding) =>
-    binding.source.columns.filter(
-      (column) => column.normalizedName === identifier.normalized,
-    ),
+    binding.source.columns
+      .filter((column) => column.normalizedName === identifier.normalized)
+      .map((column) => ({ source: binding.source, column })),
   );
   return matches.length === 1 ? matches[0] : undefined;
 };
@@ -359,7 +368,7 @@ export function inferExpressionType(
     if (callable?.signature.returnRule)
       return inferCallableReturnType(callable, sql, scope, semantics);
   }
-  return known(findColumn(tokens, semantics)?.type);
+  return known(findColumnReference(tokens, semantics)?.column.type);
 }
 
 const argumentType = (
@@ -440,10 +449,40 @@ const contextResult = (
   type: SqlTypeDescriptor,
   source: ExpectedTypeSource,
   confidence: ExpectedTypeContext["confidence"] = "catalog",
+  comparisonColumn?: ExpectedTypeContext["comparisonColumn"],
 ): ExpectedTypeContext | undefined =>
   type.kind !== "unknown"
-    ? { expectedType: type, source, confidence }
+    ? {
+        expectedType: type,
+        source,
+        confidence,
+        ...(comparisonColumn ? { comparisonColumn } : {}),
+      }
     : undefined;
+
+const comparisonColumnInRange = (
+  sql: string,
+  start: number,
+  end: number,
+  semantics: DocumentSemanticModel,
+): ExpectedTypeContext["comparisonColumn"] => {
+  const tokens = tokenizeSql(sql.slice(start, end));
+  const last = tokens.at(-1);
+  if (last?.kind !== "identifier") return undefined;
+  const qualified =
+    tokens.at(-2)?.text === "." && tokens.at(-3)?.kind === "identifier";
+  const operandStart = qualified ? tokens.length - 3 : tokens.length - 1;
+  const preceding = tokens[operandStart - 1];
+  if (
+    preceding &&
+    preceding.text !== "(" &&
+    !["on", "where", "and", "or", "when", "having"].includes(
+      preceding.normalized,
+    )
+  )
+    return undefined;
+  return findColumnReference(tokens.slice(operandStart), semantics);
+};
 
 const topLevelCommaOrdinal = (text: string): number => {
   const tokens = tokenizeSql(text);
@@ -507,6 +546,13 @@ export function inferExpectedTypeAtCursor(
         semantics,
       ),
       "comparisonOperand",
+      "catalog",
+      comparisonColumnInRange(
+        sql,
+        offset,
+        offset + expression.length,
+        semantics,
+      ),
     );
     if (result) return result;
   }
@@ -526,6 +572,13 @@ export function inferExpectedTypeAtCursor(
         semantics,
       ),
       "comparisonOperand",
+      "catalog",
+      comparisonColumnInRange(
+        sql,
+        offset,
+        offset + rightComparison[2].length,
+        semantics,
+      ),
     );
     if (result) return result;
   }

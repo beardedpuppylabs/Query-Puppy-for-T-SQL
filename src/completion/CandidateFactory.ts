@@ -23,7 +23,10 @@ import {
   classifyCompletionContext,
   completionDomainPolicy,
 } from "../parser/CompletionContextClassifier.js";
-import { inferExpectedTypeAtCursor } from "../parser/SqlTypeInference.js";
+import {
+  inferExpectedTypeAtCursor,
+  type ExpectedTypeContext,
+} from "../parser/SqlTypeInference.js";
 import {
   compareSqlTypes,
   describeSqlType,
@@ -118,6 +121,7 @@ export function createCandidates(
         }));
   }
   let candidates: CompletionCandidate[] = [];
+  let memberSource: RowSource | undefined;
   let sortKind = context.kind;
   if (context.kind === "unsupported") return [];
   if (context.kind === "member") {
@@ -128,11 +132,15 @@ export function createCandidates(
           (item) => normalizeName(item.qualifier) === normalizeName(alias),
         )
       : resolveVisibleRowSource(semantics, alias);
-    if (binding)
-      candidates = scopedColumnCandidates(
-        rebindIdentityLessSource(binding.source, alias, context.sql, scope),
+    if (binding) {
+      memberSource = rebindIdentityLessSource(
+        binding.source,
+        alias,
+        context.sql,
         scope,
       );
+      candidates = scopedColumnCandidates(memberSource, scope);
+    }
   } else if (context.kind === "qualified") {
     const parts = context.qualifier?.parts ?? [];
     if (parts.length === 2 && clauseContext.finalSetOrderBy) return [];
@@ -143,7 +151,13 @@ export function createCandidates(
         )
       : resolveVisibleRowSource(semantics, parts[0] ?? "");
     if (parts.length === 2 && binding) {
-      candidates = scopedColumnCandidates(binding.source, scope);
+      memberSource = rebindIdentityLessSource(
+        binding.source,
+        parts[0] ?? "",
+        context.sql,
+        scope,
+      );
+      candidates = scopedColumnCandidates(memberSource, scope);
       sortKind = "member";
     } else if (parts.length === 2 && scope) {
       const qualifier = parts[0] ?? "";
@@ -340,18 +354,84 @@ export function createCandidates(
       `${candidate.kind}:${candidate.database ?? ""}:${candidate.schema ?? ""}:${candidate.normalizedName}:${candidate.sourceQualifier ?? ""}`,
       candidate,
     );
+  const filtered = [...unique.values()].filter((candidate) =>
+    containsMatch(
+      candidate.searchText ?? candidate.normalizedName,
+      context.search,
+    ),
+  );
   return sortCandidates(
     applyTypeCompatibility(
-      [...unique.values()].filter((candidate) =>
-        containsMatch(
-          candidate.searchText ?? candidate.normalizedName,
-          context.search,
-        ),
+      rankComparisonRelationshipCandidates(
+        filtered,
+        expected,
+        memberSource,
+        scope,
       ),
       expected?.expectedType,
     ),
     context.search,
     sortKind,
+  );
+}
+
+function physicalSource(
+  source: RowSource,
+  scope: CompletionScope,
+):
+  | { readonly object: DatabaseObject; readonly index: DatabaseIndex }
+  | undefined {
+  const database = source.database ?? scope.activeDatabase;
+  const index = scope.indexes.get(normalizedDatabase(database));
+  const object =
+    source.sourceObject ??
+    (source.schema ? index?.findObject(source.schema, source.name) : undefined);
+  return index && object?.kind === "table" ? { object, index } : undefined;
+}
+
+function rankComparisonRelationshipCandidates(
+  candidates: readonly CompletionCandidate[],
+  expected: ExpectedTypeContext | undefined,
+  memberSource: RowSource | undefined,
+  scope: CompletionScope | undefined,
+): CompletionCandidate[] {
+  if (
+    !scope ||
+    !memberSource ||
+    expected?.source !== "comparisonOperand" ||
+    !expected.comparisonColumn
+  )
+    return [...candidates];
+  const comparison = physicalSource(expected.comparisonColumn.source, scope);
+  const member = physicalSource(memberSource, scope);
+  if (!comparison || !member || comparison.index !== member.index)
+    return [...candidates];
+  const relatedColumns = new Set<string>();
+  for (const foreignKey of comparison.index
+    .relationshipsBetween(comparison.object, member.object)
+    .filter((candidate) => !candidate.disabled)) {
+    for (const mapping of foreignKey.columns) {
+      if (
+        comparison.object.id === foreignKey.parentObjectId &&
+        member.object.id === foreignKey.referencedObjectId &&
+        normalizeName(mapping.parentColumnName) ===
+          expected.comparisonColumn.column.normalizedName
+      )
+        relatedColumns.add(normalizeName(mapping.referencedColumnName));
+      if (
+        comparison.object.id === foreignKey.referencedObjectId &&
+        member.object.id === foreignKey.parentObjectId &&
+        normalizeName(mapping.referencedColumnName) ===
+          expected.comparisonColumn.column.normalizedName
+      )
+        relatedColumns.add(normalizeName(mapping.parentColumnName));
+    }
+  }
+  if (!relatedColumns.size) return [...candidates];
+  return candidates.map((candidate) =>
+    relatedColumns.has(candidate.normalizedName)
+      ? { ...candidate, priority: (candidate.priority ?? 0) - 1 }
+      : candidate,
   );
 }
 
@@ -426,14 +506,7 @@ function physicalBinding(
 ):
   | { readonly object: DatabaseObject; readonly index: DatabaseIndex }
   | undefined {
-  const database = binding.source.database ?? scope.activeDatabase;
-  const index = scope.indexes.get(normalizedDatabase(database));
-  const object =
-    binding.source.sourceObject ??
-    (binding.source.schema
-      ? index?.findObject(binding.source.schema, binding.source.name)
-      : undefined);
-  return index && object?.kind === "table" ? { object, index } : undefined;
+  return physicalSource(binding.source, scope);
 }
 
 function renderJoinPredicate(

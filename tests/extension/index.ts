@@ -874,18 +874,28 @@ async function semanticCompletion(
 async function registeredSemanticCompletion(
   sql: string,
   cursor = sql.length,
+  triggerCharacter?: string,
 ): Promise<readonly MarkedCompletionItem[]> {
   const document = await vscode.workspace.openTextDocument({
     language: "sql",
     content: sql,
   });
-  const result = await vscode.commands.executeCommand<
-    vscode.CompletionList | readonly vscode.CompletionItem[]
-  >(
-    "vscode.executeCompletionItemProvider",
-    document.uri,
-    document.positionAt(cursor),
-  );
+  const result = triggerCharacter
+    ? await vscode.commands.executeCommand<
+        vscode.CompletionList | readonly vscode.CompletionItem[]
+      >(
+        "vscode.executeCompletionItemProvider",
+        document.uri,
+        document.positionAt(cursor),
+        triggerCharacter,
+      )
+    : await vscode.commands.executeCommand<
+        vscode.CompletionList | readonly vscode.CompletionItem[]
+      >(
+        "vscode.executeCompletionItemProvider",
+        document.uri,
+        document.positionAt(cursor),
+      );
   const items = result instanceof vscode.CompletionList ? result.items : result;
   return items as readonly MarkedCompletionItem[];
 }
@@ -1168,8 +1178,8 @@ export async function run(): Promise<void> {
     "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.Customers c ON oh.CustomerId = c.|",
   );
   assert.deepEqual(bigintMembers.slice(0, 4), [
-    "BillingAddressId",
     "CustomerId",
+    "BillingAddressId",
     "PrimaryAddressId",
     "ShippingAddressId",
   ]);
@@ -1303,6 +1313,32 @@ export async function run(): Promise<void> {
   );
   assert.equal(incompleteUdf[0], "Amount");
   assert.ok(incompleteUdf.includes("OccurredAt"));
+  const secondUdfArgument = await typeAwareLabels(
+    "SELECT billing.CalculateBillingTotal_0001(0, ol.|) FROM reltest.OrderLines AS ol;",
+  );
+  assert.equal(secondUdfArgument[0], "AmountExact");
+  assert.ok(secondUdfArgument.includes("CompanyId"));
+  const nestedUdfArgument = await typeAwareLabels(
+    "SELECT billing.CalculateBillingTotal_0001(0, billing.CalculateBillingTotal_0001(ol.|, 0.19)) FROM reltest.OrderLines AS ol;",
+  );
+  assert.equal(nestedUdfArgument[0], "AmountExact");
+  assert.ok(nestedUdfArgument.includes("OrderId"));
+  const registeredUdfSql =
+    "SELECT billing.CalculateBillingTotal_0001(ol., 0.19) FROM reltest.OrderLines AS ol;";
+  const registeredUdfCursor = registeredUdfSql.indexOf("ol.") + 3;
+  const registeredUdfItems = await registeredSemanticCompletion(
+    registeredUdfSql,
+    registeredUdfCursor,
+    ".",
+  );
+  const registeredUdfMembers = registeredUdfItems.filter(
+    (item) => item.kind === vscode.CompletionItemKind.Field,
+  );
+  assert.ok(
+    registeredUdfMembers.length > 0,
+    `catalog UDF argument returned no registered provider members: ${JSON.stringify(labels(registeredUdfItems))}`,
+  );
+  assert.equal(registeredUdfMembers[0]?.filterText, "AmountExact");
   const updateMembers = await typeAwareLabels(
     "UPDATE c SET ExternalKey = c.| FROM reltest.Customers c",
   );
@@ -1338,6 +1374,22 @@ export async function run(): Promise<void> {
   assert.match(groupedExternal.label, /UQ\s+uniqueidentifier\s+NULL/);
   assert.ok(groupedExternal.documentation instanceof vscode.MarkdownString);
   assert.match(groupedExternal.documentation.value, /UX_Customers_ExternalKey/);
+  const registeredUpdateSql =
+    "UPDATE s SET ExternalReference = c. FROM IntelliSenseLab.reltest.CompletionLayoutStress AS s CROSS JOIN IntelliSenseLab.reltest.Customers AS c;";
+  const registeredUpdateCursor = registeredUpdateSql.indexOf("c.") + 2;
+  const registeredUpdateItems = await registeredSemanticCompletion(
+    registeredUpdateSql,
+    registeredUpdateCursor,
+    ".",
+  );
+  const registeredUpdateMembers = registeredUpdateItems.filter(
+    (item) => item.kind === vscode.CompletionItemKind.Field,
+  );
+  assert.ok(
+    registeredUpdateMembers.length > 0,
+    `UPDATE RHS returned no registered provider members: ${JSON.stringify(labels(registeredUpdateItems))}`,
+  );
+  assert.equal(registeredUpdateMembers[0]?.filterText, "ExternalKey");
   const ordinaryExternal = (
     await markedTypeItems(
       "SELECT c.| FROM IntelliSenseLab.reltest.Customers AS c;",
@@ -2024,11 +2076,20 @@ FROM ${database}.dbo.Customers c`;
   assert.deepEqual(labels(aliasAfterWhitespace), ["bp"]);
   const aliasAfterWhitespaceItem = aliasAfterWhitespace[0];
   assert.ok(aliasAfterWhitespaceItem);
-  assert.equal(aliasAfterWhitespaceItem.filterText, "bp");
-  assert.ok(
-    aliasAfterWhitespaceItem.insertText instanceof vscode.SnippetString,
+  assert.deepEqual(aliasAfterWhitespaceItem.label, {
+    label: "bp",
+    description: "alias for BelegePositionen",
+  });
+  assert.equal(
+    aliasAfterWhitespaceItem.kind,
+    vscode.CompletionItemKind.Variable,
   );
-  assert.equal(aliasAfterWhitespaceItem.insertText.value, "${1:bp}");
+  assert.equal(aliasAfterWhitespaceItem.filterText, "bp");
+  assert.equal(aliasAfterWhitespaceItem.insertText, "bp");
+  assert.equal(
+    aliasAfterWhitespaceItem.detail,
+    "alias for dbo.BelegePositionen",
+  );
   assert.deepEqual(
     aliasAfterWhitespaceItem.range,
     new vscode.Range(
@@ -2041,7 +2102,7 @@ FROM ${database}.dbo.Customers c`;
   assert.deepEqual(
     labels(
       (await registeredSemanticCompletion(aliasAfterWhitespaceSql)).filter(
-        (item) => item.detail === "alias for BelegePositionen",
+        (item) => item.detail === "alias for dbo.BelegePositionen",
       ),
     ),
     ["bp"],
@@ -2054,9 +2115,13 @@ FROM ${database}.dbo.Customers c`;
   assert.deepEqual(labels(aliasAfterAs), ["bp"]);
   const aliasAfterAsItem = aliasAfterAs[0];
   assert.ok(aliasAfterAsItem);
+  assert.deepEqual(aliasAfterAsItem.label, {
+    label: "bp",
+    description: "alias for BelegePositionen",
+  });
+  assert.equal(aliasAfterAsItem.kind, vscode.CompletionItemKind.Variable);
   assert.equal(aliasAfterAsItem.filterText, "bp");
-  assert.ok(aliasAfterAsItem.insertText instanceof vscode.SnippetString);
-  assert.equal(aliasAfterAsItem.insertText.value, "${1:bp}");
+  assert.equal(aliasAfterAsItem.insertText, "bp");
   assert.deepEqual(
     aliasAfterAsItem.range,
     new vscode.Range(0, aliasAfterAsSql.length, 0, aliasAfterAsSql.length),
@@ -2064,7 +2129,7 @@ FROM ${database}.dbo.Customers c`;
   assert.deepEqual(
     labels(
       (await registeredSemanticCompletion(aliasAfterAsSql)).filter(
-        (item) => item.detail === "alias for BelegePositionen",
+        (item) => item.detail === "alias for dbo.BelegePositionen",
       ),
     ),
     ["bp"],

@@ -386,6 +386,12 @@ operand such as:
 
     ON o.CustomerId = c.
 
+When both operands resolve to physical columns, real cached FK mappings may break a
+tie among otherwise equivalent type-compatible member candidates. Only the column
+paired with the resolved opposite operand receives the contextual advantage. This
+does not create a separate visible group, use name/type heuristics, or affect
+ordinary member completion outside a comparison.
+
 ## JOIN source candidates
 
 At JOIN source positions, actual relationship metadata may influence semantic
@@ -418,12 +424,15 @@ Alias eligibility is derived from SQL token boundaries, not catalog candidate
 cardinality. Alias generation and deterministic collision fallback use the resolved
 semantic object name and visible QueryScope.
 
-The alias CompletionItem inserts only the generated alias at an empty cursor range;
-it never replaces the RowSource or inserts `AS` on the user's behalf. Typing the
-whitespace that establishes a legal alias position may open the native Suggest
-Widget. This automatic trigger is limited to syntactically valid, resolved,
-unaliased RowSources and is synchronized with the post-edit cursor; arbitrary SQL
-whitespace does not trigger it.
+The alias CompletionItem uses a compact native label description such as
+`alias for BelegePositionen`, a schema-qualified detail such as
+`alias for qpacc.BelegePositionen`, and the native local-binding/variable kind. It
+inserts only the generated alias as plain text at an empty cursor range;
+`filterText` is the same alias, and the item never replaces the RowSource or
+inserts `AS` on the user's behalf. Typing the whitespace that establishes a legal
+alias position may open the native Suggest Widget. This automatic trigger is
+limited to syntactically valid, resolved, unaliased RowSources and is synchronized
+with the post-edit cursor; arbitrary SQL whitespace does not trigger it.
 
 ## Functions and procedures
 

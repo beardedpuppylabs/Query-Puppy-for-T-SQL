@@ -53,7 +53,7 @@ const metadata: DatabaseMetadata = {
       "ShippingAddressId",
       "RegionId",
     ]),
-    object(2, "reltest", "Addresses", ["AddressId"]),
+    object(2, "reltest", "Addresses", ["AddressId", "AlternateAddressId"]),
     object(3, "reltest", "OrderHeaders", [
       "CompanyId",
       "OrderId",
@@ -203,6 +203,10 @@ const joins = (sql: string, cursor = sql.length) =>
   createCandidates(resolveSqlContext(sql, cursor), scope).filter(
     (candidate) => candidate.kind === "joinPredicate",
   );
+const members = (sql: string, cursor = sql.length) =>
+  createCandidates(resolveSqlContext(sql, cursor), scope)
+    .filter((candidate) => candidate.kind === "column")
+    .map((candidate) => candidate.name);
 
 test("contract: FK JOIN predicates render deterministically in both query orders", () => {
   assert.deepEqual(
@@ -339,6 +343,56 @@ test("contract: relationship ranking occurs after Contains filtering", () => {
       .map((candidate) => candidate.name),
     ["Addresses"],
   );
+});
+
+test("contract: real FK metadata breaks comparison type ties", () => {
+  assert.deepEqual(
+    members(
+      "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.Customers c ON oh.CustomerId = c.",
+    ).slice(0, 2),
+    ["CustomerId", "BillingAddressId"],
+  );
+  assert.deepEqual(
+    members(
+      "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.Customers c ON c.CustomerId = oh.",
+    ).slice(0, 2),
+    ["CustomerId", "CompanyId"],
+  );
+  const leftMember =
+    "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.Customers c ON c. = oh.CustomerId";
+  assert.deepEqual(members(leftMember, leftMember.indexOf(" =")).slice(0, 2), [
+    "CustomerId",
+    "BillingAddressId",
+  ]);
+  assert.deepEqual(
+    members(
+      "SELECT * FROM reltest.Customers c JOIN reltest.Addresses a ON c.BillingAddressId = a.",
+    ),
+    ["AddressId", "AlternateAddressId"],
+  );
+  assert.deepEqual(
+    members(
+      "SELECT * FROM reltest.OrderLines ol JOIN reltest.OrderHeaders oh ON ol.OrderId = oh.",
+    ).slice(0, 2),
+    ["OrderId", "CompanyId"],
+  );
+  assert.deepEqual(
+    members(
+      "SELECT * FROM reltest.Products p CROSS JOIN reltest.Customers c WHERE p.ProductId = c.",
+    ).slice(0, 2),
+    ["BillingAddressId", "CustomerId"],
+  );
+  assert.deepEqual(
+    members(
+      "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.Customers c ON oh.CustomerId + 0 = c.",
+    ).slice(0, 2),
+    ["BillingAddressId", "CustomerId"],
+  );
+  const ordinary = "SELECT c. FROM reltest.Customers c";
+  assert.deepEqual(members(ordinary, ordinary.indexOf(" FROM")).slice(0, 2), [
+    "BillingAddressId",
+    "CustomerId",
+  ]);
 });
 
 test("contract: cross-database RowSources never infer FK predicates", () => {

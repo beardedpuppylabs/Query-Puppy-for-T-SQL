@@ -164,20 +164,22 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
         scope,
       );
       if (alias) {
-        const label = alias.alias;
         const item = new vscode.CompletionItem(
-          label,
-          vscode.CompletionItemKind.Snippet,
+          {
+            label: alias.alias,
+            description: `alias for ${alias.objectName}`,
+          },
+          vscode.CompletionItemKind.Variable,
         );
         (item as vscode.CompletionItem & { data?: unknown }).data = {
           provider: "query-puppy-for-t-sql",
           semanticKind: "rowSourceAlias",
         };
-        item.detail = `alias for ${alias.objectName}`;
-        item.insertText = new vscode.SnippetString(`\${1:${alias.alias}}`);
+        item.detail = `alias for ${alias.sourceName}`;
+        item.insertText = alias.alias;
         item.range = new vscode.Range(position, position);
         item.sortText = "00000000";
-        item.filterText = label;
+        item.filterText = alias.alias;
         return new vscode.CompletionList([item], false);
       }
     }

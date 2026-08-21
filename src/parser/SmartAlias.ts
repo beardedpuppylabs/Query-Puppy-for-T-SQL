@@ -24,6 +24,7 @@ export function aliasFromObjectName(name: string): string {
 
 export interface SmartAliasContext {
   readonly objectName: string;
+  readonly sourceName: string;
   readonly alias: string;
   readonly explicitAs: boolean;
 }
@@ -128,5 +129,9 @@ export function resolveSmartAliasContext(
   let alias = base;
   for (let suffix = 2; used.has(normalizeName(alias)); suffix++)
     alias = `${base}${String(suffix)}`;
-  return { objectName, alias, explicitAs };
+  const sourceSchema = object?.schema ?? known?.schema ?? schema;
+  const sourceName = sourceSchema
+    ? `${sourceSchema}.${objectName}`
+    : objectName;
+  return { objectName, sourceName, alias, explicitAs };
 }

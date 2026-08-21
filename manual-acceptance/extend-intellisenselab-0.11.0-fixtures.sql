@@ -6,7 +6,8 @@
   The script is intentionally additive:
   - creates only qpacc/qpacc_ref fixtures in IntelliSenseLab
   - creates only qpacc/qpacc_archive fixtures in IntelliSenseLabReporting
-  - does not drop, rename, truncate, or alter existing project fixtures
+  - repairs only missing qpacc constraints through guarded ALTER TABLE statements
+  - does not drop, rename, truncate, or modify fixture data
 */
 
 IF DB_ID(N'IntelliSenseLab') IS NULL
@@ -79,17 +80,45 @@ CREATE TABLE qpacc.OrderHeaders
 GO
 
 IF OBJECT_ID(N'qpacc.OrderLines', N'U') IS NULL
-CREATE TABLE qpacc.OrderLines
-(
-    CompanyId int NOT NULL,
-    OrderId bigint NOT NULL,
-    LineNo int NOT NULL,
-    ProductCode varchar(50) NOT NULL,
-    Quantity decimal(18,4) NOT NULL,
-    AmountExact decimal(38,18) NULL,
-    CONSTRAINT PK_qpacc_OrderLines PRIMARY KEY (CompanyId, OrderId, LineNo),
-    CONSTRAINT FK_qpacc_OrderLines_OrderHeaders FOREIGN KEY (CompanyId, OrderId) REFERENCES qpacc.OrderHeaders(CompanyId, OrderId)
-);
+BEGIN
+    CREATE TABLE qpacc.OrderLines
+    (
+        CompanyId int NOT NULL,
+        OrderId bigint NOT NULL,
+        [LineNo] int NOT NULL,
+        ProductCode varchar(50) NOT NULL,
+        Quantity decimal(18,4) NOT NULL,
+        AmountExact decimal(38,18) NULL
+    );
+END;
+GO
+
+IF OBJECT_ID(N'qpacc.OrderLines', N'U') IS NULL
+    THROW 51000, N'qpacc.OrderLines was not created. Resolve the preceding CREATE TABLE error and rerun this script.', 1;
+GO
+
+IF OBJECT_ID(N'qpacc.PK_qpacc_OrderLines', N'PK') IS NULL
+BEGIN
+    ALTER TABLE qpacc.OrderLines
+        ADD CONSTRAINT PK_qpacc_OrderLines PRIMARY KEY (CompanyId, OrderId, [LineNo]);
+END;
+GO
+
+IF OBJECT_ID(N'qpacc.PK_qpacc_OrderLines', N'PK') IS NULL
+    THROW 51003, N'qpacc.OrderLines exists but its expected composite primary key was not created.', 1;
+GO
+
+IF OBJECT_ID(N'qpacc.FK_qpacc_OrderLines_OrderHeaders', N'F') IS NULL
+BEGIN
+    ALTER TABLE qpacc.OrderLines
+        ADD CONSTRAINT FK_qpacc_OrderLines_OrderHeaders
+        FOREIGN KEY (CompanyId, OrderId)
+        REFERENCES qpacc.OrderHeaders(CompanyId, OrderId);
+END;
+GO
+
+IF OBJECT_ID(N'qpacc.FK_qpacc_OrderLines_OrderHeaders', N'F') IS NULL
+    THROW 51004, N'qpacc.OrderLines exists but its expected composite foreign key was not created.', 1;
 GO
 
 IF OBJECT_ID(N'qpacc.CustomerAliases', N'U') IS NULL
@@ -254,6 +283,45 @@ BEGIN
 END;
 GO
 
+DECLARE @MissingIntelliSenseLabObjects nvarchar(2048) = N'';
+SELECT @MissingIntelliSenseLabObjects = @MissingIntelliSenseLabObjects
+    + CASE WHEN @MissingIntelliSenseLabObjects = N'' THEN N'' ELSE N', ' END
+    + QUOTENAME(expected.SchemaName) + N'.' + QUOTENAME(expected.ObjectName)
+FROM
+(
+    VALUES
+        (N'qpacc_ref', N'Regions', N'U'),
+        (N'qpacc', N'Addresses', N'U'),
+        (N'qpacc', N'Customers', N'U'),
+        (N'qpacc', N'OrderHeaders', N'U'),
+        (N'qpacc', N'OrderLines', N'U'),
+        (N'qpacc', N'CustomerAliases', N'U'),
+        (N'qpacc', N'Products', N'U'),
+        (N'qpacc', N'LegacyCustomerLinks', N'U'),
+        (N'qpacc', N'CompletionLayoutStress', N'U'),
+        (N'qpacc', N'TypedTargets', N'U'),
+        (N'qpacc', N'Belege', N'U'),
+        (N'qpacc', N'BelegePositionen', N'U'),
+        (N'qpacc', N'BelegePositionenDetails', N'U'),
+        (N'qpacc', N'CalculateBillingTotal_Manual', N'FN'),
+        (N'qpacc', N'GetCustomerAddresses_Manual', N'IF'),
+        (N'qpacc', N'ActiveCustomerAddresses', N'V'),
+        (N'qpacc', N'FindCustomerAddress_Manual', N'P')
+) AS expected(SchemaName, ObjectName, ObjectType)
+WHERE OBJECT_ID(
+    QUOTENAME(expected.SchemaName) + N'.' + QUOTENAME(expected.ObjectName),
+    expected.ObjectType
+) IS NULL;
+
+IF @MissingIntelliSenseLabObjects <> N''
+BEGIN
+    SET @MissingIntelliSenseLabObjects =
+        N'IntelliSenseLab qpacc acceptance fixture provisioning is incomplete: '
+        + @MissingIntelliSenseLabObjects;
+    THROW 51001, @MissingIntelliSenseLabObjects, 1;
+END;
+GO
+
 IF SUSER_ID(N'intellisense_test') IS NOT NULL AND DATABASE_PRINCIPAL_ID(N'intellisense_test') IS NULL
     CREATE USER [intellisense_test] FOR LOGIN [intellisense_test];
 IF DATABASE_PRINCIPAL_ID(N'intellisense_test') IS NOT NULL
@@ -362,6 +430,35 @@ RETURN
     FROM qpacc.Customers AS c
     WHERE c.ReportingCustomerId = @ReportingCustomerId
 );
+GO
+
+DECLARE @MissingIntelliSenseLabReportingObjects nvarchar(2048) = N'';
+SELECT @MissingIntelliSenseLabReportingObjects = @MissingIntelliSenseLabReportingObjects
+    + CASE WHEN @MissingIntelliSenseLabReportingObjects = N'' THEN N'' ELSE N', ' END
+    + QUOTENAME(expected.SchemaName) + N'.' + QUOTENAME(expected.ObjectName)
+FROM
+(
+    VALUES
+        (N'qpacc', N'Customers', N'U'),
+        (N'qpacc', N'Auftraege', N'U'),
+        (N'qpacc', N'AuftraegePositionen', N'U'),
+        (N'qpacc_archive', N'CustomerAddressArchive', N'U'),
+        (N'qpacc', N'ActiveCustomerAddresses', N'V'),
+        (N'qpacc', N'CustomerAddressReport', N'V'),
+        (N'qpacc', N'GetCustomerAddresses', N'IF')
+) AS expected(SchemaName, ObjectName, ObjectType)
+WHERE OBJECT_ID(
+    QUOTENAME(expected.SchemaName) + N'.' + QUOTENAME(expected.ObjectName),
+    expected.ObjectType
+) IS NULL;
+
+IF @MissingIntelliSenseLabReportingObjects <> N''
+BEGIN
+    SET @MissingIntelliSenseLabReportingObjects =
+        N'IntelliSenseLabReporting qpacc acceptance fixture provisioning is incomplete: '
+        + @MissingIntelliSenseLabReportingObjects;
+    THROW 51002, @MissingIntelliSenseLabReportingObjects, 1;
+END;
 GO
 
 IF SUSER_ID(N'intellisense_test') IS NOT NULL AND DATABASE_PRINCIPAL_ID(N'intellisense_test') IS NULL

@@ -209,6 +209,7 @@ test("smart aliases split names and avoid visible collisions", () => {
     resolveSmartAliasContext(sql, sql.length, semantics, catalog),
     {
       objectName: "CustomerOrders",
+      sourceName: "sales.CustomerOrders",
       alias: "co2",
       explicitAs: false,
     },
@@ -253,7 +254,7 @@ test("contract: Smart Alias starts only after a completed RowSource", () => {
         analyzeDocumentSemantics(sql, sql.length, catalog),
         catalog,
       ),
-      { objectName, alias, explicitAs },
+      { objectName, sourceName: `dbo.${objectName}`, alias, explicitAs },
     );
   }
 

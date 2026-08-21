@@ -191,6 +191,24 @@ FROM qpacc.OrderLines AS ol;`);
   );
 });
 
+test("contract: catalog callable qualified members survive later and nested arguments", () => {
+  const secondArgument =
+    markedCandidates(`SELECT qpacc.CalculateBillingTotal_Manual(0, ol.|)
+FROM qpacc.OrderLines AS ol;`);
+  assert.equal(secondArgument[0]?.name, "Quantity");
+  assert.ok(secondArgument.every((candidate) => candidate.kind === "column"));
+  assert.ok(secondArgument.some((candidate) => candidate.name === "LineText"));
+
+  const nested =
+    markedCandidates(`SELECT qpacc.CalculateBillingTotal_Manual(0, qpacc.CalculateBillingTotal_Manual(ol.|, 0.19))
+FROM qpacc.OrderLines AS ol;`);
+  assert.equal(nested[0]?.name, "Quantity");
+  assert.deepEqual(
+    nested.map((candidate) => candidate.name),
+    ["Quantity", "OrderLineId", "LineText"],
+  );
+});
+
 test("contract: UPDATE RHS qualifier members retain assignment ExpectedType", () => {
   const candidates = markedCandidates(`UPDATE s
 SET ExternalReference = c.|
@@ -217,11 +235,13 @@ test("contract: Smart Alias respects object, whitespace, AS, alias, collision, a
   assert.equal(resolve("SELECT * FROM qpacc.BelegePositionen"), undefined);
   assert.deepEqual(resolve("SELECT * FROM qpacc.BelegePositionen "), {
     objectName: "BelegePositionen",
+    sourceName: "qpacc.BelegePositionen",
     alias: "bp",
     explicitAs: false,
   });
   assert.deepEqual(resolve("SELECT * FROM qpacc.BelegePositionen AS "), {
     objectName: "BelegePositionen",
+    sourceName: "qpacc.BelegePositionen",
     alias: "bp",
     explicitAs: true,
   });

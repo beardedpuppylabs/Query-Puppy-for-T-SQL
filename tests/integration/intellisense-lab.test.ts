@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import * as sql from "mssql";
 import { createCandidates } from "../../src/completion/CandidateFactory.js";
@@ -16,6 +19,7 @@ import {
   resolveCallableAtCursor,
 } from "../../src/parser/CallableAnalyzer.js";
 import { isWritableColumn } from "../../src/metadata/MetadataModels.js";
+import { FileMetadataSnapshotStore } from "../../src/metadata/PersistentMetadataStore.js";
 
 const names = [
   "MSSQL_TEST_SERVER",
@@ -156,6 +160,90 @@ test(
         [(process.env["MSSQL_TEST_DATABASE"] ?? "").toLowerCase(), index],
       ]),
     };
+    const qpaccOrderLines = index.findObject("qpacc", "OrderLines");
+    const qpaccBillingTotal = index.findObject(
+      "qpacc",
+      "CalculateBillingTotal_Manual",
+    );
+    assert.ok(
+      qpaccOrderLines,
+      "missing qpacc.OrderLines from loaded metadata; provision the supplemental 0.11.0 fixture and grant metadata visibility",
+    );
+    assert.equal(qpaccOrderLines.kind, "table");
+    assert.ok(
+      qpaccBillingTotal,
+      "missing qpacc.CalculateBillingTotal_Manual from loaded metadata",
+    );
+    assert.equal(qpaccBillingTotal.kind, "scalarFunction");
+    assert.deepEqual(
+      qpaccBillingTotal.parameters.map((parameter) => [
+        parameter.name,
+        parameter.type.name,
+        parameter.type.precision,
+        parameter.type.scale,
+      ]),
+      [
+        ["@NetAmount", "decimal", 18, 2],
+        ["@TaxRate", "decimal", 9, 4],
+      ],
+    );
+    const persistenceDirectory = await mkdtemp(
+      join(tmpdir(), "query-puppy-live-cache-"),
+    );
+    context.after(() =>
+      rm(persistenceDirectory, { recursive: true, force: true }),
+    );
+    const persistentStore = new FileMetadataSnapshotStore(persistenceDirectory);
+    await persistentStore.save(
+      "integration",
+      process.env["MSSQL_TEST_DATABASE"] ?? "",
+      index,
+      Date.now(),
+    );
+    const hydrated = await persistentStore.load(
+      "integration",
+      process.env["MSSQL_TEST_DATABASE"] ?? "",
+    );
+    assert.ok(hydrated);
+    assert.ok(hydrated.index.findObject("qpacc", "OrderLines"));
+    assert.equal(
+      hydrated.index.findObject("qpacc", "CalculateBillingTotal_Manual")
+        ?.parameters.length,
+      2,
+    );
+    const hydratedScope = {
+      activeDatabase: process.env["MSSQL_TEST_DATABASE"] ?? "",
+      indexes: new Map([
+        [
+          (process.env["MSSQL_TEST_DATABASE"] ?? "").toLowerCase(),
+          hydrated.index,
+        ],
+      ]),
+    };
+    const hydratedCandidates = (markedSql: string) => {
+      const cursor = markedSql.indexOf("|");
+      assert.ok(cursor >= 0);
+      const text = markedSql.replace("|", "");
+      return createCandidates(resolveSqlContext(text, cursor), hydratedScope);
+    };
+    const ordinaryOrderLineMembers = hydratedCandidates(
+      "SELECT ol.| FROM qpacc.OrderLines AS ol;",
+    );
+    assert.deepEqual(
+      ordinaryOrderLineMembers.map((candidate) => candidate.name),
+      qpaccOrderLines.columns
+        .map((column) => column.name)
+        .sort((left, right) => left.localeCompare(right)),
+    );
+    const udfOrderLineMembers = hydratedCandidates(
+      "SELECT qpacc.CalculateBillingTotal_Manual(ol.|, 0.19) FROM qpacc.OrderLines AS ol;",
+    );
+    assert.deepEqual(
+      udfOrderLineMembers.slice(0, 2).map((candidate) => candidate.name),
+      ["AmountExact", "Quantity"],
+    );
+    assert.equal(udfOrderLineMembers[0]?.typeCompatibility, "sameBaseType");
+    assert.equal(udfOrderLineMembers.length, qpaccOrderLines.columns.length);
     const belegeFamily = [
       "Belege",
       "BelegePositionen",
@@ -284,8 +372,8 @@ test(
       "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.Customers c ON oh.CustomerId = c.|",
     );
     assert.deepEqual(bigintMembers.slice(0, 4), [
-      "BillingAddressId",
       "CustomerId",
+      "BillingAddressId",
       "PrimaryAddressId",
       "ShippingAddressId",
     ]);

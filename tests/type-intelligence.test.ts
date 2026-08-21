@@ -333,11 +333,12 @@ test("contract: expression inference covers columns literals casts UDFs arithmet
 test("contract: ExpectedType covers comparison callable DML LIKE and arithmetic contexts", () => {
   const expected = (sql: string, cursor = sql.length) =>
     inferExpectedTypeAtCursor(sql, cursor, scope, semantics(sql, cursor));
-  assert.equal(
-    expected("SELECT * FROM dbo.Customers c WHERE c.CustomerId = c.")
-      ?.expectedType.normalizedName,
-    "bigint",
+  const comparison = expected(
+    "SELECT * FROM dbo.Customers c WHERE c.CustomerId = c.",
   );
+  assert.equal(comparison?.expectedType.normalizedName, "bigint");
+  assert.equal(comparison.comparisonColumn?.source.name, "Customers");
+  assert.equal(comparison.comparisonColumn.column.name, "CustomerId");
   const lhs = "SELECT * FROM dbo.Customers c WHERE c. = c.ExternalKey";
   assert.equal(expected(lhs, lhs.indexOf(" ="))?.expectedType.family, "guid");
   assert.equal(
