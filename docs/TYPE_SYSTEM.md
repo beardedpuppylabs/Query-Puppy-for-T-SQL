@@ -412,16 +412,16 @@ Do not display:
 
 unless the actual declared SQL type syntax genuinely contains such facets.
 
-## Future built-in function intelligence
+## Extending built-in function intelligence
 
-A future built-in SQL Server function signature catalog may provide:
+Additional SQL Server built-in definitions may provide:
 
 - parameter types
 - return types
 - Signature Help
 - richer ExpectedType contexts
 
-It should reuse this type system.
+They must reuse this type system.
 
 Do not create a second built-in-specific type engine.
 

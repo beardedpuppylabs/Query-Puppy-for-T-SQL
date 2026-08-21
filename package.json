@@ -1,7 +1,7 @@
 {
   "name": "query-puppy-for-t-sql",
   "displayName": "Query Puppy for T-SQL",
-  "description": "Context-aware SQL Server IntelliSense for large schemas with Contains search, PK/FK metadata, and relationship-aware JOIN completion.",
+  "description": "Context-aware T-SQL IntelliSense for SQL Server with Contains discovery, type-aware completion, FK-aware JOINs, and persistent schema caching.",
   "version": "0.11.0",
   "publisher": "BeardedPuppyLabs",
   "author": "Bearded Puppy Labs",
@@ -33,7 +33,10 @@
     "contains-search",
     "foreign-key",
     "schema",
-    "join"
+    "join",
+    "type-aware",
+    "signature-help",
+    "persistent-cache"
   ],
   "extensionDependencies": [
     "ms-mssql.mssql"

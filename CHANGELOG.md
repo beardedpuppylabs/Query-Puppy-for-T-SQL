@@ -10,6 +10,12 @@
   and swapped atomically, while failures preserve the last usable snapshot.
 - Added visible cold/background metadata status, a canonical manual refresh path,
   and a confirmed active-database cache-clear command.
+- Refined Smart Alias completion so object names remain discoverable until a legal
+  alias position, then present an alias-only suggestion without forcing `AS`.
+- Added real-FK comparison tie-breaking so a relationship-mapped column can lead
+  otherwise equivalent exact-type candidates without hiding legal alternatives.
+- Hardened cross-feature regression coverage for qualified members, callable
+  arguments, UPDATE assignments, wildcard expansion, and persistent warm starts.
 - Preserved lazy cross-database loading, read-only mssql connection sharing, static
   built-in metadata, and memory-only document semantics.
 

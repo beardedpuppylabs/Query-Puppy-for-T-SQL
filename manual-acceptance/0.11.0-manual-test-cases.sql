@@ -8,62 +8,73 @@
 USE [IntelliSenseLab];
 GO
 
-/* TEST 01
-   Row-source Contains in the active database.
-   Cursor at end of fragment.
+/* SECTION A
+   OBJECT / SCHEMA COMPLETION
 */
-SELECT *
-FROM qpacc.addr
 
-/* TEST 02
+/* TEST 01
    Database-qualified schema navigation.
    Cursor after the final dot.
 */
 SELECT *
 FROM IntelliSenseLab.
 
-/* TEST 03
+/* TEST 02
    Database-wide shortcut across schemas.
    Cursor at end of fragment.
 */
 SELECT *
 FROM IntelliSenseLab.addr
 
-/* TEST 04
+/* TEST 03
    Strict database/schema object navigation.
    Cursor at end of fragment.
 */
 SELECT *
 FROM IntelliSenseLab.qpacc.addr
 
+/* SECTION B
+   PHYSICAL COLUMNS AND PK / UQ / FK METADATA
+*/
+
+/* TEST 04
+   Physical-column metadata roles and canonical presentation.
+   Cursor at end of c.customer.
+*/
+SELECT c.customer
+FROM qpacc.Customers AS c
+
 /* TEST 05
+   Long physical identifier filtering and insertion.
+   Cursor at end of s.reference.
+*/
+SELECT s.reference
+FROM qpacc.CompletionLayoutStress AS s
+
+/* TEST 06
+   No ExpectedType ordering.
+   Cursor after s.
+*/
+SELECT s.
+FROM qpacc.CompletionLayoutStress AS s
+
+/* SECTION C
+   CONTAINS AND PREFIX COLLISION
+*/
+
+/* TEST 07
+   Row-source Contains in the active database.
+   Cursor at end of fragment.
+*/
+SELECT *
+FROM qpacc.addr
+
+/* TEST 08
    Prefix-family Contains while identifier token is active.
    Cursor at end of fragment.
 */
 SELECT *
 FROM qpacc.Belege
-
-/* TEST 06
-   Smart Alias after whitespace.
-   Cursor after trailing whitespace.
-*/
-SELECT *
-FROM qpacc.BelegePositionen 
-
-/* TEST 07
-   Smart Alias after AS.
-   Cursor after trailing whitespace.
-*/
-SELECT *
-FROM qpacc.BelegePositionen AS 
-
-/* TEST 08
-   Smart Alias collision fallback in one visible scope.
-   Cursor after trailing whitespace.
-*/
-SELECT *
-FROM qpacc.Belege AS bpd
-JOIN qpacc.BelegePositionenDetails 
 
 /* TEST 09
    Explicit alias member Contains.
@@ -72,231 +83,40 @@ JOIN qpacc.BelegePositionenDetails
 SELECT c.addr
 FROM qpacc.Customers AS c
 
-/* TEST 10
-   Physical-column metadata roles and canonical presentation.
-   Cursor at end of c.customer.
+/* SECTION D
+   SMART ALIAS
 */
-SELECT c.customer
-FROM qpacc.Customers AS c
+
+/* TEST 10
+   Smart Alias after whitespace.
+   After pasting, type one space at the end of the FROM line.
+   Cursor immediately after that space.
+*/
+SELECT *
+FROM qpacc.BelegePositionen
 
 /* TEST 11
-   Long physical identifier filtering and insertion.
-   Cursor at end of s.reference.
+   Smart Alias after AS.
+   After pasting, type one space after AS.
+   Cursor immediately after that space.
 */
-SELECT s.reference
-FROM qpacc.CompletionLayoutStress AS s
+SELECT *
+FROM qpacc.BelegePositionen AS
 
 /* TEST 12
-   No ExpectedType ordering.
-   Cursor after s.
+   Smart Alias collision fallback in one visible scope.
+   After pasting, type one space at the end of the JOIN line.
+   Cursor immediately after that space.
 */
-SELECT s.
-FROM qpacc.CompletionLayoutStress AS s
+SELECT *
+FROM qpacc.Belege AS bpd
+JOIN qpacc.BelegePositionenDetails
+
+/* SECTION E
+   CTE / DERIVED / TEMP / TABLE VARIABLE / VALUES / APPLY
+*/
 
 /* TEST 13
-   Comparison ExpectedType for bigint.
-   Cursor after c.
-*/
-SELECT *
-FROM qpacc.OrderHeaders AS oh
-JOIN qpacc.Customers AS c ON oh.CustomerId = c.
-
-/* TEST 14
-   Comparison ExpectedType for varchar.
-   Cursor after c.
-*/
-SELECT *
-FROM qpacc.Customers AS c
-WHERE c.CustomerNumber = c.
-
-/* TEST 15
-   Comparison ExpectedType for uniqueidentifier.
-   Cursor after c.
-*/
-SELECT *
-FROM qpacc.Customers AS c
-WHERE c.ExternalKey = c.
-
-/* TEST 16
-   Built-in DATEADD date argument ExpectedType with incomplete call.
-   Cursor after s.
-*/
-SELECT DATEADD(day, 1, s.
-FROM qpacc.CompletionLayoutStress AS s;
-
-/* TEST 17
-   Built-in DATEADD number argument ExpectedType with incomplete call.
-   Cursor after c.
-*/
-SELECT DATEADD(day, c.
-FROM qpacc.Customers AS c;
-
-/* TEST 18
-   Built-in SUBSTRING expression ExpectedType with incomplete call.
-   Cursor after c.
-*/
-SELECT SUBSTRING(c.
-FROM qpacc.Customers AS c;
-
-/* TEST 19
-   Catalog scalar-function argument ExpectedType.
-   Cursor after ol.
-*/
-SELECT qpacc.CalculateBillingTotal_Manual(ol., 0.19)
-FROM qpacc.OrderLines AS ol;
-
-/* TEST 20
-   UPDATE RHS ExpectedType for uniqueidentifier.
-   Cursor after c.
-*/
-UPDATE s
-SET ExternalReference = c.
-FROM IntelliSenseLab.qpacc.CompletionLayoutStress AS s
-CROSS JOIN IntelliSenseLab.qpacc.Customers AS c;
-
-/* TEST 21
-   UPDATE positional assignment ExpectedType.
-   Cursor after c.
-*/
-UPDATE s
-SET CustomerId = c.CustomerId,
-    ExternalReference = c.
-FROM IntelliSenseLab.qpacc.CompletionLayoutStress AS s
-CROSS JOIN IntelliSenseLab.qpacc.Customers AS c;
-
-/* TEST 22
-   INSERT SELECT ExpectedType.
-   Cursor after ol.
-*/
-INSERT INTO qpacc.TypedTargets (Amount)
-SELECT ol.
-FROM qpacc.OrderLines AS ol;
-
-/* TEST 23
-   INSERT writable target columns.
-   Cursor at end of target-list fragment.
-*/
-INSERT INTO qpacc.CompletionLayoutStress (Ref
-
-/* TEST 24
-   UPDATE writable target columns.
-   Cursor at end of SET fragment.
-*/
-UPDATE qpacc.CompletionLayoutStress
-SET Ref
-
-/* TEST 25
-   EXEC named parameters.
-   Cursor after @.
-*/
-EXEC qpacc.FindCustomerAddress_Manual @
-
-/* TEST 26
-   EXEC used-parameter exclusion.
-   Cursor after final @.
-*/
-EXECUTE qpacc.FindCustomerAddress_Manual @Search = N'x', @
-
-/* TEST 27
-   INSERT OUTPUT inserted pseudo source.
-   Cursor after inserted.
-*/
-INSERT INTO qpacc.Customers (CustomerNumber)
-OUTPUT inserted.
-VALUES (
-
-/* TEST 28
-   DELETE OUTPUT deleted pseudo source.
-   Cursor after deleted.
-*/
-DELETE FROM qpacc.Customers
-OUTPUT deleted.
-WHERE
-
-/* TEST 29
-   Invalid deleted statement must not expose inserted.
-   Cursor after inserted.
-*/
-DELETE FROM qpacc.Customers
-OUTPUT inserted.
-WHERE
-
-/* TEST 30
-   FK JOIN predicate, dependent right side.
-   Cursor after ON.
-*/
-SELECT *
-FROM qpacc.Customers AS c
-JOIN qpacc.OrderHeaders AS oh ON
-
-/* TEST 31
-   FK JOIN predicate, principal right side.
-   Cursor after ON.
-*/
-SELECT *
-FROM qpacc.OrderHeaders AS oh
-JOIN qpacc.Customers AS c ON
-
-/* TEST 32
-   Multiple FK predicates between the same two row sources.
-   Cursor after ON.
-*/
-SELECT *
-FROM qpacc.Customers AS c
-JOIN qpacc.Addresses AS a ON
-
-/* TEST 33
-   Composite FK predicate.
-   Cursor after ON.
-*/
-SELECT *
-FROM qpacc.OrderHeaders AS oh
-JOIN qpacc.OrderLines AS ol ON
-
-/* TEST 34
-   Cross-schema FK predicate.
-   Cursor after ON.
-*/
-SELECT *
-FROM qpacc.Customers AS c
-JOIN qpacc_ref.Regions AS r ON
-
-/* TEST 35
-   Disabled FK negative relationship case.
-   Cursor after ON.
-*/
-SELECT *
-FROM qpacc.Customers AS c
-JOIN qpacc.LegacyCustomerLinks AS l ON
-
-/* TEST 36
-   Unrelated table negative relationship case.
-   Cursor after ON.
-*/
-SELECT *
-FROM qpacc.Customers AS c
-JOIN qpacc.Products AS p ON
-
-/* TEST 37
-   Relationship-aware JOIN source ranking.
-   Cursor after schema dot.
-*/
-SELECT *
-FROM qpacc.Customers AS c
-JOIN qpacc.
-
-/* TEST 38
-   Positional JOIN visibility before future alias.
-   Cursor after the first ca.
-*/
-SELECT *
-FROM qpacc.Customers AS c
-JOIN qpacc.OrderHeaders AS oh
-  ON ca.
-JOIN qpacc.Addresses AS ca
-  ON ca.
-
-/* TEST 39
    CTE projection member completion.
    Cursor after x.
 */
@@ -308,7 +128,7 @@ WITH X AS
 SELECT x.
 FROM X AS x;
 
-/* TEST 40
+/* TEST 14
    CTE explicit column-list override.
    Cursor after x.
 */
@@ -320,7 +140,7 @@ WITH X (EntityId, AddressValue) AS
 SELECT x.
 FROM X AS x;
 
-/* TEST 41
+/* TEST 15
    SELECT INTO local row source.
    Cursor after t.
 */
@@ -331,7 +151,7 @@ FROM qpacc.Customers;
 SELECT t.
 FROM #QpManualCustomerProjection AS t;
 
-/* TEST 42
+/* TEST 16
    Table variable local row source.
    Cursor after v.
 */
@@ -344,7 +164,7 @@ DECLARE @CustomerWork TABLE
 SELECT v.
 FROM @CustomerWork AS v;
 
-/* TEST 43
+/* TEST 17
    Derived-table projection.
    Cursor after d.
 */
@@ -355,14 +175,14 @@ FROM
     FROM qpacc.Customers
 ) AS d;
 
-/* TEST 44
+/* TEST 18
    VALUES row source projection.
    Cursor after v.
 */
 SELECT v.
 FROM (VALUES (1, N'a')) AS v(ValueId, ValueName);
 
-/* TEST 45
+/* TEST 19
    APPLY projection.
    Cursor after lastOrder.
 */
@@ -375,7 +195,11 @@ CROSS APPLY
     WHERE oh.CustomerId = c.CustomerId
 ) AS lastOrder;
 
-/* TEST 46
+/* SECTION F
+   QUERYSCOPE / CORRELATED QUERIES / SET OPERATIONS
+*/
+
+/* TEST 20
    Correlated subquery.
    Cursor after c.
 */
@@ -388,7 +212,7 @@ WHERE EXISTS
     WHERE oh.CustomerId = c.
 );
 
-/* TEST 47
+/* TEST 21
    Ordinary derived-table non-correlation.
    Cursor after c.
 */
@@ -401,7 +225,7 @@ JOIN
     WHERE oh.CustomerId = c.
 ) AS d ON 1 = 1;
 
-/* TEST 48
+/* TEST 22
    Sibling scope isolation.
    Cursor after oh.
 */
@@ -418,7 +242,7 @@ AND EXISTS
     FROM qpacc.Addresses AS a
 );
 
-/* TEST 49
+/* TEST 23
    ORDER BY projection alias.
    Cursor at end of fragment.
 */
@@ -426,7 +250,7 @@ SELECT c.EmailAddress AS Contact
 FROM qpacc.Customers AS c
 ORDER BY cont
 
-/* TEST 50
+/* TEST 24
    GROUP BY projection alias negative case.
    Cursor at end of fragment.
 */
@@ -434,7 +258,7 @@ SELECT c.EmailAddress AS Contact
 FROM qpacc.Customers AS c
 GROUP BY cont
 
-/* TEST 51
+/* TEST 25
    Set-operation result names.
    Cursor after x.
 */
@@ -449,7 +273,7 @@ WITH X AS
 SELECT x.
 FROM X AS x;
 
-/* TEST 52
+/* TEST 26
    Set-operation branch isolation.
    Cursor after c. in the second branch.
 */
@@ -460,14 +284,18 @@ SELECT oh.OrderId
 FROM qpacc.OrderHeaders AS oh
 WHERE c.
 
-/* TEST 53
+/* SECTION G
+   WILDCARD EXPANSION
+*/
+
+/* TEST 27
    Wildcard expansion for one aliased source.
    Put the cursor after the star and press Tab.
 */
 SELECT c.*
 FROM qpacc.Customers AS c;
 
-/* TEST 54
+/* TEST 28
    Wildcard expansion for multiple sources.
    Put the cursor after the star and press Tab.
 */
@@ -475,60 +303,272 @@ SELECT *
 FROM qpacc.Customers AS c
 JOIN qpacc.OrderHeaders AS oh ON oh.CustomerId = c.CustomerId;
 
-/* TEST 55
-   Built-in expression completion.
-   Cursor at end of fragment.
+/* SECTION H
+   RELATIONSHIP-AWARE JOIN
 */
-SELECT dat
 
-/* TEST 56
-   Built-in Signature Help.
-   Cursor after opening parenthesis.
+/* TEST 29
+   FK JOIN predicate, dependent right side.
+   Cursor after ON.
 */
-SELECT DATEADD(
+SELECT *
+FROM qpacc.Customers AS c
+JOIN qpacc.OrderHeaders AS oh ON
 
-/* TEST 57
+/* TEST 30
+   FK JOIN predicate, principal right side.
+   Cursor after ON.
+*/
+SELECT *
+FROM qpacc.OrderHeaders AS oh
+JOIN qpacc.Customers AS c ON
+
+/* TEST 31
+   Multiple FK predicates between the same two row sources.
+   Cursor after ON.
+*/
+SELECT *
+FROM qpacc.Customers AS c
+JOIN qpacc.Addresses AS a ON
+
+/* TEST 32
+   Composite FK predicate.
+   Cursor after ON.
+*/
+SELECT *
+FROM qpacc.OrderHeaders AS oh
+JOIN qpacc.OrderLines AS ol ON
+
+/* TEST 33
+   Cross-schema FK predicate.
+   Cursor after ON.
+*/
+SELECT *
+FROM qpacc.Customers AS c
+JOIN qpacc_ref.Regions AS r ON
+
+/* TEST 34
+   Disabled FK negative relationship case.
+   Cursor after ON.
+*/
+SELECT *
+FROM qpacc.Customers AS c
+JOIN qpacc.LegacyCustomerLinks AS l ON
+
+/* TEST 35
+   Unrelated table negative relationship case.
+   Cursor after ON.
+*/
+SELECT *
+FROM qpacc.Customers AS c
+JOIN qpacc.Products AS p ON
+
+/* TEST 36
+   Relationship-aware JOIN source ranking.
+   Cursor after schema dot.
+*/
+SELECT *
+FROM qpacc.Customers AS c
+JOIN qpacc.
+
+/* TEST 37
+   Positional JOIN visibility before future alias.
+   Check the first ca. and then the second ca.
+   Cursor immediately after the selected dot.
+*/
+SELECT *
+FROM qpacc.Customers AS c
+JOIN qpacc.OrderHeaders AS oh
+  ON ca.
+JOIN qpacc.Addresses AS ca
+  ON ca.
+
+/* SECTION I
+   COMPARISON EXPECTEDTYPE
+*/
+
+/* TEST 38
+   Comparison ExpectedType for bigint.
+   Cursor after c.
+*/
+SELECT *
+FROM qpacc.OrderHeaders AS oh
+JOIN qpacc.Customers AS c ON oh.CustomerId = c.
+
+/* TEST 39
+   Comparison ExpectedType for varchar.
+   Cursor after c.
+*/
+SELECT *
+FROM qpacc.Customers AS c
+WHERE c.CustomerNumber = c.
+
+/* TEST 40
+   Comparison ExpectedType for uniqueidentifier.
+   Cursor after c.
+*/
+SELECT *
+FROM qpacc.Customers AS c
+WHERE c.ExternalKey = c.
+
+/* SECTION J
+   CATALOG UDF / TVF
+*/
+
+/* TEST 41
+   Catalog scalar-function argument ExpectedType.
+   Cursor after ol.
+*/
+SELECT qpacc.CalculateBillingTotal_Manual(ol., 0.19)
+FROM qpacc.OrderLines AS ol;
+
+/* TEST 42
    Catalog scalar Signature Help.
    Cursor after opening parenthesis.
 */
 SELECT qpacc.CalculateBillingTotal_Manual(
 
-/* TEST 58
+/* TEST 43
    Catalog TVF Signature Help.
    Cursor after opening parenthesis.
 */
 SELECT *
 FROM qpacc.GetCustomerAddresses_Manual(
 
-/* TEST 59
+/* SECTION K
+   BUILT-IN FUNCTIONS
+*/
+
+/* TEST 44
+   Built-in expression completion.
+   Cursor at end of fragment.
+*/
+SELECT dat
+
+/* TEST 45
+   Built-in Signature Help.
+   Cursor after opening parenthesis.
+*/
+SELECT DATEADD(
+
+/* TEST 46
+   Built-in DATEADD date argument ExpectedType with incomplete call.
+   Cursor after s.
+*/
+SELECT DATEADD(day, 1, s.
+FROM qpacc.CompletionLayoutStress AS s;
+
+/* TEST 47
+   Built-in DATEADD number argument ExpectedType with incomplete call.
+   Cursor after c.
+*/
+SELECT DATEADD(day, c.
+FROM qpacc.Customers AS c;
+
+/* TEST 48
+   Built-in SUBSTRING expression ExpectedType with incomplete call.
+   Cursor after c.
+*/
+SELECT SUBSTRING(c.
+FROM qpacc.Customers AS c;
+
+/* SECTION L
+   DML
+*/
+
+/* TEST 49
+   UPDATE positional assignment ExpectedType.
+   Cursor after c.
+*/
+UPDATE s
+SET CustomerId = c.CustomerId,
+    ExternalReference = c.
+FROM IntelliSenseLab.qpacc.CompletionLayoutStress AS s
+CROSS JOIN IntelliSenseLab.qpacc.Customers AS c;
+
+/* TEST 50
+   INSERT SELECT ExpectedType.
+   Cursor after ol.
+*/
+INSERT INTO qpacc.TypedTargets (Amount)
+SELECT ol.
+FROM qpacc.OrderLines AS ol;
+
+/* TEST 51
+   INSERT writable target columns.
+   Cursor at end of target-list fragment.
+*/
+INSERT INTO qpacc.CompletionLayoutStress (Ref
+
+/* TEST 52
+   UPDATE writable target columns.
+   Cursor at end of SET fragment.
+*/
+UPDATE qpacc.CompletionLayoutStress
+SET Ref
+
+/* TEST 53
+   EXEC named parameters.
+   Cursor after @.
+*/
+EXEC qpacc.FindCustomerAddress_Manual @
+
+/* TEST 54
+   EXEC used-parameter exclusion.
+   Cursor after final @.
+*/
+EXECUTE qpacc.FindCustomerAddress_Manual @Search = N'x', @
+
+/* TEST 55
+   INSERT OUTPUT inserted pseudo source.
+   Cursor after inserted.
+*/
+INSERT INTO qpacc.Customers (CustomerNumber)
+OUTPUT inserted.
+VALUES (
+
+/* TEST 56
+   DELETE OUTPUT deleted pseudo source.
+   Cursor after deleted.
+*/
+DELETE FROM qpacc.Customers
+OUTPUT deleted.
+WHERE
+
+/* TEST 57
+   Invalid deleted statement must not expose inserted.
+   Cursor after inserted.
+*/
+DELETE FROM qpacc.Customers
+OUTPUT inserted.
+WHERE
+
+/* SECTION M
+   CROSS-DATABASE
+*/
+
+/* TEST 58
    Same-server database discovery.
    Cursor at end of fragment.
 */
 SELECT *
 FROM Intelli
 
-/* TEST 60
+/* TEST 59
    Secondary database schema navigation.
    Cursor after the final dot.
 */
 SELECT *
 FROM IntelliSenseLabReporting.
 
-/* TEST 61
+/* TEST 60
    Secondary database strict schema completion.
    Cursor at end of fragment.
 */
 SELECT *
 FROM IntelliSenseLabReporting.qpacc.Customer
 
-/* TEST 62
-   Secondary database alias member completion.
-   Cursor after r.
-*/
-SELECT r.
-FROM IntelliSenseLabReporting.qpacc.Customers AS r;
-
-/* TEST 63
+/* TEST 61
    Cross-database aliases in one query.
    Cursor after r. and separately after c.
 */
@@ -537,7 +577,7 @@ FROM IntelliSenseLab.qpacc.Customers AS c
 JOIN IntelliSenseLabReporting.qpacc.Customers AS r
   ON r.ReportingCustomerId = c.CustomerId;
 
-/* TEST 64
+/* TEST 62
    Cross-database set branch identity.
    Cursor after r.
 */
@@ -548,7 +588,7 @@ SELECT r.ReportingCustomerId AS IgnoredId, r.ReportingEmailAddress AS IgnoredVal
 FROM IntelliSenseLabReporting.qpacc.Customers AS r
 WHERE r.
 
-/* TEST 65
+/* TEST 63
    Cross-database CTE star projection isolation.
    Cursor after y.
 */
@@ -566,35 +606,39 @@ SELECT y.
 FROM active_projection AS x
 JOIN reporting_projection AS y ON y.ReportingCustomerId = x.CustomerId;
 
-/* TEST 66
+/* TEST 64
    Four-part names are outside scope.
    Cursor after final dot.
 */
 SELECT *
 FROM SomeLinkedServer.IntelliSenseLab.qpacc.
 
-/* TEST 67
+/* SECTION N
+   PERSISTENT CACHE / MANUAL REFRESH
+*/
+
+/* TEST 65
    Persistent cache cold-load trigger.
    First run the clear-cache command for the active database, then use this cursor.
 */
 SELECT c.
 FROM qpacc.Customers AS c;
 
-/* TEST 68
+/* TEST 66
    Persistent cache warm-start trigger.
    Restart the editor/Extension Host, reconnect the same database, then use this cursor.
 */
 SELECT oh.
 FROM qpacc.OrderHeaders AS oh;
 
-/* TEST 69
+/* TEST 67
    Manual refresh trigger.
    Run the refresh command while keeping this completion point usable.
 */
 SELECT ol.
 FROM qpacc.OrderLines AS ol;
 
-/* TEST 70
+/* TEST 68
    Secondary database lazy cache trigger.
    Cursor after r.
 */
