@@ -5,7 +5,7 @@ import {
   SQL_DOCUMENT_SELECTOR,
 } from "../src/completion/ProviderRegistration.js";
 
-test("SQL signature help registration triggers calls and retriggers arguments", () => {
+test("contract: native Signature Help triggers calls and retriggers arguments", () => {
   assert.deepEqual(SQL_DOCUMENT_SELECTOR, [
     { language: "sql", scheme: "file" },
     { language: "sql", scheme: "untitled" },

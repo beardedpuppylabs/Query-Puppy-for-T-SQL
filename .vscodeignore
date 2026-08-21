@@ -8,6 +8,7 @@
 .vscode-test/**
 AGENTS.md
 docs/**
+manual-acceptance/**
 src/**
 tests/**
 scripts/**

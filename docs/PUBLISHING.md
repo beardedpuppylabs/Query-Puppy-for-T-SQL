@@ -162,6 +162,10 @@ npm run package
 
 Use the exact VSIX path produced by the current package script.
 
+The package script is intentionally non-interactive even when the local Git remote
+is not a public repository URL. Do not replace that behavior with a private or
+machine-local repository URL in the Marketplace manifest.
+
 Do not hard-code a historical release version into this permanent publishing guide.
 
 The generated archive is expected to follow the project's current package naming

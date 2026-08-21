@@ -5,7 +5,7 @@ import {
   resolveMicrosoftSuggestionState,
 } from "../src/config/MicrosoftSuggestions.js";
 
-test("globally enabled Microsoft suggestions are eligible for first-run setup", () => {
+test("contract: Microsoft suggestions first-run setup is explicit and scoped", () => {
   assert.deepEqual(
     resolveMicrosoftSuggestionState({
       effectiveValue: true,
@@ -15,7 +15,7 @@ test("globally enabled Microsoft suggestions are eligible for first-run setup", 
   );
 });
 
-test("globally disabled Microsoft suggestions need no first-run setup", () => {
+test("contract: disabled Microsoft suggestions require no first-run mutation", () => {
   assert.deepEqual(
     resolveMicrosoftSuggestionState({
       effectiveValue: false,
@@ -25,7 +25,7 @@ test("globally disabled Microsoft suggestions need no first-run setup", () => {
   );
 });
 
-test("workspace override is identified when global suggestions are disabled", () => {
+test("contract: Microsoft suggestion workspace overrides are identified", () => {
   const inspection = {
     effectiveValue: true,
     globalValue: false,

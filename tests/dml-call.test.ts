@@ -280,7 +280,7 @@ test("writable metadata excludes identity, computed, generated, and rowversion c
     ],
   );
 });
-test("INSERT columns are target-only, contains matched, and exclude used columns", () => {
+test("contract: INSERT columns are target-only Contains-matched and exclude used columns", () => {
   assert.deepEqual(names("INSERT INTO dbo.Customers (Ema"), ["EmailAddress"]);
   assert.deepEqual(names("INSERT INTO dbo.Customers (CustomerCode, Ema"), [
     "EmailAddress",
@@ -293,7 +293,7 @@ test("INSERT columns are target-only, contains matched, and exclude used columns
   assert.equal(quoteIdentifier(bracketed.name), "[Customer Name]");
 });
 
-test("DML-selected physical columns preserve ordinary canonical metadata", () => {
+test("contract: DML physical columns preserve canonical metadata", () => {
   const ordinarySql = "SELECT c. FROM dbo.Customers c";
   const ordinary = createCandidates(
     resolveSqlContext(ordinarySql, ordinarySql.indexOf("c.") + 2),
@@ -367,7 +367,7 @@ test("cross-database DML, EXEC, and function signatures use the qualified catalo
   assert.equal(signature.signature.schema, "billing");
   assert.equal(signature.activeParameter, 1);
 });
-test("UPDATE target and alias SET completion excludes used targets while RHS remains alias members", () => {
+test("contract: UPDATE targets exclude used columns while RHS retains alias members", () => {
   assert.deepEqual(names("UPDATE dbo.Customers SET Addr"), [
     "BillingAddressId",
     "EmailAddress",
@@ -389,12 +389,12 @@ test("UPDATE target and alias SET completion excludes used targets while RHS rem
     "UPDATE c SET BillingAddressId = a. FROM dbo.Customers c JOIN dbo.CustomerAddresses a ON 1=1";
   assert.deepEqual(names(rhs, rhs.indexOf("a.") + 2), ["AddressId"]);
 });
-test("DELETE aliases remain normal member scopes", () => {
+test("contract: DELETE aliases remain normal member scopes", () => {
   const sql =
     "DELETE c FROM dbo.Customers c JOIN dbo.CustomerAddresses ca ON 1=1 WHERE ca.";
   assert.deepEqual(names(sql, sql.length), ["AddressId"]);
 });
-test("EXEC named parameters preserve declaration order, used exclusion, OUTPUT, and EXECUTE", () => {
+test("contract: EXEC parameters preserve order exclusion OUTPUT and EXECUTE", () => {
   assert.deepEqual(names("EXEC dbo.FindCustomerAddress @Sea"), ["@Search"]);
   const result = createCandidates(
     resolveSqlContext("EXECUTE dbo.FindCustomerAddress @Search=N'x', @"),
@@ -406,7 +406,7 @@ test("EXEC named parameters preserve declaration order, used exclusion, OUTPUT, 
   );
   assert.equal(result[1]?.parameterOutput, true);
 });
-test("function signatures track arguments and ignore nested commas", () => {
+test("contract: catalog signatures track arguments and ignore nested commas", () => {
   const first = resolveCallableAtCursor(
     "SELECT billing.CalculateBillingTotal_0001(",
     51,
@@ -497,7 +497,7 @@ test("shared call sites own qualification, argument ranges, and nested active ar
     "CAST(3 AS decimal(18, 2))",
   );
 });
-test("OUTPUT inserted/deleted availability follows DML semantics", () => {
+test("contract: OUTPUT inserted and deleted availability follows DML semantics", () => {
   assert.deepEqual(
     names("INSERT INTO dbo.Customers (CustomerCode) OUTPUT inserted."),
     [...columns].map((c) => c.name).sort(),

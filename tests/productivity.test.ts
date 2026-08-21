@@ -113,7 +113,7 @@ test("plain wildcard preserves source order and aliases", () => {
   );
 });
 
-test("plain wildcard qualification follows the SELECT scope", () => {
+test("contract: wildcard qualification follows source count and explicit aliases", () => {
   const single = "SELECT * FROM dbo.Customers";
   const unaliased = resolveSelectWildcard(
     single,
@@ -162,7 +162,7 @@ test("plain wildcard qualification follows the SELECT scope", () => {
   assert.equal(wildcardColumnExpressions(multiple)[0], "Customers.Column1");
 });
 
-test("local row-source wildcards use the same qualification policy", () => {
+test("contract: local RowSource wildcard expansion preserves qualification policy", () => {
   const cte =
     "WITH X AS (SELECT Column1, Column2 FROM dbo.Customers) SELECT * FROM X";
   const unaliased = resolveSelectWildcard(
@@ -219,7 +219,7 @@ test("smart aliases split names and avoid visible collisions", () => {
   );
 });
 
-test("smart aliases start only after a row-source identifier is syntactically complete", () => {
+test("contract: Smart Alias starts only after a completed RowSource", () => {
   for (const sql of [
     "SELECT * FROM dbo.Belege",
     "SELECT * FROM dbo.BelegePos",

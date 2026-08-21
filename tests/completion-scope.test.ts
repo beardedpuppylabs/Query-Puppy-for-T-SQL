@@ -10,7 +10,7 @@ import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
 const databaseIndex = (database: string, schemas: string[]): DatabaseIndex =>
   new DatabaseIndex({ database, schemas, objects: [], loadedAt: 0 });
 
-test("secondary metadata loads lazily and does not expand unqualified scope", async () => {
+test("contract: secondary metadata is lazy and unqualified scope stays database-local", async () => {
   const loads: string[] = [];
   let lists = 0;
   const connections = {
@@ -68,7 +68,7 @@ test("secondary metadata loads lazily and does not expand unqualified scope", as
   assert.equal(lists, 1);
 });
 
-test("database discovery does not load secondary metadata", async () => {
+test("contract: database discovery does not eagerly load secondary metadata", async () => {
   const loads: string[] = [];
   const connections = {
     listDatabases: async () => ["IntelliSenseLab", "IntelliSenseLabReporting"],
@@ -97,7 +97,7 @@ test("database discovery does not load secondary metadata", async () => {
   assert.equal(scope.indexes.has("intellisenselabreporting"), false);
 });
 
-test("database-qualified alias requests its originating database", async () => {
+test("contract: database-qualified aliases request their originating database", async () => {
   const loads: string[] = [];
   const connections = {
     listDatabases: async () => ["DatabaseA", "DatabaseB"],

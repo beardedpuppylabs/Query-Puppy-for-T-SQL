@@ -301,7 +301,7 @@ const deferred = <T>() => {
   return { promise, resolve: resolve!, reject: reject! };
 };
 
-test("persistent snapshot round trip rebuilds canonical catalog and relationship indexes", async (t) => {
+test("contract: persistent round trip rebuilds canonical catalog and relationship indexes", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "query-puppy-cache-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const store = new FileMetadataSnapshotStore(directory);
@@ -335,7 +335,7 @@ test("persistent snapshot round trip rebuilds canonical catalog and relationship
   );
 });
 
-test("cold load coalesces consumers, emits progress lifecycle, and persists once", async () => {
+test("contract: cold load coalesces consumers reports progress and persists once", async () => {
   const store = new MemoryStore();
   const events: MetadataLifecycleEvent[] = [];
   const cache = new MetadataCache({
@@ -367,7 +367,7 @@ test("cold load coalesces consumers, emits progress lifecycle, and persists once
   );
 });
 
-test("warm hydration returns v1 while one first-session refresh builds and atomically swaps v2", async () => {
+test("contract: warm hydration returns stale data while refresh atomically swaps", async () => {
   const store = new MemoryStore();
   const first = index("DatabaseA", 1);
   const second = index("DatabaseA", 2);
@@ -397,7 +397,7 @@ test("warm hydration returns v1 while one first-session refresh builds and atomi
   assert.equal(store.saves.length, 1);
 });
 
-test("replacement remains atomic while persistence is still incomplete", async () => {
+test("contract: refresh replacement remains atomic until persistence completes", async () => {
   const saving = deferred<undefined>();
   class BlockingStore extends MemoryStore {
     override async save(
@@ -424,7 +424,7 @@ test("replacement remains atomic while persistence is still incomplete", async (
   assert.equal(cache.get("server", "DatabaseA"), second);
 });
 
-test("refresh failure retains stale memory and persistent snapshots with bounded retry", async () => {
+test("contract: refresh failure retains stale snapshots with bounded retry", async () => {
   let now = 1_000;
   const store = new MemoryStore();
   const first = index("DatabaseA", 1);
@@ -467,7 +467,7 @@ test("refresh failure retains stale memory and persistent snapshots with bounded
   assert.equal(cache.get("server", "DatabaseA")?.metadata.loadedAt, 2);
 });
 
-test("cold-load failure persists nothing and remains retryable", async () => {
+test("contract: cold-load failure persists nothing and remains retryable", async () => {
   const store = new MemoryStore();
   const cache = new MetadataCache({ store });
   await assert.rejects(
@@ -486,7 +486,7 @@ test("cold-load failure persists nothing and remains retryable", async () => {
   assert.equal(store.saves.length, 1);
 });
 
-test("a local storage failure does not discard a successful cold SQL snapshot", async () => {
+test("contract: storage failure does not discard a successful SQL catalog load", async () => {
   class FailingStore extends MemoryStore {
     override async save(): Promise<void> {
       throw new Error("disk unavailable");
@@ -512,7 +512,7 @@ test("a local storage failure does not discard a successful cold SQL snapshot", 
   );
 });
 
-test("freshness is demand-driven at exactly fifteen minutes after session refresh", async () => {
+test("contract: cache freshness is demand-driven at the fifteen-minute threshold", async () => {
   let now = 10_000;
   const store = new MemoryStore();
   store.seed("server", "DatabaseA", index("DatabaseA", 1), now - 1);
@@ -555,7 +555,7 @@ test("freshness is demand-driven at exactly fifteen minutes after session refres
   await intervalJoined;
 });
 
-test("manual refresh bypasses freshness and coalesces with simultaneous refresh requests", async () => {
+test("contract: manual refresh bypasses freshness and coalesces concurrent refreshes", async () => {
   const cache = new MetadataCache();
   const first = index("DatabaseA", 1);
   await cache.ensureLoaded("server", "DatabaseA", async () => first);
@@ -574,7 +574,7 @@ test("manual refresh bypasses freshness and coalesces with simultaneous refresh 
   assert.equal(cache.get("server", "DatabaseA")?.metadata.loadedAt, 2);
 });
 
-test("file identities isolate connections and databases and serialized data is allow-listed", async (t) => {
+test("contract: snapshot identities isolate databases and serialized data is allow-listed", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "query-puppy-cache-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const store = new FileMetadataSnapshotStore(directory);
@@ -631,7 +631,7 @@ test("file identities isolate connections and databases and serialized data is a
   );
 });
 
-test("corrupt and incompatible snapshots are discarded and replaced by a cold load", async (t) => {
+test("contract: corrupt or incompatible snapshots fall back to a cold load", async (t) => {
   for (const corruption of ["invalid-json", "wrong-version"] as const) {
     const directory = await mkdtemp(join(tmpdir(), "query-puppy-cache-"));
     t.after(() => rm(directory, { recursive: true, force: true }));
@@ -666,7 +666,7 @@ test("corrupt and incompatible snapshots are discarded and replaced by a cold lo
   }
 });
 
-test("memory remains the hot path and secondary databases hydrate only when referenced", async () => {
+test("contract: memory is the hot path and secondary databases hydrate on demand", async () => {
   const store = new MemoryStore();
   store.seed("server", "DatabaseA", index("DatabaseA", 1), 1);
   store.seed("server", "DatabaseB", index("DatabaseB", 1), 1);

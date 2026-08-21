@@ -162,7 +162,7 @@ const metadata: DatabaseMetadata = {
   ],
 };
 
-test("relationship graph preserves composite ordinals, direction, state, and cross-schema edges", () => {
+test("contract: relationship graph preserves composite direction state and cross-schema edges", () => {
   const index = new DatabaseIndex(metadata);
   const headers = index.findObject("reltest", "OrderHeaders")!;
   const lines = index.findObject("reltest", "OrderLines")!;
@@ -192,7 +192,7 @@ test("relationship graph preserves composite ordinals, direction, state, and cro
   );
 });
 
-test("physical columns derive multiple roles without changing ranking", () => {
+test("contract: physical columns retain combined PK UQ FK roles", () => {
   const index = new DatabaseIndex(metadata);
   const sql = "SELECT ol.company FROM reltest.OrderLines ol";
   const candidates = createCandidates(
@@ -223,7 +223,7 @@ test("physical columns derive multiple roles without changing ranking", () => {
   );
 });
 
-test("database-wide completion retains same-named objects from different schemas", () => {
+test("contract: database indexes retain same-named objects from different schemas", () => {
   const duplicate = new DatabaseIndex({
     database: "Db",
     schemas: ["dbo", "reltest"],

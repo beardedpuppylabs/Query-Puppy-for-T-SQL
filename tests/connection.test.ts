@@ -22,7 +22,7 @@ function sharingApi(
   };
 }
 
-test("connection abstraction reuses one transient shared URI for related queries", async () => {
+test("contract: connection sharing reuses one transient URI without owning credentials", async () => {
   const calls: string[] = [];
   const api = sharingApi({
     getActiveEditorConnectionId: async (id) => {
@@ -56,7 +56,7 @@ test("connection abstraction reuses one transient shared URI for related queries
   ]);
 });
 
-test("concurrent active-context callers share one in-flight lookup", async () => {
+test("contract: concurrent active-context callers coalesce one lookup", async () => {
   let release: (() => void) | undefined;
   const blocked = new Promise<void>((resolve) => {
     release = resolve;
@@ -90,7 +90,7 @@ test("concurrent active-context callers share one in-flight lookup", async () =>
   assert.equal(activeDatabaseCalls, 1);
 });
 
-test("successful mssql API acquisition is reused while active context stays dynamic", async () => {
+test("contract: mssql API is reused while active connection context stays dynamic", async () => {
   let apiRequests = 0;
   let connectionId = "connection-1";
   let database = "ERP";

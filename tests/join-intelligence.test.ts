@@ -204,7 +204,7 @@ const joins = (sql: string, cursor = sql.length) =>
     (candidate) => candidate.kind === "joinPredicate",
   );
 
-test("single FK predicates render current-right-first in both query orders", () => {
+test("contract: FK JOIN predicates render deterministically in both query orders", () => {
   assert.deepEqual(
     joins(
       "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON",
@@ -230,7 +230,7 @@ test("JOIN predicates survive existing spaces and newline indentation", () => {
     );
 });
 
-test("three real relationships remain distinct in both directions", () => {
+test("contract: multiple FK relationships remain distinct", () => {
   assert.deepEqual(
     joins("SELECT * FROM reltest.Customers c JOIN reltest.Addresses a ON")
       .map((item) => item.name)
@@ -253,7 +253,7 @@ test("three real relationships remain distinct in both directions", () => {
   );
 });
 
-test("composite relationships produce one ordinal predicate in both directions", () => {
+test("contract: composite FKs produce one ordinal JOIN predicate", () => {
   assert.deepEqual(
     joins(
       "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.OrderLines ol ON",
@@ -268,7 +268,7 @@ test("composite relationships produce one ordinal predicate in both directions",
   );
 });
 
-test("cross-schema works while unrelated and disabled relationships do not", () => {
+test("contract: cross-schema trusted FKs work while disabled FKs do not", () => {
   assert.deepEqual(
     joins("SELECT * FROM reltest.Customers c JOIN relref.Regions r ON").map(
       (item) => item.name,
@@ -317,7 +317,7 @@ test("only current-right to legally previous sources participates", () => {
   );
 });
 
-test("JOIN source ranking uses enabled relationships after Contains filtering", () => {
+test("contract: relationship ranking occurs after Contains filtering", () => {
   const candidates = createCandidates(
     resolveSqlContext("SELECT * FROM reltest.Customers c JOIN reltest."),
     scope,
@@ -341,7 +341,7 @@ test("JOIN source ranking uses enabled relationships after Contains filtering", 
   );
 });
 
-test("cross-database row sources never produce relationship predicates", () => {
+test("contract: cross-database RowSources never infer FK predicates", () => {
   const other = new DatabaseIndex({
     ...metadata,
     database: "Other",

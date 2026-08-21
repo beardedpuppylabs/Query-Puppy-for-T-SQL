@@ -77,7 +77,7 @@ const candidates = (sql: string, cursor = sql.length) =>
     (item) => item.name,
   );
 
-test("classifies SELECT, WHERE, GROUP BY, HAVING, ORDER BY, and incomplete clauses", () => {
+test("contract: clause classification includes incomplete SQL", () => {
   for (const [sql, clause] of [
     ["SELECT addr FROM dbo.Customers c", "select"],
     ["SELECT * FROM dbo.Customers c WHERE addr", "where"],
@@ -125,7 +125,7 @@ test("JOIN ON exposes structured left/current-right context and excludes future 
   );
 });
 
-test("JOIN explicit members use positional visibility across multiple ON clauses", () => {
+test("contract: JOIN members obey positional RowSource visibility", () => {
   const sql =
     "SELECT * FROM dbo.Customers c JOIN sales.CustomerOrders o ON c. AND o. AND future. JOIN dbo.Customers future ON c. AND o. AND future.";
   const at = (needle: string, occurrence = 0) => {
@@ -169,7 +169,7 @@ test("expression policy excludes RowSources while FROM and EXEC retain their dom
   assert.equal(policy.allowRowSources, false);
 });
 
-test("projection aliases are peer/GROUP/HAVING-invisible and ORDER-BY-visible", () => {
+test("contract: projection alias visibility follows SQL clause semantics", () => {
   for (const sql of [
     "SELECT c.EmailAddress AS Contact, cont FROM dbo.Customers c",
     "SELECT c.EmailAddress AS Contact FROM dbo.Customers c GROUP BY cont",

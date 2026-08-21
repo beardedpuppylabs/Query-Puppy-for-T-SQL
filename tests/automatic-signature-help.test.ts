@@ -5,7 +5,7 @@ import {
   signatureTriggerFromEdit,
 } from "../src/completion/AutomaticSignatureHelp.js";
 
-test("recognizes opening, auto-closing, and comma edits", () => {
+test("contract: automatic Signature Help recognizes opening closing and comma edits", () => {
   assert.deepEqual(
     signatureTriggerFromEdit(
       "untitled:test",
@@ -52,7 +52,7 @@ test("recognizes opening, auto-closing, and comma edits", () => {
   );
 });
 
-test("selection fulfillment is exact and one-shot", () => {
+test("contract: automatic Signature Help fulfillment is exact and one-shot", () => {
   const state = new PendingSignatureTriggerState();
   const pending = state.replace("file:test.sql", 4, {
     rangeOffset: 7,

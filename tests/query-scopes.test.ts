@@ -84,7 +84,7 @@ const at = (sql: string, needle: string, occurrence = 0) => {
   );
 };
 
-test("top-level and EXISTS scopes resolve local and correlated aliases", () => {
+test("contract: nested scopes resolve local and legally correlated aliases", () => {
   const sql =
     "SELECT c. FROM dbo.Customers c WHERE EXISTS (SELECT o. FROM sales.CustomerOrders o WHERE c.)";
   assert.deepEqual(at(sql, "c."), ["CustomerCode", "CustomerId"]);
@@ -129,7 +129,7 @@ test("scoped outer bindings rebind cached catalog metadata without global alias 
   );
 });
 
-test("inner aliases do not leak out and sibling scopes are isolated", () => {
+test("contract: inner aliases do not leak and sibling scopes stay isolated", () => {
   const closed =
     "SELECT c. FROM dbo.Customers c WHERE EXISTS (SELECT 1 FROM sales.CustomerOrders o) AND o.";
   assert.deepEqual(at(closed, "AND o."), []);
@@ -248,7 +248,7 @@ test("unfinished nested queries stay active", () => {
   );
 });
 
-test("comments, strings, and statements do not create or share scopes", () => {
+test("contract: comments strings and statements do not create or share scopes", () => {
   const fake =
     "SELECT 'SELECT fake. FROM dbo.Customers fake' FROM dbo.Customers c -- SELECT nope.\nWHERE c.";
   assert.deepEqual(at(fake, "c."), ["CustomerCode", "CustomerId"]);
@@ -381,7 +381,7 @@ test("set projections support star, alias star, TOP, DISTINCT, and explicit CTE 
   assert.deepEqual(at(explicit, "x."), ["AddressValue", "EntityId"]);
 });
 
-test("all set operators reconcile expanded stars before ordinal projection", () => {
+test("contract: set operators reconcile expanded stars before ordinal projection", () => {
   for (const operator of ["UNION", "UNION ALL", "INTERSECT", "EXCEPT"]) {
     const sql = `WITH X AS (SELECT c.* FROM Lab.dbo.Customers c ${operator} SELECT c2.* FROM Lab.dbo.Customers c2) SELECT x. FROM X x`;
     assert.deepEqual(at(sql, "x."), ["CustomerCode", "CustomerId"]);

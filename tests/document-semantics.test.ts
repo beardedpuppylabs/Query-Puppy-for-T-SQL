@@ -104,7 +104,7 @@ test("CTE projections, aliases, explicit lists, and catalog types resolve", () =
   assert.equal(result[0].nullable, false);
 });
 
-test("multiple CTEs resolve in order and do not leak to later statements", () => {
+test("contract: chained CTEs resolve projections in order without leakage", () => {
   const sql =
     "WITH A AS (SELECT CustomerId FROM dbo.Customers), B AS (SELECT a.CustomerId AS Id FROM A a) SELECT b. FROM B b";
   assert.deepEqual(
@@ -119,7 +119,7 @@ test("multiple CTEs resolve in order and do not leak to later statements", () =>
   );
 });
 
-test("CREATE temp and table variable definitions preserve columns and scalar variables are excluded", () => {
+test("contract: temp tables global temps and table variables expose declared columns", () => {
   const sql =
     "CREATE TABLE #T (Id bigint NOT NULL, [Address Text] nvarchar(200) NULL); DECLARE @Scalar bigint; DECLARE @Rows TABLE (Name nvarchar(100) NULL); SELECT t. FROM #T t";
   const result = complete(sql, sql.indexOf("t.") + 2);
@@ -164,7 +164,7 @@ test("ALTER TABLE temp ADD extends subsequent local metadata", () => {
   assert.equal(result.find((x) => x.name === "Flag")?.nullable, false);
 });
 
-test("SELECT INTO supports aliases, computed aliases, and star expansion", () => {
+test("contract: SELECT INTO exposes inferred target columns", () => {
   const sql =
     "SELECT CustomerId AS Id, EmailAddress AS Mail, CreditLimit * 2 AS Gross INTO #T FROM dbo.Customers; SELECT t. FROM #T t";
   const result = complete(sql, sql.indexOf("t.") + 2);
@@ -181,7 +181,7 @@ test("SELECT INTO supports aliases, computed aliases, and star expansion", () =>
   assert.equal(complete(star, star.indexOf("t.") + 2).length, 4);
 });
 
-test("derived tables and nested projections expose only projected columns", () => {
+test("contract: derived tables expose only projection aliases", () => {
   const sql =
     "SELECT x. FROM (SELECT CustomerId AS Id, EmailAddress AS Mail FROM dbo.Customers) x";
   assert.deepEqual(
@@ -198,7 +198,7 @@ test("derived tables and nested projections expose only projected columns", () =
   );
 });
 
-test("VALUES aliases, APPLY TVFs, and derived APPLY resolve columns", () => {
+test("contract: VALUES and APPLY RowSources resolve projected members", () => {
   const values = "SELECT v. FROM (VALUES (1, 'A'), (2, 'B')) v(Id, Name)";
   assert.deepEqual(
     complete(values, values.indexOf("v.") + 2).map((x) => x.name),

@@ -83,7 +83,7 @@ const index = new DatabaseIndex({
     },
   ],
 });
-test("alias completion is columns-only and uses contains", () => {
+test("contract: explicit alias completion is columns-only and uses Contains", () => {
   const sql = "SELECT c.addr FROM dbo.Customers c";
   const result = createCandidates(
     resolveSqlContext(sql, "SELECT c.addr".length),
@@ -142,7 +142,7 @@ test("an ambiguous unqualified alias source returns no columns", () => {
   );
 });
 
-test("prefix-family row sources remain independent Contains candidates and canonical bindings", () => {
+test("contract: exact RowSource matches retain longer prefix-family Contains candidates", () => {
   const family = new DatabaseIndex({
     database: "Db",
     schemas: ["dbo"],
@@ -267,7 +267,7 @@ test("unqualified row sources remain scoped to the active database", () => {
   );
 });
 
-test("three-part and double-dot completion use only the explicit database and schema", () => {
+test("contract: same-server three-part completion preserves database and schema scope", () => {
   const explicit = createCandidates(
     resolveSqlContext("SELECT * FROM ReportingDb.reporting.addr"),
     crossDatabaseScope,
@@ -286,7 +286,7 @@ test("three-part and double-dot completion use only the explicit database and sc
   );
 });
 
-test("FROM row sources include and group tables, views, and TVFs", () => {
+test("contract: row-source completion includes tables views and TVFs", () => {
   const result = createCandidates(
     resolveSqlContext("SELECT * FROM ReportingDb.reporting.customer"),
     crossDatabaseScope,
@@ -683,7 +683,7 @@ test("sys and INFORMATION_SCHEMA behave as strict developer metadata schemas", (
   );
 });
 
-test("cross-database aliases return columns from their own database only", () => {
+test("contract: cross-database aliases return only their database members", () => {
   const sql = `SELECT c.addr, r.addr
 FROM dbo.Customers c
 JOIN ReportingDb.reporting.CustomerAddressReport r ON r.ReportAddressId = c.AddressId`;

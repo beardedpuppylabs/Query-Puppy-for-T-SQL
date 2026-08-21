@@ -269,7 +269,7 @@ test("classifies deterministic conservative compatibility tiers", () => {
   assert.equal(compare({ name: "unknown" }, { name: "bigint" }), "unknown");
 });
 
-test("infers physical/local columns, literals, casts, scalar UDFs, arithmetic, and CASE", () => {
+test("contract: expression inference covers columns literals casts UDFs arithmetic and CASE", () => {
   const base = "SELECT c.CustomerId FROM dbo.Customers c";
   const model = semantics(base);
   const infer = (expression: string) =>
@@ -330,7 +330,7 @@ test("infers physical/local columns, literals, casts, scalar UDFs, arithmetic, a
   }
 });
 
-test("infers expected types for comparison, function, UPDATE, INSERT, LIKE, and arithmetic contexts", () => {
+test("contract: ExpectedType covers comparison callable DML LIKE and arithmetic contexts", () => {
   const expected = (sql: string, cursor = sql.length) =>
     inferExpectedTypeAtCursor(sql, cursor, scope, semantics(sql, cursor));
   assert.equal(
@@ -418,7 +418,7 @@ test("infers expected types for comparison, function, UPDATE, INSERT, LIKE, and 
   assert.equal(expected("SELECT c. FROM dbo.Customers c"), undefined);
 });
 
-test("UPDATE assignment ownership is positional and depth-aware", () => {
+test("contract: UPDATE assignment ownership is positional and depth-aware", () => {
   const cases = [
     [
       "UPDATE s SET ExternalReference = c.| FROM dbo.Targets s CROSS JOIN dbo.Customers c",
@@ -454,7 +454,7 @@ test("UPDATE assignment ownership is positional and depth-aware", () => {
   }
 });
 
-test("type-aware ranking preserves Contains, qualifier strictness, incompatible visibility, and unknown ordering", () => {
+test("contract: type ranking preserves Contains qualifier strictness and candidate visibility", () => {
   const bigint = names("SELECT * FROM dbo.Customers c WHERE c.CustomerId = c.");
   assert.deepEqual(bigint.slice(0, 2), ["CustomerId", "PrimaryAddressId"]);
   assert.ok(bigint.indexOf("RegionId") < bigint.indexOf("CustomerCode"));

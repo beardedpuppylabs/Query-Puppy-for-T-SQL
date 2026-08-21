@@ -107,13 +107,14 @@
     "build": "npm run clean && tsc -p tsconfig.json && esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
     "compile": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
+    "test:contracts": "node --import tsx --test --test-name-pattern=\"^contract:\" tests/*.test.ts",
     "test:integration": "node --import tsx --test tests/integration/*.test.ts",
     "test:extension": "npm run build && node scripts/run-extension-tests.mjs",
     "lint": "eslint src tests",
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
     "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run test:extension && npm run build",
-    "package": "npm run verify && vsce package --no-dependencies --out query-puppy-for-t-sql-0.11.0.vsix",
+    "package": "npm run verify && vsce package --no-dependencies --allow-missing-repository --out query-puppy-for-t-sql-0.11.0.vsix",
     "publish:marketplace": "vsce publish"
   },
   "devDependencies": {

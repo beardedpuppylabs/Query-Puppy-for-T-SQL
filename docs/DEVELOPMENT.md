@@ -107,6 +107,16 @@ build.
 For details about which verification layer proves which behavior, see
 [Testing Strategy](TESTING.md).
 
+For a fast permanent regression gate spanning the major shipped feature contracts,
+run:
+
+```bash
+npm run test:contracts
+```
+
+This focused command complements rather than replaces `npm test`. See the feature
+contract inventory in [Testing Strategy](TESTING.md) for the sentinel mapping.
+
 ## Codex verification boundary
 
 For normal development tasks, Codex runs the applicable non-production checks:

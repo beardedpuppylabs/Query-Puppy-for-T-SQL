@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DocumentSemanticCache } from "../src/parser/DocumentSemanticCache.js";
 
-test("document semantic cache reuses exact versions and invalidates edits and closes", () => {
+test("contract: document semantic cache reuses versions and invalidates edits and closes", () => {
   const cache = new DocumentSemanticCache();
   const first = cache.get("file:///query.sql", 1, "SELECT 1", 8);
   assert.equal(cache.get("file:///query.sql", 1, "SELECT 1", 8), first);

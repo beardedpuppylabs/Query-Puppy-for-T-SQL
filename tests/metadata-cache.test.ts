@@ -64,7 +64,7 @@ test("database identities are independent and targeted invalidation preserves si
   assert.equal(cache.get("connection", "DatabaseB"), undefined);
 });
 
-test("concurrent requests for one database coalesce into one load", async () => {
+test("contract: concurrent catalog requests for one database coalesce", async () => {
   const cache = new MetadataCache();
   let loads = 0;
   const loader = async (): Promise<DatabaseIndex> => {

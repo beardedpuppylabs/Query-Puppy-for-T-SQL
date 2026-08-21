@@ -4,7 +4,7 @@ import { containsMatch } from "../src/completion/ContainsMatcher.js";
 import { sortCandidates } from "../src/completion/CompletionSorter.js";
 import type { CompletionCandidate } from "../src/completion/CompletionCandidate.js";
 
-test("contains matching is contiguous, case-insensitive, and accepts empty search", () => {
+test("contract: Contains matching is contiguous and case-insensitive", () => {
   assert.equal(containsMatch("CustomerAddress", "addr"), true);
   assert.equal(containsMatch("CustomerAddress", "ADDR"), true);
   assert.equal(containsMatch("BillingAddress", "address"), true);

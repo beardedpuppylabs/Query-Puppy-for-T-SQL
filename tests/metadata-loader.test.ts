@@ -85,7 +85,7 @@ test("metadata assembly is independent of result row order", async () => {
   assert.equal(index.findObject("dbo", "GetName")?.parameters[0]?.name, "@Id");
 });
 
-test("scalar return metadata supports the unnamed return parameter", async () => {
+test("contract: scalar return metadata supports the unnamed return parameter", async () => {
   const rows = [
     row("O", "8", "dbo", "GetName", "scalarFunction"),
     row(
@@ -392,7 +392,7 @@ test("keys and foreign keys are assembled set-wise without duplicate constraint 
   assert.match(RELATIONSHIP_QUERY, /LEFT JOIN sys\.key_constraints/);
 });
 
-test("Schema Intelligence runtime initialization is catalog-read-only", async () => {
+test("contract: Schema Intelligence runtime initialization is catalog-read-only", async () => {
   const statements: string[] = [];
   let metadataOperations = 0;
   const connections = {

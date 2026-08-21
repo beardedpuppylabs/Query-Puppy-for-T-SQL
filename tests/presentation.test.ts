@@ -96,7 +96,7 @@ test("database candidates use their semantic description only in mixed results",
   });
 });
 
-test("physical column rows use fixed canonical slots and role order", () => {
+test("contract: physical column presentation uses canonical slots and role order", () => {
   assert.equal(MAX_VISIBLE_COLUMN_NAME, 32);
   assert.equal(PHYSICAL_COLUMN_ROLE_WIDTH, 8);
   assert.equal(PHYSICAL_COLUMN_TYPE_WIDTH, 20);
@@ -115,7 +115,7 @@ test("physical column rows use fixed canonical slots and role order", () => {
   ]);
 });
 
-test("long physical names are presentation-only bounded with complete metadata", () => {
+test("contract: long physical names are bounded without changing semantic metadata", () => {
   const name = "VeryLongERPBusinessTransactionPostingReferenceIdentifier";
   const candidate = physical(
     name,

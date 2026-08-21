@@ -73,7 +73,7 @@ test("database-qualified aliases retain database, schema, and object identity", 
     alias: "r",
   });
 });
-test("comments and strings do not produce aliases", () => {
+test("contract: comments and strings do not produce RowSource aliases", () => {
   const context = resolveSqlContext(
     "-- FROM dbo.Bad b\nSELECT 'FROM dbo.Nope n', x",
   );

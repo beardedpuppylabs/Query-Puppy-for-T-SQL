@@ -133,6 +133,109 @@ Examples:
 
 Do not declare a visual problem solved from TypeScript object inspection alone.
 
+## Permanent feature-contract suite
+
+Run the compact cross-feature regression gate with:
+
+```bash
+npm run test:contracts
+```
+
+Contract sentinels have test names beginning with `contract:`. The command loads the
+normal test files but executes only those sentinels, so it protects high-risk
+cross-feature behavior without duplicating production implementations or replacing
+the complete `npm test` run.
+
+When a production regression is found, first add or identify a `contract:` test that
+fails for the reported SQL shape. A newly added test that fails because its expected
+value was written incorrectly is a test-authoring error, not evidence of a product
+regression; correct the assertion and record that distinction rather than changing
+production code to satisfy it.
+
+### Feature contract inventory
+
+This table is the maintained feature-to-sentinel map. `Implemented` means the
+behavior is part of the current product contract. Deferred and obsolete entries are
+listed explicitly so historical milestone notes are not mistaken for current
+promises.
+
+| Feature area                                                                         | Status                           | Sentinel test or fixture                                                                                   |
+| ------------------------------------------------------------------------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Case-insensitive contiguous Contains matching                                        | Implemented                      | `matcher-sorter.test.ts` — `contract: Contains matching is contiguous and case-insensitive`                |
+| Exact object ranking without prefix-family suppression                               | Implemented                      | `candidates.test.ts` — `contract: exact RowSource matches retain longer prefix-family Contains candidates` |
+| Database discovery, lazy cross-database loading, and unqualified isolation           | Implemented                      | `completion-scope.test.ts` database-discovery and secondary-metadata contracts                             |
+| Same-server database/schema/object qualification                                     | Implemented                      | `candidates.test.ts` — three-part completion contract                                                      |
+| Tables, views, synonyms, and TVFs as RowSources                                      | Implemented                      | `candidates.test.ts` — row-source type contract                                                            |
+| Explicit qualifier members remain source-local                                       | Implemented                      | `feature-contracts.test.ts` comparison, callable, and UPDATE RHS contracts                                 |
+| SELECT/WHERE/GROUP/HAVING/ORDER and incomplete clause recognition                    | Implemented                      | `clause-context.test.ts` — incomplete clause contract                                                      |
+| JOIN positional visibility                                                           | Implemented                      | `clause-context.test.ts` — positional RowSource contract                                                   |
+| Projection alias clause visibility                                                   | Implemented                      | `clause-context.test.ts` — projection alias contract                                                       |
+| Nested, correlated, shadowed, and sibling QueryScopes                                | Implemented                      | `query-scopes.test.ts` nested and isolation contracts                                                      |
+| UNION/UNION ALL/INTERSECT/EXCEPT projection semantics                                | Implemented                      | `query-scopes.test.ts` — set-operator contract                                                             |
+| CTEs and chained CTEs                                                                | Implemented                      | `document-semantics.test.ts` — chained CTE contract                                                        |
+| Temp tables, global temp tables, and table variables                                 | Implemented                      | `document-semantics.test.ts` — local declared-source contract                                              |
+| SELECT INTO inference                                                                | Implemented                      | `document-semantics.test.ts` — SELECT INTO contract                                                        |
+| Derived tables                                                                       | Implemented                      | `document-semantics.test.ts` — derived projection contract                                                 |
+| VALUES and APPLY RowSources                                                          | Implemented                      | `document-semantics.test.ts` — VALUES/APPLY contract                                                       |
+| Smart Alias phase boundary, collisions, and cross-database names                     | Implemented                      | `feature-contracts.test.ts` and `productivity.test.ts` Smart Alias contracts                               |
+| Wildcard expansion qualification and Tab-only activation                             | Implemented                      | `productivity.test.ts` and `feature-contracts.test.ts` wildcard contracts                                  |
+| PK/UQ/FK roles and canonical column metadata                                         | Implemented                      | `schema-intelligence.test.ts` role contract and `dml-call.test.ts` canonical-metadata contract             |
+| Composite, directional, cross-schema, and disabled FK state                          | Implemented                      | `schema-intelligence.test.ts` relationship contract                                                        |
+| Same-named objects across schemas/databases                                          | Implemented                      | `schema-intelligence.test.ts` database-index contract                                                      |
+| FK-aware JOIN predicates, multiple FKs, and composite FKs                            | Implemented                      | `join-intelligence.test.ts` FK predicate contracts                                                         |
+| Relationship ranking after Contains                                                  | Implemented                      | `join-intelligence.test.ts` — relationship ranking contract                                                |
+| No inferred cross-database FK relationships                                          | Implemented                      | `join-intelligence.test.ts` — cross-database negative contract                                             |
+| INSERT writable-column semantics                                                     | Implemented                      | `dml-call.test.ts` — INSERT target contract                                                                |
+| UPDATE target/RHS ownership and nested expression depth                              | Implemented                      | `dml-call.test.ts` and `type-intelligence.test.ts` UPDATE contracts                                        |
+| DELETE, OUTPUT inserted/deleted, and EXEC parameters                                 | Implemented                      | `dml-call.test.ts` DELETE, OUTPUT, and EXEC contracts                                                      |
+| Catalog scalar functions and TVF call signatures                                     | Implemented                      | `dml-call.test.ts` — catalog signature contract                                                            |
+| Built-in completion, signatures, ExpectedType, and return inference                  | Implemented                      | `builtin-functions.test.ts` built-in contracts                                                             |
+| Type normalization, ExpectedType, compatibility ranking, and visibility              | Implemented                      | `type-intelligence.test.ts` ExpectedType and ranking contracts                                             |
+| Canonical physical-column layout and long-name semantic preservation                 | Implemented                      | `presentation.test.ts` physical-column presentation contracts                                              |
+| Native Signature Help registration                                                   | Implemented                      | `provider-registration.test.ts` — Signature Help contract                                                  |
+| Shared mssql connection context without extension-owned credentials                  | Implemented                      | `connection.test.ts` connection-sharing contracts                                                          |
+| Read-only Schema Intelligence initialization                                         | Implemented                      | `metadata-loader.test.ts` — catalog-read-only contract                                                     |
+| Document semantic version cache                                                      | Implemented                      | `document-semantic-cache.test.ts` — invalidation contract                                                  |
+| Concurrent in-memory catalog load coalescing                                         | Implemented                      | `metadata-cache.test.ts` — catalog coalescing contract                                                     |
+| Persistent hydration, stale-while-revalidate, isolation, allow-listing, and recovery | Implemented                      | all `contract:` tests in `persistent-metadata.test.ts`                                                     |
+| Microsoft suggestion first-run coexistence                                           | Implemented                      | `microsoft-suggestions.test.ts` — explicit scoped setup contract                                           |
+| Real SQL Server catalog/relationship metadata                                        | Implemented, opt-in verification | `tests/integration/intellisense-lab.test.ts` and separately provisioned SQL fixtures                       |
+| Native Suggest Widget layout and installed-editor interaction                        | Implemented, manual verification | `tests/extension/index.ts` plus installed-editor acceptance                                                |
+| Linked Servers and arbitrary four-part cross-server intelligence                     | Deferred                         | No sentinel; outside the same-server database contract                                                     |
+| Full SQL grammar/type-precedence coverage and every SQL Server built-in              | Deferred                         | No sentinel; current parsers and built-in catalog are deliberately bounded                                 |
+| Runtime fixture provisioning or extension-owned SQL credentials                      | Prohibited                       | Read-only loader and connection-sharing contracts are negative sentinels                                   |
+| Pre-persistent memory-only catalog lifecycle                                         | Obsolete                         | Replaced by persistent metadata lifecycle contracts                                                        |
+| StartsWith/fuzzy/prefix-bonus ranking                                                | Obsolete and prohibited          | Contains contract is the authoritative negative sentinel                                                   |
+
+The four installed-editor regression shapes involving `qpacc.Customers`,
+`qpacc.OrderLines`, `qpacc.CompletionLayoutStress`, and
+`qpacc.CalculateBillingTotal_Manual` are represented directly in
+`feature-contracts.test.ts`. They deliberately construct canonical metadata rather
+than provisioning SQL. If those tests pass but an installed catalog contains no
+`qpacc` objects, the failure is a missing or stale integration prerequisite, not a
+reason to broaden explicit-qualifier completion or guess unresolved aliases.
+
+### Explicit qualifier membership invariant
+
+For an explicit qualifier such as `c.`, tests must prove this order of operations:
+
+1. resolve `c` against legally visible RowSources
+2. enumerate only the canonical members owned by that source
+3. infer an ExpectedType from the surrounding expression when reliable
+4. rank and group those already-resolved members
+
+ExpectedType must never replace the qualified member domain, broaden it to unrelated
+sources, or hide incompatible but legal members. If the RowSource itself cannot be
+resolved because its catalog or local metadata is absent, the provider must not
+invent members.
+
+### Incomplete SQL acceptance invariant
+
+Incomplete editor-state SQL is a first-class test input. Contract and provider tests
+must cover open expressions such as `DATEADD(day, 1, c.`, `fn(c.`,
+`SET Column = c.`, and `JOIN ... ON left.Column = right.` without requiring closing
+parentheses, semicolons, or a complete statement after the cursor.
+
 ## Bug-fix workflow
 
 For a practical bug:

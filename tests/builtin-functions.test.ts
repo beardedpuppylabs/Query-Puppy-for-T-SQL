@@ -120,7 +120,7 @@ const scope: CompletionScope = {
 const semantics = (sql: string, cursor = sql.length) =>
   analyzeDocumentSemantics(sql, cursor, scope);
 
-test("built-in catalog is deterministic, unique, valid, and case-insensitive", () => {
+test("contract: built-in catalog is deterministic unique valid and case-insensitive", () => {
   assert.deepEqual(
     BUILTIN_FUNCTIONS.map((item) => item.name),
     [
@@ -161,7 +161,7 @@ test("built-in catalog is deterministic, unique, valid, and case-insensitive", (
   }
 });
 
-test("built-ins use expression completion Contains matching and never pollute row sources", () => {
+test("contract: built-ins use Contains and never pollute RowSource completion", () => {
   const expression = createCandidates(resolveSqlContext("SELECT dat"), scope);
   assert.deepEqual(
     expression
@@ -190,7 +190,7 @@ test("built-ins use expression completion Contains matching and never pollute ro
   );
 });
 
-test("shared callable resolution handles built-ins, optional parameters, nesting, and qualification", () => {
+test("contract: shared callable resolution handles optional nested and qualified calls", () => {
   const sql = "SELECT DATEADD(day, DATEDIFF(day, a, b), ";
   const resolved = resolveCallableAtCursor(sql, sql.length, scope);
   assert.ok(resolved);
@@ -241,7 +241,7 @@ test("shared callable resolution handles built-ins, optional parameters, nesting
   }
 });
 
-test("built-in ExpectedType uses families and leaves datepart untyped", () => {
+test("contract: built-in ExpectedType uses families and leaves datepart untyped", () => {
   const expected = (marked: string) => {
     const cursor = marked.indexOf("|");
     const sql = marked.replace("|", "");
@@ -273,7 +273,7 @@ test("built-in ExpectedType uses families and leaves datepart untyped", () => {
   );
 });
 
-test("built-in return inference covers fixed, argument-derived, and datatype-dependent rules", () => {
+test("contract: built-in return inference covers fixed derived and datatype-dependent rules", () => {
   const model = semantics("SELECT * FROM dbo.Values v");
   const infer = (expression: string) =>
     inferExpressionType(expression, 0, expression.length, scope, model);
@@ -301,7 +301,7 @@ test("built-in return inference covers fixed, argument-derived, and datatype-dep
   assert.equal(infer("STRING_AGG(v.Name, N',')").normalizedName, "nvarchar");
 });
 
-test("built-in family ExpectedType drives provider ranking without hiding incompatible columns", () => {
+test("contract: built-in ExpectedType ranks without hiding incompatible members", () => {
   const marked = "SELECT DATEADD(day, 1, v.|) FROM dbo.Values v";
   const cursor = marked.indexOf("|");
   const sql = marked.replace("|", "");
@@ -323,7 +323,7 @@ test("built-in family ExpectedType drives provider ranking without hiding incomp
   );
 });
 
-test("qualified members survive incomplete built-in and catalog callable arguments", () => {
+test("contract: qualified members survive incomplete built-in and catalog callable arguments", () => {
   const candidates = (marked: string) => {
     const cursor = marked.indexOf("|");
     const sql = marked.replace("|", "");
