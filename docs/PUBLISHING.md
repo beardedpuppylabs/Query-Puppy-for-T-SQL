@@ -42,6 +42,18 @@ Full extension identifier:
 BeardedPuppyLabs.query-puppy-for-t-sql
 ```
 
+Public source repository:
+
+```text
+https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL
+```
+
+Public issue tracker:
+
+```text
+https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues
+```
+
 The Marketplace publisher with ID `BeardedPuppyLabs` must exist and be owned by the
 developer before publication.
 
@@ -111,6 +123,7 @@ Also confirm:
 
 - the manifest uses SPDX license `MIT`
 - the root `LICENSE` contains the canonical project MIT terms
+- `repository`, `bugs`, and `homepage` point to the canonical public GitHub project
 - current Marketplace links use the current publisher identity
 - no obsolete publisher identity remains in maintained package or release metadata
 
@@ -162,9 +175,9 @@ npm run package
 
 Use the exact VSIX path produced by the current package script.
 
-The package script is intentionally non-interactive even when the local Git remote
-is not a public repository URL. Do not replace that behavior with a private or
-machine-local repository URL in the Marketplace manifest.
+The package script is intentionally non-interactive. Keep Marketplace manifest
+repository metadata pointed at the canonical public GitHub repository; never
+replace it with a private or machine-local Git origin.
 
 Do not hard-code a historical release version into this permanent publishing guide.
 

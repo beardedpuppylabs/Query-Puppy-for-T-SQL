@@ -2,6 +2,8 @@
 
 Query Puppy for T-SQL is context-aware SQL Server IntelliSense for large and complex databases where memorizing every table, column, function, and relationship is unrealistic. It combines case-insensitive Contains discovery with query-scope analysis, expected types, and real SQL Server schema metadata.
 
+Query Puppy for T-SQL itself is free and open-source software under the [MIT License](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/LICENSE). [Source code, issues, and development](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL) are hosted publicly on GitHub.
+
 In a schema with hundreds or thousands of objects, remembering part of a name should be enough to find it. Types and real schema relationships help rank the most useful suggestions, and actual foreign keys can construct `JOIN` predicates. The extension provides its own completion provider while reusing the active Microsoft SQL Server (`mssql`) connection—there is no second login or separate connection configuration.
 
 ## Highlights
@@ -272,8 +274,14 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 
 ## Development and support
 
-Contributor guidance is in `docs/DEVELOPMENT.md`, publishing guidance is in `docs/PUBLISHING.md`, and support information is in `SUPPORT.md` in the source repository.
+Development guidance is in [docs/DEVELOPMENT.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/docs/DEVELOPMENT.md), publishing guidance is in [docs/PUBLISHING.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/docs/PUBLISHING.md), and support guidance is in [SUPPORT.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/SUPPORT.md).
 
-## License
+Report bugs and request improvements through [GitHub Issues](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues).
 
-Query Puppy for T-SQL is open-source software released under the MIT License. See `LICENSE` in the source repository for the full terms.
+## Open source
+
+Query Puppy for T-SQL itself is free and open-source software under the MIT License.
+
+- [Source code](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL)
+- [Issue tracker](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues)
+- [MIT License](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/LICENSE)

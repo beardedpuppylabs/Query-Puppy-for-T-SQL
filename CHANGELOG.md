@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.1
+
+- Added canonical public GitHub source, issue-tracker, and MIT License links to
+  extension metadata and Marketplace-facing documentation.
+- Made the project's free and open-source status visible near the start of the
+  Marketplace overview and added direct development/support links.
+
 ## 0.11.0
 
 - Added versioned, secret-free persistent schema snapshots in extension-owned

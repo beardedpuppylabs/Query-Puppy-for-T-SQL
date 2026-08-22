@@ -1,6 +1,8 @@
 # Support
 
-When reporting a problem, include:
+Report bugs and request improvements through [GitHub Issues](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues).
+
+When opening an issue, include:
 
 - Query Puppy for T-SQL and VS Code/VSCodium versions
 - Microsoft SQL Server (`ms-mssql.mssql`) version
@@ -10,4 +12,4 @@ When reporting a problem, include:
 - Relevant lines from **Output: Query Puppy for T-SQL** after enabling `queryPuppyForTSql.debugLogging`
 - Minimal SQL that reproduces the completion context, with confidential names replaced if necessary
 
-This repository does not currently advertise a public issue tracker. Use the distribution channel supplied by the developer until a public support location is established. Never include passwords, tokens, complete connection strings, or sensitive query/data values in a report.
+Never include passwords, tokens, complete connection strings, or sensitive query/data values in an issue. Replace confidential identifiers and values in reproduction SQL where necessary.
