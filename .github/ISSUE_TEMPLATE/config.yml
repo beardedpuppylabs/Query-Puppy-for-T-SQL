@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/security/policy
+    about: Read the private security-reporting guidance before sharing details.
+  - name: Support guidance
+    url: https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/SUPPORT.md
+    about: Check what information helps maintainers investigate a problem.

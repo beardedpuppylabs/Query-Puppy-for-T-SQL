@@ -1,4 +1,5 @@
 .build/**
+.github/**
 .git/**
 .gitignore
 .env
@@ -7,6 +8,8 @@
 .vscode/**
 .vscode-test/**
 AGENTS.md
+CONTRIBUTING.md
+SECURITY.md
 docs/**
 manual-acceptance/**
 src/**

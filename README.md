@@ -286,9 +286,7 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 
 ## Development and support
 
-Development guidance is in [docs/DEVELOPMENT.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/docs/DEVELOPMENT.md), publishing guidance is in [docs/PUBLISHING.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/docs/PUBLISHING.md), and support guidance is in [SUPPORT.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/SUPPORT.md).
-
-Report bugs and request improvements through [GitHub Issues](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues).
+See [CONTRIBUTING.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/CONTRIBUTING.md) for development and pull requests, [SUPPORT.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/SUPPORT.md) for bugs and feature requests, and [SECURITY.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/SECURITY.md) for private vulnerability reporting.
 
 ## Open source
 

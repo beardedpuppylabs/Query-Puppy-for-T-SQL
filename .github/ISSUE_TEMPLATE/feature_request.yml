@@ -1,0 +1,55 @@
+name: Feature request
+description: Propose a focused semantic T-SQL IntelliSense improvement
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Query Puppy focuses on semantic T-SQL IntelliSense for SQL Server. Please avoid confidential SQL, schema details, and production data.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What SQL editing task is difficult today, and who encounters it?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-behavior
+    attributes:
+      label: Proposed behavior
+      description: Describe the editor behavior you would find useful without prescribing an implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: sql-example
+    attributes:
+      label: Realistic SQL example
+      description: If applicable, provide anonymized T-SQL and mark the cursor position.
+      render: sql
+
+  - type: textarea
+    id: existing-tools
+    attributes:
+      label: Existing editor or mssql behavior
+      description: Does VS Code, VSCodium, or Microsoft mssql already provide something similar? Where does it fall short?
+    validations:
+      required: true
+
+  - type: textarea
+    id: semantic-value
+    attributes:
+      label: Query Puppy semantic value
+      description: How could Query Puppy's scopes, types, or real SQL Server metadata add value without duplicating an existing feature?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Project boundaries
+      options:
+        - label: This request is focused on SQL Server/T-SQL and does not require a second database connection, private editor APIs, or a custom completion popup.
+          required: true

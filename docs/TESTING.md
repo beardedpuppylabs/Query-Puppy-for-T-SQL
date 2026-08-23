@@ -103,6 +103,20 @@ explicit Contains assertion, and covers representative datepart, window, and
 Signature Help paths. This protects against source/catalog expansion failing to
 reach the activated extension bundle.
 
+### Public CI
+
+GitHub Actions runs one deterministic quality job on Node.js 24 LTS for pushes and
+pull requests. It installs the committed lockfile with `npm ci`, then runs
+formatting, ESLint, strict TypeScript, and the complete `npm test` unit/provider
+suite. The full suite already executes every `contract:` sentinel, so CI does not
+repeat the contract-only subset as a second test run.
+
+The default workflow deliberately omits live SQL integration tests because they
+need separately provisioned fixtures and credentials. It also omits Extension Host
+tests because the current `test:extension` script performs a production build and
+launches Electron; those remain explicit local/release verification layers rather
+than making the basic headless pull-request gate fragile.
+
 ### Live SQL integration tests
 
 Use the existing SQL Server fixtures for catalog behavior that should be verified

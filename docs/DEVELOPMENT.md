@@ -21,13 +21,17 @@ For release and publication procedures, see:
 
 ## Prerequisites
 
-- Node.js and npm
+- Node.js 24 LTS and npm
 - VS Code 1.105 or later
 - Microsoft SQL Server extension (`ms-mssql.mssql`) for Extension Development Host
   testing that exercises the real mssql integration
 
 Use versions compatible with the repository's current package metadata and
 development dependencies.
+
+Node.js 24 is the maintained CI and contributor baseline for the 0.12.1 hygiene
+release. Newer non-LTS local runtimes are not the compatibility target merely
+because they are installed on a contributor's machine.
 
 Do not assume that the newest globally available Node.js, npm, VS Code, VSCodium,
 or vsce release is automatically the version targeted by this repository.

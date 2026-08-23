@@ -1,0 +1,97 @@
+name: Bug report
+description: Report a reproducible Query Puppy problem
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Never include passwords, access tokens, credentials, complete connection strings, or sensitive production data. Anonymize SQL and schema identifiers where necessary.
+
+  - type: input
+    id: query-puppy-version
+    attributes:
+      label: Query Puppy version
+      placeholder: 0.12.1
+    validations:
+      required: true
+
+  - type: input
+    id: editor-version
+    attributes:
+      label: Editor and version
+      description: Include whether this is Visual Studio Code or VSCodium.
+      placeholder: VSCodium 1.105.x
+    validations:
+      required: true
+
+  - type: input
+    id: mssql-version
+    attributes:
+      label: Microsoft mssql version
+      placeholder: ms-mssql.mssql x.y.z
+    validations:
+      required: true
+
+  - type: input
+    id: sql-server-version
+    attributes:
+      label: SQL Server version
+      description: Include this when the problem may depend on server behavior or catalog metadata.
+      placeholder: SQL Server 2022
+
+  - type: input
+    id: database-context
+    attributes:
+      label: Active database and context
+      description: Use anonymized names when necessary. Do not include a connection string.
+      placeholder: Active database, schema, and relevant object kind
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal SQL reproduction
+      description: Show the exact cursor position and how completion or Signature Help was triggered.
+      render: sql
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: dropdown
+    id: refresh-attempted
+    attributes:
+      label: Schema metadata refresh attempted
+      description: "Did you run Query Puppy for T-SQL: Refresh Schema Metadata and wait for it to finish?"
+      options:
+        - "Yes"
+        - "No"
+        - Not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Query Puppy logs
+      description: "Paste only relevant redacted lines from Output: Query Puppy for T-SQL. Do not include credentials, full connection strings, or sensitive data."
+      render: text
+
+  - type: checkboxes
+    id: sensitive-data
+    attributes:
+      label: Sensitive-data check
+      options:
+        - label: I removed passwords, tokens, credentials, complete connection strings, and sensitive production data.
+          required: true

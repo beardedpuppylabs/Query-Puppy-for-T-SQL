@@ -3,3 +3,11 @@ dist/
 .build/
 .vscode-test/
 *.vsix
+/coverage/
+/.cache/
+/tmp/
+.env
+.env.*
+*.log
+*.tsbuildinfo
+.DS_Store

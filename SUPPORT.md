@@ -1,6 +1,10 @@
 # Support
 
-Report bugs and request improvements through [GitHub Issues](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues).
+Use the repository's [bug report form](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues/new?template=bug_report.yml) for reproducible defects and the [feature request form](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues/new?template=feature_request.yml) for proposed improvements.
+
+Do not report a sensitive vulnerability as an ordinary public issue. Follow the private reporting guidance in [SECURITY.md](SECURITY.md).
+
+## Bug reports
 
 When opening an issue, include:
 
@@ -13,3 +17,7 @@ When opening an issue, include:
 - Minimal SQL that reproduces the completion context, with confidential names replaced if necessary
 
 Never include passwords, tokens, complete connection strings, or sensitive query/data values in an issue. Replace confidential identifiers and values in reproduction SQL where necessary.
+
+## Feature requests
+
+Describe the editing problem, the proposed behavior, and a realistic anonymized SQL example where applicable. Explain whether VS Code, VSCodium, or Microsoft `mssql` already offers something similar and how Query Puppy's semantic model could add distinct value.

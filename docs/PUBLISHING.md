@@ -60,6 +60,22 @@ developer before publication.
 `package.json` is the authoritative repository source for the current package
 version and manifest publisher field.
 
+Release tags use semantic versions prefixed with `v`:
+
+```text
+vX.Y.Z
+```
+
+The matching GitHub Release title is:
+
+```text
+Query Puppy for T-SQL X.Y.Z
+```
+
+The Visual Studio Marketplace remains the primary extension-binary distribution
+channel. A GitHub Release records the source milestone and release notes; attaching
+a VSIX to every GitHub Release is not required by the current project policy.
+
 ## Publication safety
 
 Publishing must never occur automatically as a side effect of:
@@ -133,7 +149,10 @@ Before a release:
 
 - confirm the intended package version in `package.json`
 - confirm the lockfile version is consistent where applicable
-- update `CHANGELOG.md` when the release changes user-visible behavior
+- update `CHANGELOG.md` with an accurate release summary, including maintenance or
+  repository-only releases
+- synchronize affected README, support, security, contribution, architecture,
+  testing, development, roadmap, and publishing documentation
 - do not bump the version merely because implementation or documentation work
   occurred unless the release process requires a new package version
 
@@ -152,8 +171,18 @@ npm ci
 Run:
 
 ```bash
+npm run test:contracts
 npm run verify
+git diff --check
 ```
+
+`npm run verify` includes the complete unit/provider suite, so the preceding
+contract-only run is a fast explicit release sentinel rather than unique coverage.
+
+Complete the release's documented manual VS Code/VSCodium acceptance when native
+completion, Signature Help, packaging, or other editor-visible behavior changed.
+Record what was actually tested; do not claim manual or live SQL acceptance for a
+repository-only patch when it was not required.
 
 When the live SQL Server test environment is available and relevant to the release,
 also run:
@@ -172,6 +201,9 @@ Run:
 ```bash
 npm run package
 ```
+
+Production build and packaging are deliberate, user-owned release steps. They are
+not run automatically by normal contributor CI or routine Codex development work.
 
 Use the exact VSIX path produced by the current package script.
 
@@ -237,7 +269,44 @@ Do not rely only on the source `package.json`.
 
 Inspect the actual package output as part of release verification.
 
-### 9. Authenticate for publication
+### 9. Review and push the release source
+
+Review the complete diff and ensure generated VSIX or production artifacts are not
+accidentally staged. Commit the intended source changes, then push the release
+source to the canonical public GitHub repository.
+
+Verify the public branch contains:
+
+- the intended package and lockfile version
+- the matching changelog entry
+- the canonical MIT `LICENSE`
+- current source, repository, issue, support, and security links
+
+### 10. Create and push the release tag
+
+Create the annotated or lightweight semantic version tag using the exact package
+version, then push it explicitly:
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+Do not reuse or move an already published release tag.
+
+### 11. Create the GitHub Release
+
+Create a GitHub Release from `vX.Y.Z` with title:
+
+```text
+Query Puppy for T-SQL X.Y.Z
+```
+
+Use the changelog as the release-note source and keep claims consistent with actual
+verification. The Marketplace remains the primary binary channel, so a VSIX
+attachment is optional rather than required.
+
+### 12. Authenticate for Marketplace publication
 
 For a manual release, uploading the verified VSIX through Marketplace publisher
 management is acceptable.
@@ -266,7 +335,7 @@ If a token-based workflow is deliberately used and remains officially supported:
 - never print the token into logs
 - revoke temporary credentials when they are no longer needed
 
-### 10. Publish explicitly
+### 13. Publish explicitly
 
 Only after all preceding checks pass, perform the explicit publication action.
 
@@ -286,7 +355,7 @@ npm run build
 npm run package
 ```
 
-### 11. Wait for Marketplace validation
+### 14. Verify public release state
 
 Wait for Marketplace validation and scanning to complete.
 
@@ -303,21 +372,58 @@ Then verify the public listing:
 - installation succeeds
 - no stale Marketplace links remain
 
+Also verify the public GitHub source and Release:
+
+- the default branch and tag resolve to the intended source
+- the GitHub Release title and notes match the tag and changelog
+- source, issue, support, security, and MIT License links work
+- no release-only credential or generated artifact was committed
+
+Repository About metadata is maintained manually in GitHub's UI. When relevant,
+verify these values:
+
+Description:
+
+```text
+Semantic T-SQL IntelliSense for SQL Server in Visual Studio Code and VSCodium.
+```
+
+Website: the Visual Studio Marketplace listing.
+
+Topics:
+
+```text
+sql-server
+tsql
+mssql
+vscode
+vscodium
+intellisense
+autocomplete
+completion
+database-tools
+typescript
+open-source
+```
+
 ## Later releases
 
 Before every later release:
 
 1. confirm the intended version
-2. update the changelog when appropriate
-3. run the repository verification flow
-4. run relevant live integration tests when available
-5. package a fresh VSIX
-6. inspect the exact archive
-7. inspect the packaged extension identity
-8. review current publishing authentication guidance
-9. verify no credentials or private infrastructure leaked into the package
-10. publish only through an explicit release action
-11. verify the public Marketplace result
+2. update the changelog and synchronize affected documentation
+3. run contract, repository, and diff verification
+4. run relevant manual and live integration acceptance when required
+5. perform the user-owned production build and package a fresh VSIX
+6. inspect the exact archive and packaged extension identity
+7. verify no credentials or private infrastructure leaked into the package
+8. review and push the public release source
+9. create and push the `vX.Y.Z` tag
+10. create `Query Puppy for T-SQL X.Y.Z` as the GitHub Release
+11. review current Marketplace authentication guidance
+12. publish only through an explicit Marketplace release action
+13. verify Marketplace, GitHub source, tag, Release, License, and links
+14. verify repository About metadata when it changed
 
 ## Publisher migration policy
 

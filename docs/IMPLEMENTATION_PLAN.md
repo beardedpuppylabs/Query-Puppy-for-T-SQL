@@ -27,6 +27,10 @@ architecture documents describe the intended present-day design.
 - 0.10 initial built-in function intelligence — complete
 - 0.11 persistent schema metadata cache and stabilization — complete
 - 0.12 broader T-SQL language intelligence — complete; manual acceptance passed
+- 0.12.1 repository, contributor, security, CI, and release hygiene — complete
+
+0.12.1 adds no product intelligence or completion behavior. The next feature area
+remains Navigation & Code Understanding.
 
 ## 0.9.2 prefix-collision completion repair
 

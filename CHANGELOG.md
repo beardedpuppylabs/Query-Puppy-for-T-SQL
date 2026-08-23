@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.1
+
+- Added concise contribution and security-reporting guidance for the public
+  repository.
+- Added structured GitHub bug and feature forms plus a lightweight pull request
+  template.
+- Added a deterministic public CI quality gate and documented a repeatable source,
+  tag, GitHub Release, and Marketplace release sequence.
+
 ## 0.12.0
 
 - Expanded static SQL Server 2022 language intelligence across common null/value,
