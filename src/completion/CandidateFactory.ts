@@ -31,7 +31,11 @@ import {
   compareSqlTypes,
   describeSqlType,
 } from "../metadata/SqlTypeDescriptor.js";
-import { BUILTIN_FUNCTIONS } from "../parser/BuiltinFunctionCatalog.js";
+import {
+  BUILTIN_FUNCTIONS,
+  DATEPART_VALUES,
+} from "../parser/BuiltinFunctionCatalog.js";
+import { resolveCallableAtCursor } from "../parser/CallableAnalyzer.js";
 
 export interface CompletionScope {
   readonly activeDatabase: string;
@@ -85,8 +89,17 @@ export function createCandidates(
     semantics,
   );
   const policy = completionDomainPolicy(clauseContext);
+  const callable = scope
+    ? resolveCallableAtCursor(context.sql, context.cursor, scope)
+    : undefined;
   const expected = scope
-    ? inferExpectedTypeAtCursor(context.sql, context.cursor, scope, semantics)
+    ? inferExpectedTypeAtCursor(
+        context.sql,
+        context.cursor,
+        scope,
+        semantics,
+        callable ?? false,
+      )
     : undefined;
   if (scope) {
     const dml = analyzeDmlCompletion(
@@ -119,6 +132,33 @@ export function createCandidates(
           nullable: false,
           parameterOutput: parameter.output,
         }));
+    if (context.kind === "expression" && clauseContext.clause === "window") {
+      const candidates = ["ORDER BY", "PARTITION BY"]
+        .map((name) => ({
+          name,
+          normalizedName: normalizeName(name),
+          kind: "keyword" as const,
+          insertText: `${name} `,
+          documentation: "T-SQL window clause",
+        }))
+        .filter((candidate) =>
+          containsMatch(candidate.normalizedName, context.search),
+        );
+      return sortCandidates(candidates, context.search, "expression");
+    }
+    const parameter = callable?.signature.parameters[callable.activeParameter];
+    if (context.kind === "expression" && parameter?.semantic === "datepart") {
+      const candidates = DATEPART_VALUES.map((value) => ({
+        name: value.name,
+        normalizedName: normalizeName(value.name),
+        kind: "keyword" as const,
+        searchText: normalizeName([value.name, ...value.aliases].join(" ")),
+        documentation: `T-SQL datepart (${value.aliases.join(", ")})`,
+      })).filter((candidate) =>
+        containsMatch(candidate.searchText, context.search),
+      );
+      return sortCandidates(candidates, context.search, "expression");
+    }
   }
   let candidates: CompletionCandidate[] = [];
   let memberSource: RowSource | undefined;

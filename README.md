@@ -157,7 +157,18 @@ Set operations—`UNION`, `UNION ALL`, `INTERSECT`, and `EXCEPT`—compose resul
 
 ## Functions, procedures, and DML
 
-Supported SQL Server built-ins participate in function completion, native Signature Help, active-parameter tracking, ExpectedType ranking, and return-type inference. The current built-in catalog is `CHARINDEX`, `DATEADD`, `DATEDIFF`, `DATEFROMPARTS`, `ROUND`, `STRING_AGG`, and `SUBSTRING`. Signature Help opens automatically after `(`, follows commas, and can be reopened with the editor's **Trigger Parameter Hints** command.
+Supported SQL Server built-ins participate in function completion, native Signature Help, active-parameter tracking, ExpectedType ranking, and return-type inference. The current bounded catalog includes:
+
+- String: `CHARINDEX`, `CONCAT`, `LEFT`, `LEN`, `LOWER`, `LTRIM`, `REPLACE`, `RIGHT`, `RTRIM`, `SUBSTRING`, `UPPER`
+- Date/time: `DATEADD`, `DATEDIFF`, `DATEFROMPARTS`, `DATENAME`, `DATEPART`, `EOMONTH`, `GETDATE`, `SYSDATETIME`, `SYSUTCDATETIME`
+- Numeric: `ABS`, `CEILING`, `FLOOR`, `ROUND`
+- Null/value: `COALESCE`, `ISNULL`, `NULLIF`
+- Aggregate: `AVG`, `COUNT`, `COUNT_BIG`, `MAX`, `MIN`, `STRING_AGG`, `SUM`
+- Window/ranking/value: `DENSE_RANK`, `LAG`, `LEAD`, `NTILE`, `RANK`, `ROW_NUMBER`
+
+Signature Help opens automatically after `(`, follows commas, and can be reopened with the editor's **Trigger Parameter Hints** command.
+
+Window expressions understand native `OVER (` grammar, `PARTITION BY`, and window `ORDER BY`, then reuse ordinary QueryScope member completion. Datepart positions in `DATEADD`, `DATEDIFF`, `DATEPART`, and `DATENAME` offer documented canonical datepart tokens without treating them as strings or reading database metadata. `CASE` and `COALESCE` use the shared SQL type-precedence model conservatively; advanced window-frame grammar and a complete SQL Server built-in catalog remain outside the current scope.
 
 Catalog scalar UDFs and table-valued functions use the same callable intelligence for parameters and Signature Help. Scalar return types are inferred where metadata permits; TVFs remain row sources whose result columns can participate in `FROM`, `JOIN`, and member completion.
 
@@ -265,6 +276,7 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 - SQL Server is the only supported database engine.
 - Linked Servers and four-part object names are out of scope. Cross-database support is limited to databases on the active SQL Server connection.
 - The defensive parser is not a complete T-SQL compiler; unusually exotic or incomplete grammar can reduce context accuracy.
+- Dedicated intelligence for advanced window-frame grammar, `MERGE`, `PIVOT`, and `OPENJSON` is not currently implemented.
 - Type inference is conservative. Unnamed computed projections may be omitted, and recursive CTE/set-branch type reconciliation is best-effort.
 - Type-aware ranking does not implement SQL Server's complete conversion and datatype-precedence engine. Built-in intelligence is intentionally limited to the documented supported set rather than a complete SQL Server function catalog.
 - Stored-procedure result-set discovery is not performed, so the extension does not fabricate procedure result columns.

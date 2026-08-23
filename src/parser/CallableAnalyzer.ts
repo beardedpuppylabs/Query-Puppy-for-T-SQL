@@ -8,6 +8,8 @@ import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
 import {
   findBuiltinFunction,
   type BuiltinReturnRule,
+  type BuiltinOverClause,
+  type BuiltinParameterSemantic,
 } from "./BuiltinFunctionCatalog.js";
 import type { SqlTypeFamily } from "../metadata/SqlTypeDescriptor.js";
 
@@ -18,6 +20,7 @@ export interface CallArgumentRange {
 
 export interface ParsedCallSite {
   readonly nameParts: readonly string[];
+  readonly nameStart: number;
   readonly openParenthesis: number;
   readonly arguments: readonly CallArgumentRange[];
   readonly activeArgument: number;
@@ -32,10 +35,12 @@ export interface CallableSignature {
   readonly name: string;
   readonly schema?: string;
   readonly database?: string;
-  readonly kind: "scalar" | "aggregate" | "tableValued";
+  readonly kind:
+    "scalar" | "aggregate" | "window" | "expression" | "tableValued";
   readonly parameters: readonly CallableParameter[];
   readonly returnType?: SqlType;
   readonly returnRule?: BuiltinReturnRule;
+  readonly over?: BuiltinOverClause;
   readonly documentation?: string;
   readonly minimumServerMajor?: number;
   readonly catalogObject?: DatabaseObject;
@@ -46,16 +51,18 @@ export interface CallableParameter {
   readonly ordinal: number;
   readonly output: boolean;
   readonly optional?: boolean;
+  readonly variadic?: boolean;
   readonly type?: SqlType;
   readonly families?: readonly SqlTypeFamily[];
-  readonly semantic?: string;
+  readonly semantic?: BuiltinParameterSemantic;
+  readonly sameTypeAs?: number;
 }
 
 export function callableParameterLabel(parameter: CallableParameter): string {
   const expectation = parameter.type
     ? formatSqlType(parameter.type)
     : (parameter.semantic ?? parameter.families?.join(" | ") ?? "expression");
-  return `${parameter.name} ${expectation}${parameter.optional ? " [optional]" : ""}${parameter.output ? " OUTPUT" : ""}`;
+  return `${parameter.name}${parameter.variadic ? "..." : ""} ${expectation}${parameter.optional ? " [optional]" : ""}${parameter.output ? " OUTPUT" : ""}`;
 }
 
 export interface CallableResolution {
@@ -74,7 +81,12 @@ export function callableSignatureLabel(signature: CallableSignature): string {
       : signature.returnType
         ? ` → ${formatSqlType(signature.returnType)}`
         : "";
-  return `${signature.schema ? `${signature.schema}.` : ""}${signature.name}(${parameters})${returns}`;
+  const over = signature.over
+    ? signature.over.required
+      ? " OVER (ORDER BY ...)"
+      : " [OVER (...)]"
+    : "";
+  return `${signature.schema ? `${signature.schema}.` : ""}${signature.name}(${parameters})${over}${returns}`;
 }
 
 const identifierPartsBefore = (
@@ -93,6 +105,21 @@ const identifierPartsBefore = (
     .slice(start, open)
     .filter((token) => token.kind === "identifier")
     .map((token) => token.text);
+};
+
+const identifierStartBefore = (
+  tokens: readonly SqlToken[],
+  open: number,
+): number => {
+  let start = open - 1;
+  if (tokens[start]?.kind !== "identifier") return open;
+  while (
+    start >= 2 &&
+    tokens[start - 1]?.text === "." &&
+    tokens[start - 2]?.kind === "identifier"
+  )
+    start -= 2;
+  return tokens[start]?.start ?? open;
 };
 
 const callSiteFromOpen = (
@@ -125,6 +152,7 @@ const callSiteFromOpen = (
   arguments_.push({ start: argumentStart, end: argumentEnd });
   return {
     nameParts,
+    nameStart: identifierStartBefore(tokens, open),
     openParenthesis: tokens[open]?.start ?? cursor,
     arguments: arguments_,
     activeArgument: Math.max(0, arguments_.length - 1),
@@ -172,6 +200,7 @@ export function parseCompletedCallSite(
       if (nameStart !== 0) return undefined;
       return {
         ...site,
+        nameStart: site.nameStart + start,
         openParenthesis: site.openParenthesis + start,
         arguments: site.arguments.map((range) => ({
           start: range.start + start,
@@ -212,6 +241,10 @@ const builtinSignature = (name: string): CallableSignature | undefined => {
           output: false,
         })),
         returnRule: builtin.returnRule,
+        ...(builtin.returnRule.kind === "fixed"
+          ? { returnType: builtin.returnRule.type }
+          : {}),
+        ...(builtin.over ? { over: builtin.over } : {}),
         documentation: builtin.description,
         minimumServerMajor: builtin.minimumServerMajor,
       }

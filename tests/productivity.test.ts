@@ -70,7 +70,7 @@ const index = new DatabaseIndex({
 });
 const catalog = { activeDatabase: "Db", indexes: new Map([["db", index]]) };
 
-test("projection wildcard resolution is strict, ordered, and supports large tables", () => {
+test("contract: projection wildcard resolution is strict and COUNT star is never expandable", () => {
   const sql = "SELECT c.* FROM dbo.Customers AS c";
   const expansion = resolveSelectWildcard(sql, sql.indexOf("*") + 1, catalog);
   assert.ok(expansion);

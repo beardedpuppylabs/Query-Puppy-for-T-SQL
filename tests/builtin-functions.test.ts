@@ -120,22 +120,57 @@ const scope: CompletionScope = {
 const semantics = (sql: string, cursor = sql.length) =>
   analyzeDocumentSemantics(sql, cursor, scope);
 
+const builtinNames = [
+  "ABS",
+  "AVG",
+  "CEILING",
+  "CHARINDEX",
+  "COALESCE",
+  "CONCAT",
+  "COUNT",
+  "COUNT_BIG",
+  "DATEADD",
+  "DATEDIFF",
+  "DATEFROMPARTS",
+  "DATENAME",
+  "DATEPART",
+  "DENSE_RANK",
+  "EOMONTH",
+  "FLOOR",
+  "GETDATE",
+  "ISNULL",
+  "LAG",
+  "LEAD",
+  "LEFT",
+  "LEN",
+  "LOWER",
+  "LTRIM",
+  "MAX",
+  "MIN",
+  "NTILE",
+  "NULLIF",
+  "RANK",
+  "REPLACE",
+  "RIGHT",
+  "ROUND",
+  "ROW_NUMBER",
+  "RTRIM",
+  "STRING_AGG",
+  "SUBSTRING",
+  "SUM",
+  "SYSDATETIME",
+  "SYSUTCDATETIME",
+  "UPPER",
+] as const;
+
 test("contract: built-in catalog is deterministic unique valid and case-insensitive", () => {
   assert.deepEqual(
     BUILTIN_FUNCTIONS.map((item) => item.name),
-    [
-      "CHARINDEX",
-      "DATEADD",
-      "DATEDIFF",
-      "DATEFROMPARTS",
-      "ROUND",
-      "STRING_AGG",
-      "SUBSTRING",
-    ],
+    builtinNames,
   );
   assert.equal(
     new Set(BUILTIN_FUNCTIONS.map((item) => item.normalizedName)).size,
-    7,
+    builtinNames.length,
   );
   assert.equal(findBuiltinFunction("dateadd")?.name, "DATEADD");
   for (const builtin of BUILTIN_FUNCTIONS) {
@@ -143,7 +178,9 @@ test("contract: built-in catalog is deterministic unique valid and case-insensit
     assert.equal(Object.isFrozen(builtin.parameters), true);
     assert.equal(Object.isFrozen(builtin.returnRule), true);
     assert.ok(builtin.minimumServerMajor > 0);
-    assert.ok(["scalar", "aggregate"].includes(builtin.kind));
+    assert.ok(
+      ["scalar", "aggregate", "window", "expression"].includes(builtin.kind),
+    );
     assert.deepEqual(
       builtin.parameters.map((parameter) => parameter.ordinal),
       builtin.parameters.map((_, index_) => index_ + 1),
@@ -167,20 +204,21 @@ test("contract: built-ins use Contains and never pollute RowSource completion", 
     expression
       .filter((item) => item.kind === "builtinFunction")
       .map((item) => item.name),
-    ["DATEADD", "DATEDIFF", "DATEFROMPARTS"],
+    [
+      "DATEADD",
+      "DATEDIFF",
+      "DATEFROMPARTS",
+      "DATENAME",
+      "DATEPART",
+      "GETDATE",
+      "SYSDATETIME",
+      "SYSUTCDATETIME",
+    ],
   );
   const all = createCandidates(resolveSqlContext("SELECT "), scope)
     .filter((item) => item.kind === "builtinFunction")
     .map((item) => item.name);
-  assert.deepEqual(all, [
-    "CHARINDEX",
-    "DATEADD",
-    "DATEDIFF",
-    "DATEFROMPARTS",
-    "ROUND",
-    "STRING_AGG",
-    "SUBSTRING",
-  ]);
+  assert.deepEqual(all, builtinNames);
   assert.equal(new Set(all).size, all.length);
   assert.equal(
     createCandidates(resolveSqlContext("SELECT * FROM dat"), scope).some(
@@ -207,15 +245,7 @@ test("contract: shared callable resolution handles optional nested and qualified
     "dbo",
   );
   assert.equal(parseCallSite("SELECT DATEADD(", 15)?.nameParts.length, 1);
-  for (const name of [
-    "CHARINDEX",
-    "DATEADD",
-    "DATEDIFF",
-    "DATEFROMPARTS",
-    "ROUND",
-    "STRING_AGG",
-    "SUBSTRING",
-  ]) {
+  for (const name of builtinNames) {
     const first = resolveCallableAtCursor(
       `SELECT ${name}(`,
       `SELECT ${name}(`.length,
@@ -231,7 +261,7 @@ test("contract: shared callable resolution handles optional nested and qualified
     assert.equal(first.activeParameter, 0, name);
     assert.equal(
       second.activeParameter,
-      Math.min(1, first.signature.parameters.length - 1),
+      Math.min(1, Math.max(0, first.signature.parameters.length - 1)),
       name,
     );
     assert.match(

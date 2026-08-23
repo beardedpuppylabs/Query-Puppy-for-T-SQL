@@ -227,12 +227,17 @@ Catalog-backed scalar UDF return metadata should be used when inferring the type
 a function call.
 
 Supported built-ins use the same callable-signature path. Parameters may express
-an exact type, an accepted normalized type-family set, or special SQL syntax with
-no ExpectedType. Return rules are fixed, argument-derived, datatype-dependent, or
-Unknown. The initial catalog covers `CHARINDEX`, `DATEADD`, `DATEDIFF`,
-`DATEFROMPARTS`, `ROUND`, `STRING_AGG`, and `SUBSTRING` with SQL Server 2022
-semantics. In particular, `DATEADD` number is integer-family; the later bigint
-preview behavior is not treated as SQL Server 2022 behavior.
+an exact type, an accepted normalized type-family set, a same-type argument
+relationship, variadic ownership, or special SQL grammar with no ExpectedType.
+Return rules may be fixed, argument-derived, precedence-derived, or
+datatype-dependent.
+
+The bounded SQL Server 2022 catalog covers the original string/date functions plus
+common null/value, string, date/time, numeric, aggregate, and window families.
+`COUNT`/`COUNT_BIG` have distinct fixed returns; `SUM`/`AVG` apply documented
+numeric promotions; `MIN`/`MAX` and `LAG`/`LEAD` derive from their expression;
+ranking functions return `bigint`. `DATEADD` number remains integer-family rather
+than adopting preview-only bigint behavior.
 
 TVFs are RowSources, not scalar expressions.
 
@@ -249,22 +254,33 @@ Use known operand families conservatively.
 
 ## CASE
 
-CASE result inference is conservative.
-
-If known branches have the same normalized type, use it.
-
-If branches share a clearly compatible family, a conservative reconciled type/family
-may be used.
-
-Conflicting branches should fall back to Unknown rather than applying an incorrect
-full type-precedence simulation.
+Searched and simple CASE expressions collect top-level `THEN`/`ELSE` branch types
+with depth-aware CASE ownership. Known branches use the shared SQL Server
+data-type-precedence table, including safe facet reconciliation for the selected
+base type. Literal NULL and an absent ELSE do not erase a known result. An
+unresolved non-NULL branch remains Unknown. Incomplete editor-state CASE text may
+still produce a useful result when the known branch set is safe.
 
 ## ISNULL / COALESCE
 
-Where currently recognized, infer conservatively.
+`ISNULL` retains SQL Server's first-argument return rule; a literal NULL first
+argument uses the replacement type. Its replacement ExpectedType follows a known
+first argument. `NULLIF` returns its first expression and uses that known type for
+its comparison argument.
 
-Do not require fragile full built-in function intelligence merely to type these
-expressions.
+`COALESCE` is expression-like rather than a catalog scalar function. It reuses the
+shared depth-aware call site for practical variadic arguments and resolves its
+result through the same precedence facility as CASE. Literal NULL arguments are
+ignored for selection; an unresolved non-NULL argument yields Unknown. A reliable
+surrounding comparison or earlier argument may provide ExpectedType without ever
+broadening explicit qualifier membership.
+
+## SQL Server data-type precedence
+
+One shared precedence facility selects CASE/COALESCE result types from known
+system types. It is separate from completion compatibility: precedence models a
+result type, while compatibility controls ranking usefulness. Unsupported types,
+conflicting user-defined types, or unresolved non-NULL inputs remain Unknown.
 
 ## Set operations
 

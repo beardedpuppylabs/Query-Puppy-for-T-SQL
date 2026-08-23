@@ -3,6 +3,7 @@ import { normalizeName } from "../metadata/MetadataModels.js";
 import {
   describeSqlType,
   describeSqlTypeFamilies,
+  reconcileSqlTypesByPrecedence,
   UNKNOWN_SQL_TYPE,
   type SqlTypeDescriptor,
 } from "../metadata/SqlTypeDescriptor.js";
@@ -15,6 +16,7 @@ import { resolveCatalogObject } from "./CatalogObjectResolver.js";
 import {
   resolveCallableAtCursor,
   resolveCompletedScalarCallable,
+  type CallableResolution,
 } from "./CallableAnalyzer.js";
 import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
 import { resolveDocumentSymbols } from "./DocumentSymbols.js";
@@ -247,23 +249,66 @@ const parseTypeTokens = (tokens: readonly SqlToken[]): SqlTypeDescriptor => {
   return known(type);
 };
 
-const reconcile = (types: readonly SqlTypeDescriptor[]): SqlTypeDescriptor => {
-  const values = types.filter((type) => type.kind === "known");
-  const first = values[0];
-  if (!first) return unknown();
-  if (values.every((value) => value.normalizedName === first.normalizedName))
-    return first;
-  const numeric = new Set(["integer", "decimal", "floatingPoint"]);
-  const text = new Set(["string", "unicodeString"]);
-  if (values.every((value) => numeric.has(value.family)))
-    return known({ name: "decimal" });
-  if (values.every((value) => text.has(value.family)))
-    return known({
-      name: values.some((value) => value.family === "unicodeString")
-        ? "nvarchar"
-        : "varchar",
-    });
-  return unknown();
+const reconcile = reconcileSqlTypesByPrecedence;
+
+const reconcileExpressionRanges = (
+  sql: string,
+  ranges: readonly { readonly start: number; readonly end: number }[],
+  scope: CompletionScope,
+  semantics: DocumentSemanticModel,
+): SqlTypeDescriptor => {
+  const types = ranges.flatMap((range) => {
+    const expression = sql.slice(range.start, range.end).trim();
+    if (!expression || /^null$/i.test(expression)) return [];
+    return [inferExpressionType(sql, range.start, range.end, scope, semantics)];
+  });
+  return types.some((type) => type.kind === "unknown")
+    ? unknown()
+    : reconcile(types);
+};
+
+const caseBranchRanges = (
+  tokens: readonly SqlToken[],
+  textLength: number,
+): readonly { readonly start: number; readonly end: number }[] => {
+  const branches: { start: number; end: number }[] = [];
+  let caseDepth = 0;
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (!token) continue;
+    if (token.normalized === "case") {
+      caseDepth++;
+      continue;
+    }
+    if (token.normalized === "end") {
+      caseDepth--;
+      continue;
+    }
+    if (caseDepth !== 1 || !["then", "else"].includes(token.normalized))
+      continue;
+    let nestedCaseDepth = caseDepth;
+    let end = textLength;
+    for (let stop = index + 1; stop < tokens.length; stop++) {
+      const next = tokens[stop];
+      if (!next) continue;
+      if (next.normalized === "case") nestedCaseDepth++;
+      else if (next.normalized === "end") {
+        if (nestedCaseDepth === 1) {
+          end = next.start;
+          break;
+        }
+        nestedCaseDepth--;
+      } else if (
+        nestedCaseDepth === 1 &&
+        ["when", "else"].includes(next.normalized)
+      ) {
+        end = next.start;
+        break;
+      }
+    }
+    branches.push({ start: token.end, end });
+  }
+  return branches;
 };
 
 export function inferExpressionType(
@@ -324,26 +369,12 @@ export function inferExpressionType(
     if (comma > 0) return parseTypeTokens(tokens.slice(2, comma));
   }
   if (tokens[0]?.normalized === "case") {
-    const branches: SqlTypeDescriptor[] = [];
-    for (let i = 0; i < tokens.length; i++)
-      if (["then", "else"].includes(tokens[i]?.normalized ?? "")) {
-        const branch = tokens[i];
-        if (!branch) continue;
-        const stop = tokens.findIndex(
-          (token, index) =>
-            index > i && ["when", "else", "end"].includes(token.normalized),
-        );
-        branches.push(
-          inferExpressionType(
-            text,
-            branch.end,
-            stop < 0 ? text.length : (tokens[stop]?.start ?? text.length),
-            scope,
-            semantics,
-          ),
-        );
-      }
-    return reconcile(branches);
+    return reconcileExpressionRanges(
+      text,
+      caseBranchRanges(tokens, text.length),
+      scope,
+      semantics,
+    );
   }
   const arithmetic = tokens.findIndex((token) =>
     ["+", "-", "*", "/", "%"].includes(token.text),
@@ -361,6 +392,21 @@ export function inferExpressionType(
     );
     return reconcile([left, right]);
   }
+  let expressionDepth = 0;
+  const expressionDepths = tokens.map((token) => {
+    const current = expressionDepth;
+    if (token.text === "(") expressionDepth++;
+    else if (token.text === ")") expressionDepth--;
+    return current;
+  });
+  const overIndex = tokens.findIndex(
+    (token, index) =>
+      token.normalized === "over" &&
+      expressionDepths[index] === 0 &&
+      tokens[index - 1]?.text === ")",
+  );
+  const over = overIndex >= 0 ? tokens[overIndex] : undefined;
+  if (over) return inferExpressionType(text, 0, over.start, scope, semantics);
   if (tokens.at(-1)?.text === ")") {
     const callable = resolveCompletedScalarCallable(sql, start, end, scope);
     if (callable?.signature.returnType)
@@ -393,7 +439,23 @@ function inferCallableReturnType(
   const rule = resolution.signature.returnRule;
   if (!rule) return unknown();
   if (rule.kind === "fixed") return known(rule.type);
+  if (rule.kind === "argument")
+    return argumentType(resolution, rule.index, sql, scope, semantics);
+  if (rule.kind === "precedence")
+    return reconcileExpressionRanges(
+      sql,
+      resolution.callSite.arguments,
+      scope,
+      semantics,
+    );
   const first = argumentType(resolution, 0, sql, scope, semantics);
+  if (rule.kind === "isnull") {
+    const firstRange = resolution.callSite.arguments[0];
+    return firstRange &&
+      /^\s*null\s*$/i.test(sql.slice(firstRange.start, firstRange.end))
+      ? argumentType(resolution, 1, sql, scope, semantics)
+      : first;
+  }
   if (rule.kind === "dateadd") {
     const range = resolution.callSite.arguments[2];
     if (
@@ -430,6 +492,85 @@ function inferCallableReturnType(
       return known({ name: "int" });
     if (first.normalizedName === "real") return known({ name: "float" });
     return first;
+  }
+  if (rule.kind === "len")
+    return known({
+      name:
+        first.kind === "known" &&
+        first.length === -1 &&
+        ["varchar", "nvarchar", "varbinary"].includes(first.normalizedName)
+          ? "bigint"
+          : "int",
+    });
+  if (rule.kind === "numeric") {
+    if (first.kind !== "known") return unknown();
+    if (["tinyint", "smallint", "int"].includes(first.normalizedName))
+      return known({ name: "int" });
+    if (first.normalizedName === "bigint") return known({ name: "bigint" });
+    if (["decimal", "numeric"].includes(first.normalizedName))
+      return known({
+        name: "decimal",
+        precision: 38,
+        scale:
+          rule.operation === "avg"
+            ? Math.max(first.scale ?? 0, 6)
+            : (first.scale ?? 0),
+      });
+    if (["money", "smallmoney"].includes(first.normalizedName))
+      return known({ name: "money" });
+    if (["float", "real"].includes(first.normalizedName))
+      return known({ name: "float" });
+    if (first.normalizedName === "bit") return known({ name: "float" });
+    return unknown();
+  }
+  if (rule.kind === "stringTransform") {
+    if (first.kind !== "known") return unknown();
+    if (first.family === "unicodeString")
+      return known({
+        name: "nvarchar",
+        ...(first.length !== undefined ? { maxLength: first.length } : {}),
+      });
+    if (first.family === "string")
+      return known({
+        name: "varchar",
+        ...(first.length !== undefined ? { maxLength: first.length } : {}),
+      });
+    return unknown();
+  }
+  if (rule.kind === "replace") {
+    const arguments_ = resolution.callSite.arguments.map((_, index) =>
+      argumentType(resolution, index, sql, scope, semantics),
+    );
+    if (arguments_.some((type) => type.kind !== "known")) return unknown();
+    const unicode = arguments_.some((type) => type.family === "unicodeString");
+    return known({
+      name: unicode ? "nvarchar" : "varchar",
+      ...(first.kind === "known" && first.length !== undefined
+        ? { maxLength: first.length }
+        : {}),
+    });
+  }
+  if (rule.kind === "concat") {
+    const arguments_ = resolution.callSite.arguments.map((_, index) =>
+      argumentType(resolution, index, sql, scope, semantics),
+    );
+    const knownArguments = arguments_.filter((type) => type.kind === "known");
+    if (!knownArguments.length) return unknown();
+    const userDefined = knownArguments.some((type) => type.userDefined);
+    const unicode = knownArguments.some(
+      (type) => type.family === "unicodeString",
+    );
+    const max = knownArguments.some((type) => type.length === -1);
+    const lengths = knownArguments.map((type) => type.length ?? 0);
+    const totalLength = lengths.reduce((sum, value) => sum + value, 0);
+    return known({
+      name: unicode || userDefined ? "nvarchar" : "varchar",
+      ...(max || userDefined
+        ? { maxLength: -1 }
+        : totalLength > 0
+          ? { maxLength: Math.min(8000, totalLength) }
+          : {}),
+    });
   }
   if (first.kind !== "known") return unknown();
   if (first.family === "unicodeString")
@@ -496,14 +637,113 @@ const topLevelCommaOrdinal = (text: string): number => {
   return ordinal;
 };
 
+const comparisonExpectedBefore = (
+  sql: string,
+  expressionStart: number,
+  semantics: DocumentSemanticModel,
+): ExpectedTypeContext | undefined => {
+  const prefix = sql.slice(0, expressionStart);
+  const operator = /(=|<>|!=|<=|>=|<|>)\s*$/.exec(prefix);
+  if (!operator) return undefined;
+  const reference = findColumnReference(
+    tokenizeSql(prefix.slice(0, operator.index)),
+    semantics,
+  );
+  return reference
+    ? contextResult(
+        known(reference.column.type),
+        "comparisonOperand",
+        "catalog",
+        reference,
+      )
+    : undefined;
+};
+
+const activeCaseStart = (sql: string, cursor: number): number | undefined => {
+  const stack: number[] = [];
+  for (const token of tokenizeSql(sql.slice(0, cursor))) {
+    if (token.normalized === "case") stack.push(token.start);
+    else if (token.normalized === "end") stack.pop();
+  }
+  return stack.at(-1);
+};
+
+const leftComparisonRangeAtCursor = (
+  sql: string,
+  cursor: number,
+): { readonly start: number; readonly end: number } | undefined => {
+  const tokens = tokenizeSql(sql.slice(0, cursor));
+  let depth = 0;
+  const tokenDepth = tokens.map((token) => {
+    const current = depth;
+    if (token.text === "(") depth++;
+    else if (token.text === ")") depth--;
+    return current;
+  });
+  let operator = -1;
+  for (let index = tokens.length - 1; index >= 0; index--)
+    if (["=", "<", ">", "!"].includes(tokens[index]?.text ?? "")) {
+      operator = index;
+      break;
+    }
+  if (operator < 0) return undefined;
+  const baseDepth = tokenDepth[operator] ?? 0;
+  let start = 0;
+  for (let index = operator - 1; index >= 0; index--) {
+    const token = tokens[index];
+    if (!token || tokenDepth[index] !== baseDepth) continue;
+    if (
+      token.text === "," ||
+      ["select", "where", "on", "and", "or", "having", "when"].includes(
+        token.normalized,
+      )
+    ) {
+      start = token.end;
+      break;
+    }
+  }
+  const end = tokens[operator]?.start ?? 0;
+  return end > start ? { start, end } : undefined;
+};
+
 export function inferExpectedTypeAtCursor(
   sql: string,
   cursor: number,
   scope: CompletionScope,
   semantics: DocumentSemanticModel,
+  callableResolution?: CallableResolution | false,
 ): ExpectedTypeContext | undefined {
-  const signature = resolveCallableAtCursor(sql, cursor, scope);
+  const signature =
+    callableResolution === undefined
+      ? resolveCallableAtCursor(sql, cursor, scope)
+      : callableResolution || undefined;
   const parameter = signature?.signature.parameters[signature.activeParameter];
+  if (signature && parameter?.sameTypeAs !== undefined) {
+    const range = signature.callSite.arguments[parameter.sameTypeAs];
+    if (range) {
+      const result = contextResult(
+        inferExpressionType(sql, range.start, range.end, scope, semantics),
+        "functionParameter",
+      );
+      if (result) return result;
+    }
+  }
+  if (
+    signature?.signature.name === "COALESCE" &&
+    signature.callSite.activeArgument > 0
+  ) {
+    const priorTypes = signature.callSite.arguments
+      .slice(0, signature.callSite.activeArgument)
+      .map((range) =>
+        inferExpressionType(sql, range.start, range.end, scope, semantics),
+      );
+    const result = contextResult(
+      reconcile(priorTypes),
+      "functionParameter",
+      "reconciled",
+    );
+    if (result) return result;
+  }
   if (parameter?.type)
     return contextResult(known(parameter.type), "functionParameter");
   if (parameter?.families?.length)
@@ -511,6 +751,18 @@ export function inferExpectedTypeAtCursor(
       describeSqlTypeFamilies(parameter.families),
       "functionParameter",
     );
+  const surroundingCallable = signature
+    ? comparisonExpectedBefore(sql, signature.callSite.nameStart, semantics)
+    : undefined;
+  if (surroundingCallable) return surroundingCallable;
+  const caseStart = /\bcase\b/i.test(sql.slice(0, cursor))
+    ? activeCaseStart(sql, cursor)
+    : undefined;
+  const surroundingCase =
+    caseStart !== undefined
+      ? comparisonExpectedBefore(sql, caseStart, semantics)
+      : undefined;
+  if (surroundingCase) return surroundingCase;
 
   const before = sql.slice(0, cursor);
   // Resolve the current SET assignment before generic comparison operators.
@@ -534,6 +786,29 @@ export function inferExpectedTypeAtCursor(
     /(?:^|[\s,(])(.+?)\s*(=|<>|!=|<=|>=|<|>)\s*(?:[\w@#$]*\.)?[\w@#$]*$/is.exec(
       before,
     );
+  const comparisonRange = comparison?.[1]?.includes(")")
+    ? leftComparisonRangeAtCursor(sql, cursor)
+    : undefined;
+  if (comparisonRange) {
+    const result = contextResult(
+      inferExpressionType(
+        sql,
+        comparisonRange.start,
+        comparisonRange.end,
+        scope,
+        semantics,
+      ),
+      "comparisonOperand",
+      "catalog",
+      comparisonColumnInRange(
+        sql,
+        comparisonRange.start,
+        comparisonRange.end,
+        semantics,
+      ),
+    );
+    if (result) return result;
+  }
   if (comparison) {
     const expression = comparison[1] ?? "";
     const offset = before.lastIndexOf(expression);

@@ -97,10 +97,14 @@ production code.
 
 ## Documentation maintenance
 
-Treat maintained project documentation as part of the implementation.
+Treat maintained project documentation as part of the implementation. Assess the
+documentation impact of every meaningful change and update affected maintained
+documentation in the same task.
 
 When a task changes or introduces:
 
+- user-visible behavior or the public feature set
+- commands or settings
 - subsystem responsibilities
 - data flow
 - completion pipeline behavior
@@ -114,6 +118,9 @@ When a task changes or introduces:
 - release or publishing procedures
 - publisher identity
 - milestone scope or completion state
+- known limitations
+- privacy or storage behavior
+- Marketplace or other public positioning
 - an architectural invariant documented in this repository
 
 review the relevant documentation before considering the task complete.
@@ -123,6 +130,10 @@ project state has actually changed.
 
 Do not update documentation merely because implementation details were renamed,
 moved, or rearranged without affecting the documented contract.
+
+A milestone is not complete while maintained documentation describes the previous
+behavior, and manual acceptance is not complete while its required editor or
+database context remains ambiguous.
 
 ### Architecture documentation responsibilities
 
@@ -546,7 +557,7 @@ Do not build separate type systems for:
 - UPDATE
 - INSERT
 - arithmetic
-- future built-in function intelligence
+- built-in, aggregate, window, and conditional-expression intelligence
 
 Type-aware completion is primarily ranking.
 
@@ -711,9 +722,9 @@ Ctrl+Space remains normal completion.
 
 Signature Help remains the editor's native Signature Help mechanism.
 
-Future built-in function intelligence should reuse the existing signature/type
-infrastructure wherever the semantic responsibilities are shared rather than
-creating a second parallel subsystem.
+Built-in, aggregate, and window intelligence must reuse the existing
+signature/type infrastructure wherever the semantic responsibilities are shared
+rather than creating a second parallel subsystem.
 
 Callable name parsing, depth-aware argument ranges, active-argument calculation,
 signature resolution, parameter ExpectedType, and scalar return inference share the

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.0
+
+- Expanded static SQL Server 2022 language intelligence across common null/value,
+  string, date/time, numeric, aggregate, and window functions.
+- Added aggregate/window callable semantics, documented return inference, native
+  Signature Help metadata, and scoped `OVER`, `PARTITION BY`, and window
+  `ORDER BY` completion.
+- Added distinct `ISNULL`/`NULLIF` rules plus shared SQL type-precedence inference
+  for variadic `COALESCE` and searched/simple `CASE` expressions.
+- Added context-only datepart grammar completion for `DATEADD`, `DATEDIFF`,
+  `DATEPART`, and `DATENAME` without database queries or persistent-cache data.
+- Added permanent provider/type/callable contracts and a focused 15-case manual
+  acceptance suite while preserving explicit qualifier, Contains, DML, wildcard,
+  QueryScope, and persistent-cache behavior.
+
 ## 0.11.1
 
 - Added canonical public GitHub source, issue-tracker, and MIT License links to

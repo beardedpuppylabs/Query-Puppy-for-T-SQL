@@ -22,6 +22,12 @@ that milestone and later superseded.
 When historical text conflicts with the current architecture documents, the current
 architecture documents describe the intended present-day design.
 
+## Current milestone status
+
+- 0.10 initial built-in function intelligence — complete
+- 0.11 persistent schema metadata cache and stabilization — complete
+- 0.12 broader T-SQL language intelligence — complete; manual acceptance passed
+
 ## 0.9.2 prefix-collision completion repair
 
 - [x] Prevent smart-alias takeover from hiding longer legal Contains matches when
@@ -63,6 +69,58 @@ architecture documents describe the intended present-day design.
 True incremental/delta synchronization, a configurable refresh interval, broader
 Configurability work, and unrelated parser/tokenization optimization remain
 deferred.
+
+## 0.12.0 Broader T-SQL Language Intelligence
+
+- [x] Expand the immutable language catalog across common null/value, string,
+      date/time, numeric, aggregate, and window functions while preserving the
+      initial 0.10 definitions.
+- [x] Add aggregate/window callable kinds, SQL Server 2022 return rules, native
+      Signature Help metadata, and required/optional `OVER` contracts.
+- [x] Reuse QueryScopes for `PARTITION BY` and window `ORDER BY` members and offer
+      bounded native window-clause grammar completion.
+- [x] Add one shared SQL Server type-precedence facility for CASE and COALESCE,
+      while retaining the distinct ISNULL/NULLIF rules and conservative Unknown.
+- [x] Add context-only datepart grammar completion from one static canonical value
+      list, with no database/cache participation.
+- [x] Protect all new families with permanent provider/type/callable contracts and
+      a focused 15-case installed-editor acceptance suite.
+- [x] Complete installed VSCodium acceptance against the active IntelliSenseLab
+      fixture, including built-ins, conditional typing, aggregates, windows,
+      datepart grammar, and existing callable/member regressions.
+
+Advanced window frames, a complete built-in catalog, MERGE/PIVOT/OPENJSON and
+deeper general grammar remain deferred.
+
+## Forward roadmap
+
+The next major planned product area is **Navigation & Code Understanding**.
+Detailed scope will be defined when that milestone begins rather than assigning a
+speculative version now.
+
+Later product areas remain:
+
+- diagnostics and Quick Fixes
+- refactoring and Code Actions
+- broader grammar coverage
+- Configurability and a Query Puppy Control Center
+- formatting improvements
+- production-safety assistance
+- advanced persistent query history
+
+## Future configurability / Query Puppy Control Center
+
+Future control work may combine normal contributed VS Code settings and
+`settings.json` with native Query Puppy status/control views for higher-level
+workflows. Candidate areas include Smart Alias style, metadata refresh interval,
+diagnostic and production-safety rules, formatting preferences, cache/status
+controls, and history retention. None is implemented by 0.12.0.
+
+Advanced persistent query history remains deferred until a stable public mechanism
+for observing executed queries is verified. It must not depend on private mssql
+internals. A future Query Puppy Control Center may provide history browsing,
+favorites, saved queries, filters, retention controls, and export/import if that
+public observation boundary becomes available.
 
 ## 0.9.0 Type-aware Expression Intelligence
 

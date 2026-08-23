@@ -57,7 +57,7 @@ export function describeSqlTypeFamilies(
 ): SqlTypeDescriptor {
   const unique = [...new Set(families)];
   const label = unique.every((family) =>
-    ["integer", "decimal", "floatingPoint"].includes(family),
+    ["integer", "decimal", "floatingPoint", "boolean"].includes(family),
   )
     ? "numeric"
     : unique.every((family) => ["string", "unicodeString"].includes(family))
@@ -216,4 +216,106 @@ export function descriptorToSqlType(
       ? { underlyingSystemType: descriptor.underlyingSystemType }
       : {}),
   };
+}
+
+// SQL Server chooses the highest-precedence result type for CASE and COALESCE.
+// Keep the table centralized so expression inference does not grow a second
+// compatibility model. Unknown and family-only descriptors are not guessable.
+const typePrecedence = new Map(
+  [
+    "sql_variant",
+    "xml",
+    "datetimeoffset",
+    "datetime2",
+    "datetime",
+    "smalldatetime",
+    "date",
+    "time",
+    "float",
+    "real",
+    "decimal",
+    "numeric",
+    "money",
+    "smallmoney",
+    "bigint",
+    "int",
+    "smallint",
+    "tinyint",
+    "bit",
+    "ntext",
+    "text",
+    "image",
+    "timestamp",
+    "rowversion",
+    "uniqueidentifier",
+    "nvarchar",
+    "nchar",
+    "varchar",
+    "char",
+    "varbinary",
+    "binary",
+  ].map((name, index) => [name, index]),
+);
+
+const widestFacet = (
+  values: readonly (number | undefined)[],
+): number | undefined => {
+  const present = values.filter(
+    (value): value is number => value !== undefined,
+  );
+  if (!present.length) return undefined;
+  return present.includes(-1) ? -1 : Math.max(...present);
+};
+
+const mergeSameBaseType = (
+  values: readonly SqlTypeDescriptor[],
+): SqlTypeDescriptor => {
+  const first = values[0];
+  if (!first) return UNKNOWN_SQL_TYPE;
+  const type = descriptorToSqlType(first);
+  if (!type) return UNKNOWN_SQL_TYPE;
+  const length = widestFacet(values.map((value) => value.length));
+  const precision = widestFacet(values.map((value) => value.precision));
+  const scale = widestFacet(values.map((value) => value.scale));
+  return describeSqlType({
+    ...type,
+    ...(length !== undefined ? { maxLength: length } : {}),
+    ...(precision !== undefined ? { precision } : {}),
+    ...(scale !== undefined ? { scale } : {}),
+  });
+};
+
+/** Reconciles known expression types using SQL Server data-type precedence. */
+export function reconcileSqlTypesByPrecedence(
+  types: readonly SqlTypeDescriptor[],
+): SqlTypeDescriptor {
+  const known = types.filter(
+    (type): type is SqlTypeDescriptor & { readonly kind: "known" } =>
+      type.kind === "known",
+  );
+  if (!known.length) return UNKNOWN_SQL_TYPE;
+  if (known.some((type) => type.userDefined)) {
+    const firstUserDefined = known.find((type) => type.userDefined);
+    return firstUserDefined &&
+      known
+        .filter((type) => type.userDefined)
+        .every(
+          (type) =>
+            type.userDefinedTypeName?.toLowerCase() ===
+            firstUserDefined.userDefinedTypeName?.toLowerCase(),
+        )
+      ? firstUserDefined
+      : UNKNOWN_SQL_TYPE;
+  }
+  const selected = [...known].sort(
+    (left, right) =>
+      (typePrecedence.get(left.normalizedName) ?? Number.MAX_SAFE_INTEGER) -
+      (typePrecedence.get(right.normalizedName) ?? Number.MAX_SAFE_INTEGER),
+  )[0];
+  if (!selected || !typePrecedence.has(selected.normalizedName))
+    return UNKNOWN_SQL_TYPE;
+  const sameBase = known.filter(
+    (type) => type.normalizedName === selected.normalizedName,
+  );
+  return mergeSameBaseType(sameBase);
 }

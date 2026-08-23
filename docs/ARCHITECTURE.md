@@ -83,6 +83,15 @@ connection/database metadata. It carries availability, parameter-family, special
 syntax, callable-kind, documentation, and return-rule metadata. Resolving a
 built-in performs no SQL query and does not initialize or refresh schema metadata.
 
+Scalar, aggregate, window, and expression-like definitions enter through this
+same callable boundary. Aggregate/window return rules and `OVER` requirements are
+language metadata rather than catalog objects. `COALESCE` is identified as an
+expression-like callable so it can reuse depth-aware argument ownership without
+being mislabeled as a catalog scalar function. `CASE` branch inference stays in
+the shared expression layer. Window `PARTITION BY`/`ORDER BY` member completion
+uses the active QueryScope; datepart tokens come from one immutable grammar-value
+list. None of these language domains is serialized into persistent schema cache.
+
 The editor's automatic Signature Help fallback remains UI coordination. It may
 restrict which edits are eligible, but semantic call interpretation comes from the
 shared call-site parser and callable resolver.

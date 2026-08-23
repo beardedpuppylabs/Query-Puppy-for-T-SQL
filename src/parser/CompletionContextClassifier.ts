@@ -12,6 +12,9 @@ export type CompletionClause =
   | "having"
   | "orderBy"
   | "functionArgument"
+  | "window"
+  | "windowPartitionBy"
+  | "windowOrderBy"
   | "unknown";
 
 export interface JoinConditionContext {
@@ -131,7 +134,21 @@ export function classifyCompletionContext(
       clause = "orderBy";
     }
   }
-  if (functionToken >= 0) clause = "functionArgument";
+  if (functionToken >= 0) {
+    clause = "functionArgument";
+    if (tokens[functionToken - 1]?.normalized === "over") {
+      clause = "window";
+      const windowDepth = (tokenDepth[functionToken] ?? 0) + 1;
+      for (let index = functionToken + 1; index < end; index++) {
+        if ((tokenDepth[index] ?? 0) !== windowDepth) continue;
+        const word = tokens[index]?.normalized;
+        if (word === "partition" && tokens[index + 1]?.normalized === "by")
+          clause = "windowPartitionBy";
+        else if (word === "order" && tokens[index + 1]?.normalized === "by")
+          clause = "windowOrderBy";
+      }
+    }
+  }
   const finalSetOrderBy =
     clause === "orderBy" && semantics.setQueryExpressions.length > 0;
   let join: JoinConditionContext | undefined;
@@ -174,6 +191,9 @@ export function classifyCompletionContext(
       "having",
       "orderBy",
       "functionArgument",
+      "window",
+      "windowPartitionBy",
+      "windowOrderBy",
     ].includes(clause),
     allowProjectionAliases: clause === "orderBy",
     finalSetOrderBy,

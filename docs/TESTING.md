@@ -97,6 +97,12 @@ Examples:
 - extension activation
 - settings interaction
 
+The 0.12 runtime-parity sentinel exercises the registered completion provider,
+compares its built-in inventory with the authoritative static catalog, retains an
+explicit Contains assertion, and covers representative datepart, window, and
+Signature Help paths. This protects against source/catalog expansion failing to
+reach the activated extension bundle.
+
 ### Live SQL integration tests
 
 Use the existing SQL Server fixtures for catalog behavior that should be verified
@@ -189,7 +195,8 @@ promises.
 | UPDATE target/RHS ownership and nested expression depth                              | Implemented                      | `dml-call.test.ts` and `type-intelligence.test.ts` UPDATE contracts                                        |
 | DELETE, OUTPUT inserted/deleted, and EXEC parameters                                 | Implemented                      | `dml-call.test.ts` DELETE, OUTPUT, and EXEC contracts                                                      |
 | Catalog scalar functions and TVF call signatures                                     | Implemented                      | `dml-call.test.ts` — catalog signature contract                                                            |
-| Built-in completion, signatures, ExpectedType, and return inference                  | Implemented                      | `builtin-functions.test.ts` built-in contracts                                                             |
+| Built-in completion, signatures, ExpectedType, and return inference                  | Implemented                      | `builtin-functions.test.ts` and `broader-language-intelligence.test.ts` contracts                          |
+| Aggregates, windows/OVER, CASE/COALESCE, and datepart grammar values                 | Implemented                      | `broader-language-intelligence.test.ts` provider and inference contracts                                   |
 | Type normalization, ExpectedType, compatibility ranking, and visibility              | Implemented                      | `type-intelligence.test.ts` ExpectedType and ranking contracts                                             |
 | Canonical physical-column layout and long-name semantic preservation                 | Implemented                      | `presentation.test.ts` physical-column presentation contracts                                              |
 | Native Signature Help registration                                                   | Implemented                      | `provider-registration.test.ts` — Signature Help contract                                                  |
@@ -255,8 +262,24 @@ behavior.
 
 ## Manual SQL acceptance tests
 
-When user-visible IntelliSense behavior needs manual checking, provide one
-copy/paste SQL script containing sequential test cases.
+When user-visible IntelliSense behavior needs manual checking, provide a compact
+copy/paste SQL suite. A combined file is acceptable only when its isolation
+boundaries are unmistakable.
+
+For database-backed acceptance, state the required active database prominently.
+The active database selected by the mssql editor connection is authoritative; a
+`USE` statement inside intentionally incomplete SQL is not a substitute. If a
+fixture script finishes in another database, explicitly switch the editor back to
+the required database and run **Query Puppy for T-SQL: Refresh Schema Metadata**
+when provisioning or database changes may have left cached metadata stale.
+
+Every intentionally incomplete SQL scenario must say **RUN ALONE IN A FRESH SQL
+EDITOR**, identify the exact cursor position, and distinguish positioning the
+cursor from typing a trigger character. Use the native editor commands precisely:
+
+- `Ctrl+Space` opens ordinary completion.
+- `Ctrl+Shift+Space` opens Signature Help / Parameter Hints manually.
+- Typing `(` tests automatic Signature Help activation.
 
 Comments inside the SQL document may contain:
 
@@ -481,6 +504,10 @@ Protect:
 - static built-in lookup, availability, optionality, and callable kind
 - built-in completion without RowSource pollution or database I/O
 - built-in family ExpectedType and fixed/derived/datatype-dependent returns
+- aggregate callable kinds and SQL Server numeric return promotions
+- CASE/COALESCE shared precedence, ISNULL distinction, and unresolved-input fallback
+- required/optional OVER metadata plus window grammar and scoped member completion
+- datepart grammar candidates only in the documented active argument
 - built-in Signature Help for every supported definition, including nesting
 - qualified physical members inside incomplete built-in and catalog callable
   arguments, including a `FROM` clause after the cursor

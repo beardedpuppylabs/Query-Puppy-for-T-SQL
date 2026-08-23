@@ -439,14 +439,21 @@ with the post-edit cursor; arbitrary SQL whitespace does not trigger it.
 Functions/procedures use their domain-specific CompletionItem presentation.
 
 Supported SQL Server built-ins are static language candidates in expression
-contexts. They use the same Contains filter, deterministic type ordering,
-callable presentation, parsed call site, and semantic deduplication as catalog
-functions, but they are not database objects and never appear as RowSources.
+contexts. Scalar, aggregate, window, and expression-like callables use the same
+Contains filter, deterministic type ordering, callable presentation, parsed call
+site, and semantic deduplication as catalog functions, but they are not database
+objects and never appear as RowSources.
+
+An active datepart parameter narrows the domain to the canonical static datepart
+grammar values. An unfinished `OVER (` narrows it to `ORDER BY` and `PARTITION BY`;
+inside either clause, ordinary QueryScope columns and strict explicit-qualifier
+membership resume. These are context domains, not fuzzy keywords mixed into every
+expression list. Window `ORDER BY` does not expose top-level projection aliases.
 
 Do not force the physical-column fixed-width row format onto:
 
 - scalar functions
-- built-in scalar and aggregate functions
+- built-in scalar, aggregate, expression-like, and window functions
 - TVFs
 - procedures
 - schemas

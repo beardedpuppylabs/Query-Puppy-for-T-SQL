@@ -303,7 +303,12 @@ test("contract: expression inference covers columns literals casts UDFs arithmet
     "bigint",
   );
   assert.equal(
-    infer("CASE WHEN 1=1 THEN c.CustomerId ELSE c.ExternalKey END").kind,
+    infer("CASE WHEN 1=1 THEN c.CustomerId ELSE c.ExternalKey END")
+      .normalizedName,
+    "bigint",
+  );
+  assert.equal(
+    infer("CASE WHEN 1=1 THEN c.CustomerId ELSE MissingColumn END").kind,
     "unknown",
   );
 

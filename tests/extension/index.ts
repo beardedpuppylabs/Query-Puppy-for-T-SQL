@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { DatabaseIndex } from "../../src/metadata/DatabaseIndex.js";
 import type { SqlType } from "../../src/metadata/MetadataModels.js";
+import { BUILTIN_FUNCTIONS } from "../../src/parser/BuiltinFunctionCatalog.js";
 
 const database = "IntelliSenseLab";
 const index = new DatabaseIndex({
@@ -2484,14 +2485,28 @@ SELECT x. FROM X x`;
   );
   assert.equal(explicit.activeParameter, 0);
 
-  const builtinItems = await semanticCompletion("SELECT dat");
+  const registeredCatalogItems = await registeredSemanticCompletion("SELECT ");
+  const builtinNames = new Set(
+    BUILTIN_FUNCTIONS.map((builtin) => builtin.name),
+  );
   assert.deepEqual(
-    labels(
-      builtinItems.filter(
-        (item) => item.data?.semanticKind === "builtinFunction",
-      ),
-    ),
-    ["DATEADD", "DATEDIFF", "DATEFROMPARTS"],
+    labels(registeredCatalogItems).filter((name) => builtinNames.has(name)),
+    BUILTIN_FUNCTIONS.map((builtin) => builtin.name),
+  );
+
+  const builtinItems = await registeredSemanticCompletion("SELECT dat");
+  assert.deepEqual(
+    labels(builtinItems).filter((name) => builtinNames.has(name)),
+    [
+      "DATEADD",
+      "DATEDIFF",
+      "DATEFROMPARTS",
+      "DATENAME",
+      "DATEPART",
+      "GETDATE",
+      "SYSDATETIME",
+      "SYSUTCDATETIME",
+    ],
   );
   assert.equal(
     (await semanticCompletion("SELECT * FROM dat")).some(
@@ -2499,12 +2514,47 @@ SELECT x. FROM X x`;
     ),
     false,
   );
+  const datepartItems =
+    await registeredSemanticCompletion("SELECT DATEPART(mi");
+  const matchingDateparts = new Set(["microsecond", "millisecond", "minute"]);
+  assert.deepEqual(
+    labels(datepartItems).filter((name) => matchingDateparts.has(name)),
+    ["microsecond", "millisecond", "minute"],
+  );
+  for (const sql of [
+    "SELECT ROW_NUMBER() OVER (PARTITION BY c. FROM dbo.Customers AS c",
+    "SELECT ROW_NUMBER() OVER (ORDER BY c. FROM dbo.Customers AS c",
+  ]) {
+    const cursor = sql.indexOf("c.") + 2;
+    const members = await semanticCompletion(sql, cursor);
+    assert.deepEqual(
+      labels(members).filter((name) =>
+        ["CustomerCode", "CustomerId"].includes(name),
+      ),
+      ["CustomerCode", "CustomerId"],
+    );
+  }
+  const overItems = await registeredSemanticCompletion(
+    "SELECT ROW_NUMBER() OVER (",
+  );
+  assert.deepEqual(
+    labels(overItems).filter((name) =>
+      ["ORDER BY", "PARTITION BY"].includes(name),
+    ),
+    ["ORDER BY", "PARTITION BY"],
+  );
   for (const name of [
+    "ABS",
     "CHARINDEX",
+    "COALESCE",
+    "CONCAT",
+    "COUNT",
     "DATEADD",
     "DATEDIFF",
     "DATEFROMPARTS",
+    "DATENAME",
     "ROUND",
+    "ROW_NUMBER",
     "STRING_AGG",
     "SUBSTRING",
   ]) {
