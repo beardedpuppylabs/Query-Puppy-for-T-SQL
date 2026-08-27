@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CompletionScopeResolver } from "../src/completion/CompletionScopeResolver.js";
+import type { MetadataBackend } from "../src/backend/MetadataBackend.js";
 import { DatabaseIndex } from "../src/metadata/DatabaseIndex.js";
 import { MetadataCache } from "../src/metadata/MetadataCache.js";
-import type { ConnectionService } from "../src/mssql/ConnectionService.js";
-import type { MetadataLoader } from "../src/mssql/MetadataLoader.js";
+import type { MetadataLoader } from "../src/metadata/MetadataLoader.js";
 import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
 
 const databaseIndex = (database: string, schemas: string[]): DatabaseIndex =>
@@ -18,7 +18,7 @@ test("contract: secondary metadata is lazy and unqualified scope stays database-
       lists++;
       return ["DatabaseA", "DatabaseB"];
     },
-  } as unknown as ConnectionService;
+  } as unknown as MetadataBackend;
   const loader = {
     load: async ({ database }: { database: string }) => {
       loads.push(database);
@@ -34,7 +34,11 @@ test("contract: secondary metadata is lazy and unqualified scope stays database-
     new MetadataCache(),
     () => undefined,
   );
-  const active = { connectionId: "connection", database: "DatabaseA" };
+  const active = {
+    backendId: "fake",
+    connectionIdentity: "connection",
+    database: "DatabaseA",
+  };
 
   const ordinary = await resolver.resolve(
     active,
@@ -72,7 +76,7 @@ test("contract: database discovery does not eagerly load secondary metadata", as
   const loads: string[] = [];
   const connections = {
     listDatabases: async () => ["IntelliSenseLab", "IntelliSenseLabReporting"],
-  } as unknown as ConnectionService;
+  } as unknown as MetadataBackend;
   const loader = {
     load: async ({ database }: { database: string }) => {
       loads.push(database);
@@ -86,7 +90,11 @@ test("contract: database discovery does not eagerly load secondary metadata", as
     () => undefined,
   );
   const scope = await resolver.resolve(
-    { connectionId: "connection", database: "IntelliSenseLab" },
+    {
+      backendId: "fake",
+      connectionIdentity: "connection",
+      database: "IntelliSenseLab",
+    },
     resolveSqlContext("SELECT * FROM Intelli"),
   );
   assert.deepEqual(scope.databaseNames, [
@@ -101,7 +109,7 @@ test("contract: database-qualified aliases request their originating database", 
   const loads: string[] = [];
   const connections = {
     listDatabases: async () => ["DatabaseA", "DatabaseB"],
-  } as unknown as ConnectionService;
+  } as unknown as MetadataBackend;
   const loader = {
     load: async ({ database }: { database: string }) => {
       loads.push(database);
@@ -116,7 +124,11 @@ test("contract: database-qualified aliases request their originating database", 
   );
   const sql = "SELECT b. FROM DatabaseB.sales.Customers b";
   await resolver.resolve(
-    { connectionId: "connection", database: "DatabaseA" },
+    {
+      backendId: "fake",
+      connectionIdentity: "connection",
+      database: "DatabaseA",
+    },
     resolveSqlContext(sql, "SELECT b.".length),
   );
   assert.deepEqual(loads, ["DatabaseA", "DatabaseB"]);
@@ -126,7 +138,7 @@ test("CTE projection loads databases explicitly referenced inside its statement"
   const loads: string[] = [];
   const connections = {
     listDatabases: async () => ["DatabaseA", "DatabaseB"],
-  } as unknown as ConnectionService;
+  } as unknown as MetadataBackend;
   const loader = {
     load: async ({ database }: { database: string }) => {
       loads.push(database);
@@ -142,7 +154,11 @@ test("CTE projection loads databases explicitly referenced inside its statement"
   const sql =
     "WITH x AS (SELECT * FROM DatabaseB.archive.CustomerAddressArchive a) SELECT y. FROM x y";
   const scope = await resolver.resolve(
-    { connectionId: "connection", database: "DatabaseA" },
+    {
+      backendId: "fake",
+      connectionIdentity: "connection",
+      database: "DatabaseA",
+    },
     resolveSqlContext(sql, sql.indexOf("y.") + 2),
   );
   assert.deepEqual(loads, ["DatabaseA", "DatabaseB"]);
@@ -152,7 +168,7 @@ test("CTE projection loads databases explicitly referenced inside its statement"
 test("changing the active database selects its own cached default scope", async () => {
   const connections = {
     listDatabases: async () => [],
-  } as unknown as ConnectionService;
+  } as unknown as MetadataBackend;
   const loader = {
     load: async ({ database }: { database: string }) =>
       databaseIndex(database, ["dbo"]),
@@ -165,11 +181,11 @@ test("changing the active database selects its own cached default scope", async 
   );
   const context = resolveSqlContext("SELECT * FROM cust");
   const first = await resolver.resolve(
-    { connectionId: "same", database: "DatabaseA" },
+    { backendId: "fake", connectionIdentity: "same", database: "DatabaseA" },
     context,
   );
   const second = await resolver.resolve(
-    { connectionId: "same", database: "DatabaseB" },
+    { backendId: "fake", connectionIdentity: "same", database: "DatabaseB" },
     context,
   );
   assert.deepEqual([...first.indexes.keys()], ["databasea"]);

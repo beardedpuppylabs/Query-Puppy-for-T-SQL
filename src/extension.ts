@@ -7,9 +7,9 @@ import {
 import { MetadataCache } from "./metadata/MetadataCache.js";
 import { MetadataLifecycleStatus } from "./metadata/MetadataLifecycleStatus.js";
 import { FileMetadataSnapshotStore } from "./metadata/PersistentMetadataStore.js";
-import { ConnectionService } from "./mssql/ConnectionService.js";
+import { MetadataLoader } from "./metadata/MetadataLoader.js";
+import { MssqlConnectionSharingAdapter } from "./mssql/ConnectionSharingAdapter.js";
 import { getMssqlApi } from "./mssql/MssqlApi.js";
-import { MetadataLoader } from "./mssql/MetadataLoader.js";
 import { SqlSignatureHelpProvider } from "./completion/SqlSignatureHelpProvider.js";
 import {
   parseCallSite,
@@ -21,7 +21,10 @@ import {
 } from "./completion/ProviderRegistration.js";
 import { PendingSignatureTriggerState } from "./completion/AutomaticSignatureHelp.js";
 import { SelectStarExpansionController } from "./commands/ExpandSelectStarCommand.js";
-import { isPotentialSmartAliasTrigger } from "./parser/SmartAlias.js";
+import {
+  PendingCompletionTriggerState,
+  type AutomaticCompletionTriggerKind,
+} from "./parser/AutomaticCompletionTrigger.js";
 import {
   microsoftSuggestionStatusLines,
   resolveMicrosoftSuggestionState,
@@ -43,33 +46,32 @@ export function activate(context: vscode.ExtensionContext): void {
     store: persistentStore,
     onEvent: (event) => metadataStatus.handle(event),
   });
-  const connections = new ConnectionService(EXTENSION_ID, getMssqlApi);
-  const loader = new MetadataLoader(connections, (message) =>
+  const mssqlBackend = new MssqlConnectionSharingAdapter(
+    EXTENSION_ID,
+    getMssqlApi,
+  );
+  const loader = new MetadataLoader(mssqlBackend, (message) =>
     output.appendLine(`[metadata] ${message}`),
   );
   const provider = new SqlCompletionProvider(
-    connections,
+    mssqlBackend,
     loader,
     cache,
     output,
+    context.extensionMode === vscode.ExtensionMode.Test,
   );
   const signatureProvider = new SqlSignatureHelpProvider(
-    connections,
+    mssqlBackend,
     loader,
     cache,
     output,
   );
   const automaticSignatureHelp = new PendingSignatureTriggerState();
   let automaticFallbackTimer: ReturnType<typeof setTimeout> | undefined;
-  let pendingAliasTrigger:
-    | {
-        readonly uri: string;
-        readonly documentVersion: number;
-        readonly expectedOffset: number;
-      }
-    | undefined;
-  let automaticAliasTimer: ReturnType<typeof setTimeout> | undefined;
+  const automaticCompletion = new PendingCompletionTriggerState();
+  let automaticSuggestRunning = false;
   let automaticAliasSuggestInvocations = 0;
+  let automaticSemanticSuggestInvocations = 0;
   let fallbackInvoked = false;
   let fallbackSuppressed = false;
   const clearAutomaticTrigger = (): void => {
@@ -77,23 +79,26 @@ export function activate(context: vscode.ExtensionContext): void {
     if (automaticFallbackTimer) clearTimeout(automaticFallbackTimer);
     automaticFallbackTimer = undefined;
   };
-  const clearAutomaticAliasTrigger = (): void => {
-    pendingAliasTrigger = undefined;
-    if (automaticAliasTimer) clearTimeout(automaticAliasTimer);
-    automaticAliasTimer = undefined;
+  const clearAutomaticSuggestTrigger = (): void => {
+    automaticCompletion.clear();
+    provider.clearAutomaticCompletionExpectation();
   };
-  const fulfillAutomaticAliasTrigger = async (): Promise<void> => {
-    const pending = pendingAliasTrigger;
+  const fulfillAutomaticSuggestTrigger = async (
+    generation?: number,
+  ): Promise<void> => {
+    if (automaticSuggestRunning) return;
+    const pending = automaticCompletion.current();
     const editor = vscode.window.activeTextEditor;
     if (!pending || !editor) return;
     const position = editor.selection.active;
-    if (
-      editor.document.uri.toString() !== pending.uri ||
-      editor.document.version !== pending.documentVersion ||
-      editor.document.offsetAt(position) !== pending.expectedOffset
-    )
-      return;
-    clearAutomaticAliasTrigger();
+    const taken = automaticCompletion.takeIfCurrent(
+      editor.document.uri.toString(),
+      editor.document.version,
+      editor.document.offsetAt(position),
+      generation,
+    );
+    if (!taken) return;
+    automaticSuggestRunning = true;
     const cancellation = new vscode.CancellationTokenSource();
     try {
       const completion = await provider.provideCompletionItems(
@@ -101,27 +106,55 @@ export function activate(context: vscode.ExtensionContext): void {
         position,
         cancellation.token,
       );
-      const hasAlias = completion.items.some(
-        (item) =>
-          (
-            item as vscode.CompletionItem & {
-              readonly data?: { readonly semanticKind?: string };
-            }
-          ).data?.semanticKind === "rowSourceAlias",
-      );
+      const hasSemanticCandidate = completion.items.some((item) => {
+        const data = (
+          item as vscode.CompletionItem & {
+            readonly data?: {
+              readonly provider?: string;
+              readonly semanticKind?: string;
+              readonly decorative?: string;
+            };
+          }
+        ).data;
+        if (
+          data?.provider !== "query-puppy-for-t-sql" ||
+          data.decorative ||
+          !data.semanticKind
+        )
+          return false;
+        return automaticCandidateMatches(taken.kind, data.semanticKind);
+      });
       const active = vscode.window.activeTextEditor;
       if (
-        !hasAlias ||
         active !== editor ||
-        active.document.version !== pending.documentVersion ||
+        active.document.version !== taken.documentVersion ||
         active.document.offsetAt(active.selection.active) !==
-          pending.expectedOffset
+          taken.expectedOffset
       )
         return;
-      automaticAliasSuggestInvocations++;
-      await vscode.commands.executeCommand("editor.action.triggerSuggest");
+      if (hasSemanticCandidate) {
+        await vscode.commands.executeCommand("hideSuggestWidget");
+        const current = vscode.window.activeTextEditor;
+        if (
+          current !== editor ||
+          current.document.version !== taken.documentVersion ||
+          current.document.offsetAt(current.selection.active) !==
+            taken.expectedOffset
+        )
+          return;
+        provider.expectAutomaticCompletionInvocation(
+          taken.kind,
+          current.document.uri,
+          taken.documentVersion,
+          taken.expectedOffset,
+        );
+        if (taken.kind === "smartAlias") automaticAliasSuggestInvocations++;
+        else automaticSemanticSuggestInvocations++;
+        await vscode.commands.executeCommand("editor.action.triggerSuggest");
+      }
     } finally {
       cancellation.dispose();
+      automaticSuggestRunning = false;
     }
   };
   const fulfillAutomaticTrigger = async (
@@ -166,7 +199,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     output,
     metadataStatus,
-    new SelectStarExpansionController(connections, cache),
+    new SelectStarExpansionController(mssqlBackend, cache),
     vscode.languages.registerCompletionItemProvider(
       SQL_DOCUMENT_SELECTOR,
       provider,
@@ -181,12 +214,12 @@ export function activate(context: vscode.ExtensionContext): void {
       provider.closeDocument(document.uri);
       if (automaticSignatureHelp.current()?.uri === document.uri.toString())
         clearAutomaticTrigger();
-      if (pendingAliasTrigger?.uri === document.uri.toString())
-        clearAutomaticAliasTrigger();
+      if (automaticCompletion.current()?.uri === document.uri.toString())
+        clearAutomaticSuggestTrigger();
     }),
     vscode.workspace.onDidChangeTextDocument((event) => {
       clearAutomaticTrigger();
-      clearAutomaticAliasTrigger();
+      clearAutomaticSuggestTrigger();
       const editor = vscode.window.activeTextEditor;
       if (
         !editor ||
@@ -197,30 +230,22 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       const change = event.contentChanges[0];
       if (!change) return;
-      const expectedOffset = change.rangeOffset + change.text.length;
-      if (
-        (vscode.workspace
+      const pendingSuggest = automaticCompletion.replace(
+        event.document.uri.toString(),
+        event.document.version,
+        event.document.getText(),
+        change,
+        vscode.workspace
           .getConfiguration(
             "queryPuppyForTSql.smartAliases",
             event.document.uri,
           )
-          .get<boolean>("enabled") ??
-          true) &&
-        /^\s+$/.test(change.text) &&
-        isPotentialSmartAliasTrigger(event.document.getText(), expectedOffset)
-      ) {
-        pendingAliasTrigger = {
-          uri: event.document.uri.toString(),
-          documentVersion: event.document.version,
-          expectedOffset,
-        };
-        automaticAliasTimer = setTimeout(() => {
-          automaticAliasTimer = undefined;
-          void fulfillAutomaticAliasTrigger().finally(() =>
-            clearAutomaticAliasTrigger(),
-          );
-        }, 75);
-      }
+          .get<boolean>("enabled") ?? true,
+      );
+      if (pendingSuggest)
+        queueMicrotask(
+          () => void fulfillAutomaticSuggestTrigger(pendingSuggest.generation),
+        );
       const pending = automaticSignatureHelp.replace(
         event.document.uri.toString(),
         event.document.version,
@@ -243,11 +268,21 @@ export function activate(context: vscode.ExtensionContext): void {
       );
     }),
     vscode.window.onDidChangeTextEditorSelection(() => {
-      void fulfillAutomaticAliasTrigger();
+      const pending = automaticCompletion.current();
+      const active = vscode.window.activeTextEditor;
+      if (
+        pending &&
+        active?.document.uri.toString() === pending.uri &&
+        active.document.version === pending.documentVersion &&
+        active.document.offsetAt(active.selection.active) ===
+          pending.expectedOffset
+      )
+        void fulfillAutomaticSuggestTrigger(pending.generation);
+      else if (pending) clearAutomaticSuggestTrigger();
       void fulfillAutomaticTrigger();
     }),
     vscode.window.onDidChangeActiveTextEditor(() => {
-      clearAutomaticAliasTrigger();
+      clearAutomaticSuggestTrigger();
       clearAutomaticTrigger();
     }),
     vscode.commands.registerCommand(
@@ -255,11 +290,11 @@ export function activate(context: vscode.ExtensionContext): void {
       () => vscode.commands.executeCommand("editor.action.triggerSuggest"),
     ),
     vscode.commands.registerCommand("queryPuppyForTSql.refreshMetadata", () =>
-      refreshMetadata(connections, loader, cache),
+      refreshMetadata(mssqlBackend, loader, cache),
     ),
     vscode.commands.registerCommand(
       "queryPuppyForTSql.clearMetadataCache",
-      () => clearMetadataCache(connections, cache),
+      () => clearMetadataCache(mssqlBackend, cache),
     ),
     vscode.commands.registerCommand(
       "queryPuppyForTSql.showStatus",
@@ -271,8 +306,8 @@ export function activate(context: vscode.ExtensionContext): void {
           const parameterHintStatus = parameterHintStatusLine(
             vscode.window.activeTextEditor?.document,
           );
-          const installed = await connections.available();
-          const active = await connections.active();
+          const installed = await mssqlBackend.available();
+          const active = await mssqlBackend.active();
           if (!installed) {
             await vscode.window.showInformationMessage(
               `Query Puppy for T-SQL — mssql API unavailable; disconnected; metadata not loaded.\n${suggestionStatus}\n${parameterHintStatus}`,
@@ -285,7 +320,7 @@ export function activate(context: vscode.ExtensionContext): void {
             );
             return;
           }
-          const cached = cache.snapshots(active.connectionId);
+          const cached = cache.snapshots(active.connectionIdentity);
           const summary =
             cached.length === 0
               ? "none"
@@ -405,6 +440,18 @@ export function activate(context: vscode.ExtensionContext): void {
           return count;
         },
       ),
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.takeAutomaticSemanticSuggestInvocations",
+        () => {
+          const count = automaticSemanticSuggestInvocations;
+          automaticSemanticSuggestInvocations = 0;
+          return count;
+        },
+      ),
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.takeAutomaticCompletionInvocations",
+        () => provider.takeAutomaticCompletionInvocations(),
+      ),
     );
   const checkFirstRun = (): void => {
     warnAboutMicrosoftSuggestions(context).catch((error: unknown) =>
@@ -435,6 +482,15 @@ export function activate(context: vscode.ExtensionContext): void {
         reportDuplicateProviders();
     }),
   );
+}
+
+function automaticCandidateMatches(
+  trigger: AutomaticCompletionTriggerKind,
+  semanticKind: string,
+): boolean {
+  if (trigger === "smartAlias") return semanticKind === "rowSourceAlias";
+  if (trigger === "joinContinuation") return semanticKind === "keyword";
+  return true;
 }
 
 function functionCallAtCursor(

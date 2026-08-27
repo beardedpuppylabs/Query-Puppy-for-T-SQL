@@ -424,15 +424,73 @@ Alias eligibility is derived from SQL token boundaries, not catalog candidate
 cardinality. Alias generation and deterministic collision fallback use the resolved
 semantic object name and visible QueryScope.
 
-The alias CompletionItem uses a compact native label description such as
-`alias for BelegePositionen`, a schema-qualified detail such as
-`alias for qpacc.BelegePositionen`, and the native local-binding/variable kind. It
-inserts only the generated alias as plain text at an empty cursor range;
-`filterText` is the same alias, and the item never replaces the RowSource or
-inserts `AS` on the user's behalf. Typing the whitespace that establishes a legal
-alias position may open the native Suggest Widget. This automatic trigger is
+The alias CompletionItem uses a compact native label such as `AS bp`, a description
+such as `alias for BelegePositionen`, a schema-qualified detail such as
+`alias for qpacc.BelegePositionen`, and the native local-binding/variable kind. At
+a completed RowSource it inserts `AS bp` as plain text at an empty cursor range. If
+the user already typed `AS `, it labels and inserts only `bp`; it never duplicates
+the keyword or replaces the RowSource. `filterText` follows the actual displayed
+and inserted alias text. Typing the whitespace that establishes a legal alias
+position may open the native Suggest Widget. This automatic trigger is
 limited to syntactically valid, resolved, unaliased RowSources and is synchronized
-with the post-edit cursor; arbitrary SQL whitespace does not trigger it.
+with the post-edit cursor. The first legal whitespace after the RowSource or
+after `AS` is sufficient; a second space must not be required. Arbitrary SQL
+whitespace does not trigger it.
+
+All whitespace-driven completion uses one version-bound trigger lifecycle. The
+trigger records the edit's resulting document version and expected cursor, waits
+for the active editor selection to reflect that edit, resolves the semantic domain
+from that current state, closes any Suggest session that belongs to the previous
+phase, and invokes native Suggest once. A later document version, active-editor
+change, or cursor move cancels the pending trigger. Automatic completion therefore
+uses the same provider/domain as Ctrl+Space at the same final version and position;
+it does not retry through arbitrary timing delays.
+
+## DML target candidates
+
+`UPDATE`, `INSERT INTO`, and `DELETE FROM` target positions use a distinct target
+domain instead of ordinary expression completion. They expose legal target row
+sources such as tables, views, synonyms, visible CTEs, temp tables, and table
+variables, with normal Contains filtering and schema/database qualification.
+
+This target domain is separate from DML expression and column phases. `UPDATE SET`
+target-column completion, assignment right-hand sides, INSERT column lists,
+OUTPUT pseudo sources, DELETE aliases, and EXEC parameter completion continue to
+use their existing DML-specific paths.
+
+Completed DML keywords separated from the cursor by whitespace are grammar
+context, not identifier search text. Ctrl+Space at an empty target position and
+normal suggestion behavior after a typed fragment use this target domain. Query
+Puppy deliberately does not force native Suggest at the blank keyword-space
+boundary because that command opens every installed completion/snippet provider,
+which the extension neither controls nor filters.
+
+## JOIN continuation keyword
+
+Whitespace after a RowSource is resolved into one explicit phase rather than
+falling back to generic RowSource discovery:
+
+- completed predicate-bearing JOIN object: Smart Alias first, then `ON`
+- explicit `AS`: alias only, because the alias is syntactically required
+- completed JOIN alias, with or without `AS`: `ON` only
+- completed FROM/APPLY object: Smart Alias only
+
+The predicate-bearing forms are `JOIN`, `INNER JOIN`, `LEFT [OUTER] JOIN`, `RIGHT
+[OUTER] JOIN`, and `FULL [OUTER] JOIN`. Accepting `ON` inserts only `ON `; existing
+ON expression and FK intelligence then owns the next completion phase. `CROSS
+JOIN`, `CROSS APPLY`, and `OUTER APPLY` do not offer ON. Accepting `ON` directly
+without an alias keeps the RowSource's shortest legal object qualifier and does
+not weaken FK resolution.
+
+## Automatic expression triggers
+
+Typing the whitespace after a completed `JOIN ... ON` may open the native Suggest
+Widget for Query Puppy semantic expression candidates. If real FK metadata exists
+between the current-right RowSource and legally visible left sources, the usual
+FK predicate candidates participate. If no relationship exists, ordinary legal
+expression candidates such as aliases and visible columns remain available. The
+trigger does not inspect Microsoft completion items and does not infer
+relationships from matching names or datatypes.
 
 ## Functions and procedures
 

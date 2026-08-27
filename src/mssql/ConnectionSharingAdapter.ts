@@ -1,22 +1,27 @@
+import type {
+  ActiveConnectionContext,
+  ConnectionContextResolver,
+  MetadataBackend,
+  MetadataQueryResult,
+} from "../backend/MetadataBackend.js";
 import type { ConnectionSharingApi, MssqlExtensionApi } from "./MssqlApi.js";
-import type { SimpleExecuteResult } from "./SimpleExecuteResult.js";
 import { validateSimpleExecuteResult } from "./SimpleExecuteResult.js";
 
-export interface ActiveConnection {
-  readonly connectionId: string;
-  readonly database: string;
-}
-
-export class ConnectionService {
+export class MssqlConnectionSharingAdapter
+  implements ConnectionContextResolver, MetadataBackend
+{
+  readonly id = "mssql-connection-sharing";
   private sharingApi: ConnectionSharingApi | undefined;
   private sharingRequest: Promise<ConnectionSharingApi | undefined> | undefined;
-  private activeRequest: Promise<ActiveConnection | undefined> | undefined;
+  private activeRequest:
+    Promise<ActiveConnectionContext | undefined> | undefined;
 
   constructor(
     private readonly extensionId: string,
     private readonly getApi: () => Promise<MssqlExtensionApi | undefined>,
   ) {}
-  async active(): Promise<ActiveConnection | undefined> {
+
+  async active(): Promise<ActiveConnectionContext | undefined> {
     if (this.activeRequest) return this.activeRequest;
     const pending = this.resolveActive();
     this.activeRequest = pending;
@@ -26,47 +31,34 @@ export class ConnectionService {
       if (this.activeRequest === pending) this.activeRequest = undefined;
     }
   }
-  private async resolveActive(): Promise<ActiveConnection | undefined> {
-    const sharing = await this.sharing();
-    if (!sharing) return undefined;
-    const connectionId = await sharing.getActiveEditorConnectionId(
-      this.extensionId,
-    );
-    if (!connectionId) return undefined;
-    const database =
-      (await sharing.getActiveDatabase(this.extensionId)) ??
-      (await sharing.getDatabaseForConnectionId(
-        this.extensionId,
-        connectionId,
-      ));
-    return database ? { connectionId, database } : undefined;
-  }
-  async query(
-    connection: ActiveConnection,
+
+  async executeMetadataQuery(
+    connection: ActiveConnectionContext,
     sql: string,
-  ): Promise<SimpleExecuteResult> {
-    const result = (await this.queryMany(connection, [sql]))[0];
+  ): Promise<MetadataQueryResult> {
+    const result = (await this.executeMetadataQueries(connection, [sql]))[0];
     if (!result) throw new Error("mssql query returned no result.");
     return result;
   }
-  async queryMany(
-    connection: ActiveConnection,
+
+  async executeMetadataQueries(
+    connection: ActiveConnectionContext,
     sqlStatements: readonly string[],
-  ): Promise<SimpleExecuteResult[]> {
+  ): Promise<readonly MetadataQueryResult[]> {
     if (sqlStatements.length === 0) return [];
     const sharing = await this.sharing();
     if (!sharing)
       throw new Error("Microsoft mssql connection sharing is unavailable.");
     const uri = await sharing.connect(
       this.extensionId,
-      connection.connectionId,
+      connection.connectionIdentity,
       connection.database,
     );
     if (!uri) throw new Error("mssql did not provide a shared connection URI.");
     try {
       if (!sharing.isConnected(uri))
         throw new Error("The shared mssql connection is not connected.");
-      const results: SimpleExecuteResult[] = [];
+      const results: MetadataQueryResult[] = [];
       for (const sql of sqlStatements)
         results.push(
           validateSimpleExecuteResult(
@@ -78,16 +70,20 @@ export class ConnectionService {
       sharing.disconnect(uri);
     }
   }
+
   async available(): Promise<boolean> {
     return (await this.sharing()) !== undefined;
   }
-  async listDatabases(connection: ActiveConnection): Promise<string[]> {
+
+  async listDatabases(
+    connection: ActiveConnectionContext,
+  ): Promise<readonly string[]> {
     const sharing = await this.sharing();
     if (!sharing)
       throw new Error("Microsoft mssql connection sharing is unavailable.");
     const uri = await sharing.connect(
       this.extensionId,
-      connection.connectionId,
+      connection.connectionIdentity,
       connection.database,
     );
     if (!uri) throw new Error("mssql did not provide a shared connection URI.");
@@ -107,6 +103,29 @@ export class ConnectionService {
       sharing.disconnect(uri);
     }
   }
+
+  private async resolveActive(): Promise<ActiveConnectionContext | undefined> {
+    const sharing = await this.sharing();
+    if (!sharing) return undefined;
+    const connectionId = await sharing.getActiveEditorConnectionId(
+      this.extensionId,
+    );
+    if (!connectionId) return undefined;
+    const database =
+      (await sharing.getActiveDatabase(this.extensionId)) ??
+      (await sharing.getDatabaseForConnectionId(
+        this.extensionId,
+        connectionId,
+      ));
+    return database
+      ? {
+          backendId: this.id,
+          connectionIdentity: connectionId,
+          database,
+        }
+      : undefined;
+  }
+
   private async sharing(): Promise<ConnectionSharingApi | undefined> {
     if (this.sharingApi) return this.sharingApi;
     if (this.sharingRequest) return this.sharingRequest;

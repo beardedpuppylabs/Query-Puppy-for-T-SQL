@@ -3,13 +3,10 @@ import type {
   DocumentSemanticModel,
   SemanticCatalog,
 } from "./DocumentSemanticAnalyzer.js";
-import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
+import { tokenizeSql } from "./SqlTokenizer.js";
 import { resolveDocumentSymbols } from "./DocumentSymbols.js";
+import { resolveRowSourceCompletionPhase } from "./RowSourceCompletionPhase.js";
 
-const identifier = (token: SqlToken | undefined): token is SqlToken =>
-  token?.kind === "identifier" ||
-  token?.kind === "temp" ||
-  token?.kind === "variable";
 export function aliasFromObjectName(name: string): string {
   const words = name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -34,8 +31,7 @@ export function isPotentialSmartAliasTrigger(
   cursor: number,
 ): boolean {
   if (!/\s/.test(sql[cursor - 1] ?? "")) return false;
-  const tokens = tokenizeSql(sql.slice(0, cursor));
-  return Boolean(resolveAliasTarget(sql, cursor, tokens));
+  return Boolean(resolveAliasTarget(sql, cursor));
 }
 
 interface AliasTarget {
@@ -46,43 +42,11 @@ interface AliasTarget {
 function resolveAliasTarget(
   sql: string,
   cursor: number,
-  tokens: readonly SqlToken[],
 ): AliasTarget | undefined {
-  let keyword = -1;
-  for (let i = tokens.length - 1; i >= 0; i--) {
-    if (tokens[i]?.text === ";" || tokens[i]?.normalized === "go") break;
-    if (["from", "join", "apply"].includes(tokens[i]?.normalized ?? "")) {
-      keyword = i;
-      break;
-    }
-  }
-  if (keyword < 0) return undefined;
-  let p = keyword + 1;
-  if (tokens[p]?.text === "(" || !identifier(tokens[p])) return undefined;
-  const parts = [tokens[p]?.text ?? ""];
-  while (tokens[p + 1]?.text === "." && identifier(tokens[p + 2])) {
-    parts.push(tokens[p + 2]?.text ?? "");
-    p += 2;
-  }
-  if (tokens[p + 1]?.text === "(") {
-    let depth = 0;
-    do {
-      p++;
-      if (tokens[p]?.text === "(") depth++;
-      if (tokens[p]?.text === ")") depth--;
-    } while (p < tokens.length && depth > 0);
-  }
-  const trailing = tokens.slice(p + 1);
-  const explicitAs = trailing.length === 1 && trailing[0]?.normalized === "as";
-  if (trailing.length > (explicitAs ? 1 : 0)) return undefined;
-  const boundary = explicitAs ? trailing[0]?.end : tokens[p]?.end;
-  if (
-    boundary === undefined ||
-    boundary >= cursor ||
-    !/^\s+$/.test(sql.slice(boundary, cursor))
-  )
+  const phase = resolveRowSourceCompletionPhase(sql, cursor);
+  if (!phase || !["completedObject", "explicitAs"].includes(phase.kind))
     return undefined;
-  return { parts, explicitAs };
+  return { parts: phase.parts, explicitAs: phase.kind === "explicitAs" };
 }
 
 export function resolveSmartAliasContext(
@@ -93,7 +57,7 @@ export function resolveSmartAliasContext(
 ): SmartAliasContext | undefined {
   if (cursor <= 0) return undefined;
   const tokens = tokenizeSql(sql.slice(0, cursor));
-  const target = resolveAliasTarget(sql, cursor, tokens);
+  const target = resolveAliasTarget(sql, cursor);
   if (!target) return undefined;
   const { parts, explicitAs } = target;
   const objectName = parts.at(-1) ?? "";

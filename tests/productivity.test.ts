@@ -11,6 +11,14 @@ import {
   isPotentialSmartAliasTrigger,
   resolveSmartAliasContext,
 } from "../src/parser/SmartAlias.js";
+import {
+  isPotentialJoinContinuationCompletionTrigger,
+  isPotentialJoinOnCompletionTrigger,
+  PendingCompletionTriggerState,
+} from "../src/parser/AutomaticCompletionTrigger.js";
+import { resolveRowSourceCompletionPhase } from "../src/parser/RowSourceCompletionPhase.js";
+import { createCandidates } from "../src/completion/CandidateFactory.js";
+import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
 
 const columns = Array.from({ length: 200 }, (_, index) => ({
   name: `Column${String(index + 1)}`,
@@ -21,7 +29,7 @@ const columns = Array.from({ length: 200 }, (_, index) => ({
 }));
 const index = new DatabaseIndex({
   database: "Db",
-  schemas: ["dbo", "sales"],
+  schemas: ["dbo", "sales", "qpacc"],
   loadedAt: 0,
   objects: [
     {
@@ -55,6 +63,14 @@ const index = new DatabaseIndex({
       kind: "table",
       parameters: [],
       columns: columns.slice(0, 4),
+    },
+    {
+      schema: "qpacc",
+      name: "OrderHeaders",
+      normalizedName: "orderheaders",
+      kind: "table",
+      parameters: [],
+      columns: columns.slice(0, 3),
     },
     ...["Belege", "BelegePositionen", "BelegePositionenDetails"].map(
       (name) => ({
@@ -280,16 +296,215 @@ test("contract: Smart Alias starts only after a completed RowSource", () => {
   for (const sql of [
     "SELECT * FROM dbo.BelegePositionen ",
     "SELECT * FROM dbo.BelegePositionen AS ",
+    "SELECT * FROM dbo.Belege b JOIN dbo.BelegePositionen ",
+    "SELECT * FROM dbo.Belege b JOIN dbo.BelegePositionen AS ",
   ])
     assert.equal(isPotentialSmartAliasTrigger(sql, sql.length), true);
   for (const sql of [
     "SELECT ",
     "SELECT * FROM dbo.BelegePositionen WHERE ",
+    "SELECT * FROM dbo.Belege b JOIN dbo.BelegePositionen bp ",
     "SELECT b.BelegId ",
     "SELECT * FROM dbo.BelegePositionen -- comment ",
     "SELECT 'text '",
   ])
     assert.equal(isPotentialSmartAliasTrigger(sql, sql.length), false);
+});
+
+test("automatic JOIN ON completion trigger is scoped to whitespace after ON", () => {
+  for (const sql of [
+    "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON ",
+    "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON     ",
+    "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON\n  ",
+  ])
+    assert.equal(
+      isPotentialJoinOnCompletionTrigger(sql, sql.length),
+      true,
+      sql,
+    );
+  for (const sql of [
+    "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON",
+    "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON c.",
+    "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o WHERE ",
+    "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON 1 ",
+  ])
+    assert.equal(
+      isPotentialJoinOnCompletionTrigger(sql, sql.length),
+      false,
+      sql,
+    );
+});
+
+test("contract: automatic completion state binds to the post-edit document version", () => {
+  const state = new PendingCompletionTriggerState();
+  const before = "SELECT * FROM dbo.BelegePositionen";
+  const after = `${before} `;
+  const pending = state.replace("file:///query.sql", 2, after, {
+    rangeOffset: before.length,
+    text: " ",
+  });
+  assert.equal(pending?.kind, "smartAlias");
+  assert.equal(
+    state.takeIfCurrent("file:///query.sql", 1, before.length),
+    undefined,
+  );
+  assert.equal(
+    state.takeIfCurrent("file:///query.sql", 2, after.length)?.kind,
+    "smartAlias",
+  );
+
+  for (const sql of ["UPDATE ", "INSERT INTO ", "DELETE FROM "])
+    assert.equal(
+      state.replace("file:///query.sql", 3, sql, {
+        rangeOffset: sql.length - 1,
+        text: " ",
+      }),
+      undefined,
+      `${sql} must not force the native multi-provider Suggest Widget open`,
+    );
+  state.replace("file:///query.sql", 4, "DELETE FROM x", {
+    rangeOffset: "DELETE FROM ".length,
+    text: "x",
+  });
+  assert.equal(
+    state.takeIfCurrent("file:///query.sql", 3, "DELETE FROM ".length),
+    undefined,
+  );
+});
+
+test("contract: JOIN source phases have deterministic alias and ON domains", () => {
+  for (const join of [
+    "JOIN",
+    "INNER JOIN",
+    "LEFT JOIN",
+    "LEFT OUTER JOIN",
+    "RIGHT JOIN",
+    "RIGHT OUTER JOIN",
+    "FULL JOIN",
+    "FULL OUTER JOIN",
+  ]) {
+    const completedObject = `SELECT * FROM dbo.Customers c ${join} qpacc.OrderHeaders `;
+    assert.equal(
+      resolveRowSourceCompletionPhase(completedObject, completedObject.length)
+        ?.kind,
+      "completedObject",
+      completedObject,
+    );
+    assert.equal(
+      resolveSmartAliasContext(
+        completedObject,
+        completedObject.length,
+        analyzeDocumentSemantics(
+          completedObject,
+          completedObject.length,
+          catalog,
+        ),
+        catalog,
+      )?.alias,
+      "oh",
+      completedObject,
+    );
+    assert.deepEqual(
+      createCandidates(resolveSqlContext(completedObject), catalog).map(
+        (candidate) => candidate.name,
+      ),
+      ["ON"],
+      completedObject,
+    );
+
+    const explicitAs = `${completedObject}AS `;
+    assert.equal(
+      resolveRowSourceCompletionPhase(explicitAs, explicitAs.length)?.kind,
+      "explicitAs",
+      explicitAs,
+    );
+    assert.equal(
+      resolveSmartAliasContext(
+        explicitAs,
+        explicitAs.length,
+        analyzeDocumentSemantics(explicitAs, explicitAs.length, catalog),
+        catalog,
+      )?.alias,
+      "oh",
+      explicitAs,
+    );
+    assert.deepEqual(
+      createCandidates(resolveSqlContext(explicitAs), catalog),
+      [],
+      explicitAs,
+    );
+
+    for (const source of [
+      "qpacc.OrderHeaders oh ",
+      "qpacc.OrderHeaders AS oh ",
+    ]) {
+      const sql = `SELECT * FROM dbo.Customers c ${join} ${source}`;
+      assert.equal(
+        resolveRowSourceCompletionPhase(sql, sql.length)?.kind,
+        "completedAlias",
+        sql,
+      );
+      assert.equal(
+        isPotentialJoinContinuationCompletionTrigger(sql, sql.length),
+        true,
+        sql,
+      );
+      assert.deepEqual(
+        createCandidates(resolveSqlContext(sql), catalog).map(
+          (candidate) => candidate.name,
+        ),
+        ["ON"],
+        sql,
+      );
+    }
+  }
+  for (const sql of [
+    "SELECT * FROM dbo.Customers c CROSS JOIN sales.CustomerOrders ",
+    "SELECT * FROM dbo.Customers c CROSS JOIN dbo.CustomerOrders o ",
+    "SELECT * FROM dbo.Customers c CROSS APPLY dbo.CustomerOrders o ",
+    "SELECT * FROM dbo.Customers c OUTER APPLY dbo.CustomerOrders o ",
+  ]) {
+    assert.equal(
+      isPotentialJoinContinuationCompletionTrigger(sql, sql.length),
+      false,
+      sql,
+    );
+    assert.equal(
+      createCandidates(resolveSqlContext(sql), catalog).some(
+        (candidate) => candidate.name === "ON",
+      ),
+      false,
+      sql,
+    );
+  }
+});
+
+test("contract: completed FROM phases never fall back to RowSource discovery", () => {
+  const completed = "SELECT * FROM dbo.Customers ";
+  assert.equal(
+    resolveRowSourceCompletionPhase(completed, completed.length)?.kind,
+    "completedObject",
+  );
+  assert.equal(
+    resolveSmartAliasContext(
+      completed,
+      completed.length,
+      analyzeDocumentSemantics(completed, completed.length, catalog),
+      catalog,
+    )?.alias,
+    "c",
+  );
+  assert.deepEqual(createCandidates(resolveSqlContext(completed), catalog), []);
+
+  const explicitAs = `${completed}AS `;
+  assert.equal(
+    resolveRowSourceCompletionPhase(explicitAs, explicitAs.length)?.kind,
+    "explicitAs",
+  );
+  assert.deepEqual(
+    createCandidates(resolveSqlContext(explicitAs), catalog),
+    [],
+  );
 });
 
 test("smart alias phase boundaries apply to supported JOIN source forms", () => {

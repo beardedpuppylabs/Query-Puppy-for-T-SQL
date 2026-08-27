@@ -119,6 +119,23 @@ const index = new DatabaseIndex({
         },
       ],
     },
+    ...["Foo", "FooBar", "FooBarBaz"].map((name, offset) => ({
+      id: 20 + offset,
+      schema: "dbo",
+      name,
+      normalizedName: name.toLocaleLowerCase("en-US"),
+      kind: "table" as const,
+      parameters: [],
+      columns: [
+        {
+          name: `${name}Id`,
+          normalizedName: `${name.toLocaleLowerCase("en-US")}id`,
+          type: { name: "int" },
+          nullable: false,
+          ordinal: 1,
+        },
+      ],
+    })),
     {
       schema: "sales",
       name: "CustomerOrders",
@@ -266,6 +283,8 @@ const scope = {
 };
 const names = (sql: string, cursor = sql.length) =>
   createCandidates(resolveSqlContext(sql, cursor), scope).map((x) => x.name);
+const candidates = (sql: string, cursor = sql.length) =>
+  createCandidates(resolveSqlContext(sql, cursor), scope);
 
 test("writable metadata excludes identity, computed, generated, and rowversion columns", () => {
   assert.deepEqual(
@@ -280,6 +299,60 @@ test("writable metadata excludes identity, computed, generated, and rowversion c
     ],
   );
 });
+
+test("contract: DML target positions complete target RowSources with Contains", () => {
+  for (const sql of ["UPDATE ", "INSERT INTO ", "DELETE FROM "]) {
+    assert.equal(resolveSqlContext(sql).kind, "dmlTarget", sql);
+    assert.ok(
+      candidates(sql).some((candidate) => candidate.kind === "table"),
+      sql,
+    );
+    assert.equal(
+      candidates(sql).some((candidate) => candidate.kind === "builtinFunction"),
+      false,
+      sql,
+    );
+  }
+  for (const sql of ["UPDATE Foo", "INSERT INTO Foo", "DELETE FROM Foo"])
+    assert.deepEqual(
+      candidates(sql)
+        .filter((candidate) => candidate.kind === "table")
+        .map((candidate) => candidate.name),
+      ["Foo", "FooBar", "FooBarBaz"],
+      sql,
+    );
+  for (const sql of [
+    "UPDATE dbo.Foo",
+    "INSERT INTO dbo.Foo",
+    "DELETE FROM dbo.Foo",
+    "UPDATE Db.dbo.Foo",
+    "INSERT INTO Db.dbo.Foo",
+    "DELETE FROM Db.dbo.Foo",
+  ])
+    assert.deepEqual(
+      candidates(sql)
+        .filter((candidate) => candidate.kind === "table")
+        .map((candidate) => candidate.name),
+      ["Foo", "FooBar", "FooBarBaz"],
+      sql,
+    );
+});
+
+test("contract: DML target completion stays out of assignment expressions", () => {
+  const rhs = candidates("UPDATE dbo.Customers SET EmailAddress = Foo");
+  assert.equal(
+    rhs.some((candidate) => candidate.kind === "table"),
+    false,
+    "UPDATE RHS must remain expression completion, not target-object completion",
+  );
+  const targetColumn = candidates("UPDATE dbo.Customers SET Foo");
+  assert.equal(
+    targetColumn.some((candidate) => candidate.kind === "table"),
+    false,
+    "UPDATE SET target column phase must not offer target RowSources",
+  );
+});
+
 test("contract: INSERT columns are target-only Contains-matched and exclude used columns", () => {
   assert.deepEqual(names("INSERT INTO dbo.Customers (Ema"), ["EmailAddress"]);
   assert.deepEqual(names("INSERT INTO dbo.Customers (CustomerCode, Ema"), [

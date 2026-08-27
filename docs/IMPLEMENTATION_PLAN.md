@@ -28,9 +28,67 @@ architecture documents describe the intended present-day design.
 - 0.11 persistent schema metadata cache and stabilization — complete
 - 0.12 broader T-SQL language intelligence — complete; manual acceptance passed
 - 0.12.1 repository, contributor, security, CI, and release hygiene — complete
+- 0.12.2 daily-workflow stabilization — complete; manual acceptance pending
+- P0 connection-resilience stage 1 — complete; backend-neutral boundary in place
 
-0.12.1 adds no product intelligence or completion behavior. The next feature area
-remains Navigation & Code Understanding.
+0.12.2 is a focused stabilization patch for existing completion workflows. The
+next larger feature area remains Navigation & Code Understanding.
+
+## P0 Connection Resilience Stage 1
+
+- [x] Define backend-neutral active connection and metadata contracts for the
+      current Query Puppy metadata needs.
+- [x] Isolate the current Microsoft mssql Connection Sharing API behind
+      `MssqlConnectionSharingAdapter`.
+- [x] Move canonical catalog loading to the metadata layer so it consumes
+      `MetadataBackend` rather than mssql-specific APIs or result types.
+- [x] Keep Microsoft mssql responsible for connection profiles and
+      authentication; no direct SQL Server backend, SecretStorage credentials, or
+      connection UI is implemented.
+- [x] Preserve existing persistent cache identity for the mssql adapter so
+      existing 0.12.1 snapshots are not invalidated merely by the boundary
+      refactor.
+- [x] Add fake-backend boundary tests and focused mssql adapter tests for active
+      context mapping, database enumeration, metadata query execution, retryable
+      failures, and coalescing.
+
+Direct SQL Server backend feasibility remains a later spike. Current Connection
+Sharing has not been removed.
+
+## 0.12.2 daily-workflow stabilization
+
+- [x] Make Smart Alias automatic completion resilient on the first legal
+      whitespace and insert `AS <alias>` after a resolved RowSource or only the
+      alias after an explicit `AS`.
+- [x] Add automatic native Suggest activation after whitespace following
+      `JOIN ... ON` when Query Puppy semantic expression candidates are available.
+- [x] Preserve FK-only predicate generation: real relationships can produce ON
+      predicates; unrelated tables still expose legal aliases and columns without
+      fabricated predicates.
+- [x] Add target-object completion for `UPDATE`, `INSERT INTO`, and `DELETE FROM`
+      with Contains matching plus schema/database qualification.
+- [x] Replace timing retries with one version/cursor-bound automatic completion
+      lifecycle and verify the actual registered provider's post-edit domain.
+- [x] Offer the `ON` continuation keyword after completed predicate-bearing JOIN
+      sources while excluding CROSS JOIN and APPLY; keep Smart Alias first and ON
+      second when the JOIN object is still unaliased.
+- [x] Stop forcing native Suggest at blank DML target whitespace while preserving
+      the Query Puppy target domain for Ctrl+Space and typed fragments.
+- [x] Keep DML target-object completion separate from UPDATE SET target columns,
+      assignment RHS expression completion, OUTPUT pseudo sources, DELETE alias
+      behavior, and EXEC parameters.
+- [x] Preserve the backend-neutral metadata boundary introduced by the P0
+      connection-resilience stage.
+- [x] Add parser/provider/Extension Host sentinels plus a focused manual
+      acceptance suite for the repaired daily workflows.
+
+This patch adds no navigation/code-understanding surface, custom UI, inferred
+relationships, direct SQL backend, or new credential path.
+
+INSERT required/all-writable column-list generation remains a focused follow-up.
+It must distinguish required writable columns from nullable/defaulted columns and
+exclude identity, computed, generated, and rowversion columns; it is not part of
+the trigger stabilization patch.
 
 ## 0.9.2 prefix-collision completion repair
 
@@ -161,8 +219,14 @@ This preparation became the common boundary used by the 0.10.0 built-in catalog.
 ## Verified contracts
 
 - VS Code 1.105 completion providers support structured labels, explicit replacement ranges, `filterText`, lazy resolution, and incomplete lists.
-- mssql 1.45 exports the connection-sharing surface currently consumed by the project for active connection/database lookup and query execution.
-- External mssql integration is isolated in `MssqlApi`/`ConnectionService` so changes to the external connection-sharing contract can be adapted without changing the semantic completion engine.
+- mssql 1.45 exports the connection-sharing surface currently consumed by the
+  mssql adapter for active connection/database lookup and metadata query
+  execution.
+- External mssql integration is isolated in `MssqlApi` and
+  `MssqlConnectionSharingAdapter` behind the backend-neutral
+  `ConnectionContextResolver`/`MetadataBackend` contracts, so changes to the
+  external connection-sharing contract can be adapted without changing the
+  semantic completion engine.
 - `mssql.intelliSense.enableSuggestions` remains the independently configurable Microsoft suggestion switch.
 
 ## Execution state
@@ -177,8 +241,8 @@ This preparation became the common boundary used by the 0.10.0 built-in catalog.
 
 ## Current design summary
 
-Persistent SQL Server metadata is loaded lazily using set-based metadata operations
-and cached by connection ID plus database.
+Persistent SQL Server metadata is loaded lazily using set-based metadata
+operations and cached by backend connection identity plus database.
 
 Concurrent requests for the same unloaded catalog use the project's coalesced
 loading path.

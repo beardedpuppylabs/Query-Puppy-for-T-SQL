@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
-import type { ConnectionService } from "../mssql/ConnectionService.js";
-import type { MetadataLoader } from "../mssql/MetadataLoader.js";
+import type { ConnectionContextResolver } from "../backend/MetadataBackend.js";
 import { MetadataCache } from "../metadata/MetadataCache.js";
+import type { MetadataLoader } from "../metadata/MetadataLoader.js";
 
 export async function refreshMetadata(
-  connections: ConnectionService,
+  connections: ConnectionContextResolver,
   loader: MetadataLoader,
   cache: MetadataCache,
 ): Promise<void> {
@@ -22,7 +22,7 @@ export async function refreshMetadata(
         title: `Refreshing schema metadata for ${active.database}`,
       },
       () =>
-        cache.refresh(active.connectionId, active.database, () =>
+        cache.refresh(active.connectionIdentity, active.database, () =>
           loader.load(active),
         ),
     );
@@ -37,7 +37,7 @@ export async function refreshMetadata(
 }
 
 export async function clearMetadataCache(
-  connections: ConnectionService,
+  connections: ConnectionContextResolver,
   cache: MetadataCache,
 ): Promise<void> {
   try {
@@ -54,7 +54,7 @@ export async function clearMetadataCache(
       "Clear Cache",
     );
     if (confirmation !== "Clear Cache") return;
-    await cache.clearDatabase(active.connectionId, active.database);
+    await cache.clearDatabase(active.connectionIdentity, active.database);
     await vscode.window.showInformationMessage(
       `Cleared Query Puppy schema metadata for ${active.database}.`,
     );

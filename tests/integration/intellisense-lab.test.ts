@@ -6,9 +6,11 @@ import test from "node:test";
 import * as sql from "mssql";
 import { createCandidates } from "../../src/completion/CandidateFactory.js";
 import { MetadataCache } from "../../src/metadata/MetadataCache.js";
-import { MetadataLoader } from "../../src/mssql/MetadataLoader.js";
-import type { ConnectionService } from "../../src/mssql/ConnectionService.js";
-import type { DbCellValue } from "../../src/mssql/SimpleExecuteResult.js";
+import { MetadataLoader } from "../../src/metadata/MetadataLoader.js";
+import type {
+  MetadataBackend,
+  MetadataCellValue,
+} from "../../src/backend/MetadataBackend.js";
 import { resolveSqlContext } from "../../src/parser/SqlContextResolver.js";
 import { analyzeDocumentSemantics } from "../../src/parser/DocumentSemanticAnalyzer.js";
 import { resolveSmartAliasContext } from "../../src/parser/SmartAlias.js";
@@ -49,7 +51,8 @@ test(
 
     const connections = metadataConnection(pool);
     const index = await new MetadataLoader(connections).load({
-      connectionId: "integration",
+      backendId: "integration",
+      connectionIdentity: "integration",
       database: process.env["MSSQL_TEST_DATABASE"] ?? "",
     });
     assert.ok(index.count > 0);
@@ -745,14 +748,19 @@ test(
     const loader = new MetadataLoader(metadataConnection(pool));
     const cache = new MetadataCache();
     const active = await cache.ensureLoaded("integration", activeDatabase, () =>
-      loader.load({ connectionId: "integration", database: activeDatabase }),
+      loader.load({
+        backendId: "integration",
+        connectionIdentity: "integration",
+        database: activeDatabase,
+      }),
     );
     const secondary = await cache.ensureLoaded(
       "integration",
       secondaryDatabase,
       () =>
         loader.load({
-          connectionId: "integration",
+          backendId: "integration",
+          connectionIdentity: "integration",
           database: secondaryDatabase,
         }),
     );
@@ -1546,15 +1554,18 @@ function createTestPool(database: string): sql.ConnectionPool {
   });
 }
 
-function metadataConnection(pool: sql.ConnectionPool): ConnectionService {
+function metadataConnection(pool: sql.ConnectionPool): MetadataBackend {
   return {
-    queryMany: async (_connection: unknown, queries: readonly string[]) =>
+    executeMetadataQueries: async (
+      _connection: unknown,
+      queries: readonly string[],
+    ) =>
       Promise.all(
         queries.map(async (query) => {
           const result = await pool
             .request()
             .query<Record<string, unknown>>(query);
-          const rows: DbCellValue[][] = result.recordset.map((record) =>
+          const rows: MetadataCellValue[][] = result.recordset.map((record) =>
             Object.values(record).map((raw) => ({
               isNull: raw === null || raw === undefined,
               displayValue: toDisplayValue(raw),
@@ -1563,7 +1574,7 @@ function metadataConnection(pool: sql.ConnectionPool): ConnectionService {
           return { rowCount: rows.length, rows };
         }),
       ),
-  } as unknown as ConnectionService;
+  } as unknown as MetadataBackend;
 }
 
 function toDisplayValue(raw: unknown): string {

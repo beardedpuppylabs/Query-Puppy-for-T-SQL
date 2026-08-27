@@ -1,15 +1,11 @@
-export interface DbCellValue {
-  readonly displayValue: string;
-  readonly isNull: boolean;
-}
-export interface SimpleExecuteResult {
-  readonly rowCount: number;
-  readonly rows: readonly (readonly DbCellValue[])[];
-}
+import type {
+  MetadataCellValue,
+  MetadataQueryResult,
+} from "../backend/MetadataBackend.js";
 
 export function validateSimpleExecuteResult(
   value: unknown,
-): SimpleExecuteResult {
+): MetadataQueryResult {
   if (typeof value !== "object" || value === null)
     throw new Error("mssql executeSimpleQuery returned a non-object result.");
   const result = value as Record<string, unknown>;
@@ -17,7 +13,7 @@ export function validateSimpleExecuteResult(
     throw new Error(
       `mssql executeSimpleQuery result has no rows array (keys: ${Object.keys(result).join(", ") || "none"}).`,
     );
-  const rows: DbCellValue[][] = result["rows"].map(
+  const rows: MetadataCellValue[][] = result["rows"].map(
     (rawRow: unknown, rowIndex: number) => {
       if (!Array.isArray(rawRow))
         throw new Error(`mssql query row ${String(rowIndex)} is not an array.`);

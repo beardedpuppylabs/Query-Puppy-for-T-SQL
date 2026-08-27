@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import type { ConnectionService } from "../mssql/ConnectionService.js";
-import type { MetadataLoader } from "../mssql/MetadataLoader.js";
+import type { ConnectionContextResolver } from "../backend/MetadataBackend.js";
+import type { MetadataLoader } from "../metadata/MetadataLoader.js";
 import { MetadataCache } from "../metadata/MetadataCache.js";
 import { formatSqlType } from "../metadata/SqlTypeFormatter.js";
 import { normalizeName } from "../metadata/MetadataModels.js";
@@ -32,7 +32,7 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
   private readonly loggedEnvironments = new Set<string>();
   private readonly diagnostics = new Map<string, string>();
   constructor(
-    private readonly connections: ConnectionService,
+    private readonly connections: ConnectionContextResolver,
     private readonly loader: MetadataLoader,
     private readonly cache: MetadataCache,
     private readonly output?: vscode.OutputChannel,
@@ -86,7 +86,7 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
       }
       const indexes = new Map();
       const activeIndex = await this.cache.ensureLoaded(
-        active.connectionId,
+        active.connectionIdentity,
         active.database,
         () => this.loader.load(active),
       );
@@ -97,7 +97,7 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
         normalizeName(database) !== normalizeName(active.database)
       ) {
         const index = await this.cache.ensureLoaded(
-          active.connectionId,
+          active.connectionIdentity,
           database,
           () => this.loader.load({ ...active, database }),
         );
@@ -170,7 +170,10 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     const active = await this.connections.active();
     if (!active) return false;
     const indexes = new Map();
-    const activeIndex = this.cache.get(active.connectionId, active.database);
+    const activeIndex = this.cache.get(
+      active.connectionIdentity,
+      active.database,
+    );
     if (!activeIndex) return false;
     indexes.set(normalizeName(active.database), activeIndex);
     const callSite = parseCallSite(sql, cursor);
@@ -179,7 +182,7 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
       database &&
       normalizeName(database) !== normalizeName(active.database)
     ) {
-      const index = this.cache.get(active.connectionId, database);
+      const index = this.cache.get(active.connectionIdentity, database);
       if (!index) return false;
       indexes.set(normalizeName(database), index);
     }

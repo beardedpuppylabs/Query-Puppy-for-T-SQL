@@ -4,9 +4,14 @@ import {
   type SourceReference,
 } from "./DocumentSymbols.js";
 import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
+import {
+  resolveRowSourceCompletionPhase,
+  type RowSourceCompletionPhase,
+} from "./RowSourceCompletionPhase.js";
 
 export type SqlContextKind =
   | "rowSource"
+  | "dmlTarget"
   | "execute"
   | "expression"
   | "member"
@@ -22,7 +27,7 @@ export interface IdentifierQualifier {
 }
 export interface SqlCompletionContext {
   readonly kind: SqlContextKind;
-  readonly baseKind: "rowSource" | "execute" | "expression";
+  readonly baseKind: "rowSource" | "dmlTarget" | "execute" | "expression";
   readonly search: string;
   readonly replacementStart: number;
   readonly qualifier?: IdentifierQualifier;
@@ -30,6 +35,7 @@ export interface SqlCompletionContext {
   readonly symbols: DocumentSymbols;
   readonly sql: string;
   readonly cursor: number;
+  readonly rowSourcePhase?: RowSourceCompletionPhase;
 }
 
 const isReferenceToken = (token: SqlToken | undefined): boolean =>
@@ -74,7 +80,15 @@ export function resolveSqlContext(
   );
   const search = hasSearch && last ? last.text : "";
   const replacementStart = hasSearch && last ? last.start : cursor;
-  const common = { search, replacementStart, symbols, sql, cursor };
+  const rowSourcePhase = resolveRowSourceCompletionPhase(sql, cursor);
+  const common = {
+    search,
+    replacementStart,
+    symbols,
+    sql,
+    cursor,
+    ...(rowSourcePhase ? { rowSourcePhase } : {}),
+  };
 
   // A completed ON keyword starts an expression even before trailing whitespace is typed.
   // It is syntax, never a replacement/filter fragment.
@@ -93,12 +107,13 @@ export function resolveSqlContext(
     };
 
   let tailStart = tokens.length;
-  while (tailStart > 0 && isReferenceToken(tokens[tailStart - 1])) {
-    const previous = tokens[tailStart - 1];
-    const current = tokens[tailStart];
-    if (current && current.text !== "." && previous?.text !== ".") break;
-    tailStart--;
-  }
+  if (last?.end === cursor)
+    while (tailStart > 0 && isReferenceToken(tokens[tailStart - 1])) {
+      const previous = tokens[tailStart - 1];
+      const current = tokens[tailStart];
+      if (current && current.text !== "." && previous?.text !== ".") break;
+      tailStart--;
+    }
   const tail = tokens.slice(tailStart);
   const parts = referenceParts(tail);
   const baseKind = resolveBaseKind(tokens.slice(0, tailStart));
@@ -159,14 +174,20 @@ function referenceParts(tokens: readonly SqlToken[]): string[] {
 
 function resolveBaseKind(
   tokens: readonly SqlToken[],
-): "rowSource" | "execute" | "expression" {
+): "rowSource" | "dmlTarget" | "execute" | "expression" {
   const significant = tokens.at(-1);
+  const previous = tokens.at(-2);
   const recent = tokens.slice(-10).map((token) => token.normalized);
   if (
     significant?.normalized === "exec" ||
     significant?.normalized === "execute"
   )
     return "execute";
+  if (significant?.normalized === "update") return "dmlTarget";
+  if (significant?.normalized === "into" && previous?.normalized === "insert")
+    return "dmlTarget";
+  if (significant?.normalized === "from" && previous?.normalized === "delete")
+    return "dmlTarget";
   if (
     recent.some((word, index) => word === "order" && recent[index + 1] === "by")
   )

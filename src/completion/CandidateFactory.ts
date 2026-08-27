@@ -5,7 +5,10 @@ import {
   type ForeignKeyMetadata,
 } from "../metadata/MetadataModels.js";
 import { quoteIdentifier } from "../metadata/SqlTypeFormatter.js";
-import type { SqlCompletionContext } from "../parser/SqlContextResolver.js";
+import type {
+  SqlCompletionContext,
+  SqlContextKind,
+} from "../parser/SqlContextResolver.js";
 import {
   analyzeDocumentSemantics,
   resolveVisibleRowSource,
@@ -101,6 +104,22 @@ export function createCandidates(
         callable ?? false,
       )
     : undefined;
+  if (context.rowSourcePhase) {
+    if (
+      context.rowSourcePhase.joinAllowsOn &&
+      context.rowSourcePhase.kind !== "explicitAs"
+    )
+      return [
+        {
+          name: "ON",
+          normalizedName: "on",
+          kind: "keyword",
+          insertText: "ON ",
+          documentation: "T-SQL JOIN condition",
+        },
+      ];
+    return [];
+  }
   if (scope) {
     const dml = analyzeDmlCompletion(
       context.sql,
@@ -202,7 +221,7 @@ export function createCandidates(
     } else if (parts.length === 2 && scope) {
       const qualifier = parts[0] ?? "";
       if (activeIndex?.hasSchema(qualifier)) {
-        candidates = objectsInSchema(activeIndex, qualifier);
+        candidates = objectsInSchema(activeIndex, qualifier, context.baseKind);
         sortKind = context.baseKind;
       } else {
         const databaseIndex = scope.indexes.get(normalizedDatabase(qualifier));
@@ -212,10 +231,12 @@ export function createCandidates(
           );
           if (context.search)
             candidates.push(
-              ...objectsAcrossSchemas(databaseIndex).map((candidate) => ({
-                ...candidate,
-                priority: 1,
-              })),
+              ...objectsAcrossSchemas(databaseIndex, context.baseKind).map(
+                (candidate) => ({
+                  ...candidate,
+                  priority: 1,
+                }),
+              ),
             );
           sortKind = context.search ? context.baseKind : "schema";
         }
@@ -224,13 +245,14 @@ export function createCandidates(
       const database = parts[0] ?? "";
       const schema = parts[1] || "dbo";
       const databaseIndex = scope.indexes.get(normalizedDatabase(database));
-      if (databaseIndex) candidates = objectsInSchema(databaseIndex, schema);
+      if (databaseIndex)
+        candidates = objectsInSchema(databaseIndex, schema, context.baseKind);
       sortKind = context.baseKind;
     }
   } else {
     const allowed = new Set(TYPE_ORDER[context.kind]);
     if (activeIndex) {
-      if (context.kind === "rowSource")
+      if (context.kind === "rowSource" || context.kind === "dmlTarget")
         candidates.push(
           ...activeIndex.metadata.schemas.map((schema) =>
             schemaCandidate(schema, activeIndex.metadata.database),
@@ -241,7 +263,9 @@ export function createCandidates(
           .filter((object) => allowed.has(object.kind))
           .map((object) => ({
             ...objectCandidate(object, activeIndex.metadata.database),
-            ...(context.kind === "rowSource" ? { priority: 1 } : {}),
+            ...(context.kind === "rowSource" || context.kind === "dmlTarget"
+              ? { priority: 1 }
+              : {}),
             ...(context.kind === "expression" ? { priority: 100 } : {}),
           })),
       );
@@ -257,7 +281,9 @@ export function createCandidates(
           name: local.name,
           normalizedName: normalizeName(local.name),
           kind: local.sourceKind,
-          ...(context.kind === "rowSource" ? { priority: 1 } : {}),
+          ...(context.kind === "rowSource" || context.kind === "dmlTarget"
+            ? { priority: 1 }
+            : {}),
         })),
     );
     if (context.kind === "expression") {
@@ -313,7 +339,10 @@ export function createCandidates(
           })),
         );
     }
-    if (context.kind === "rowSource" && scope?.databaseNames)
+    if (
+      (context.kind === "rowSource" || context.kind === "dmlTarget") &&
+      scope?.databaseNames
+    )
       candidates.push(
         ...scope.databaseNames.map((database) => ({
           name: database,
@@ -733,8 +762,11 @@ function relationshipProperties(
   };
 }
 
-function objectsAcrossSchemas(index: DatabaseIndex): CompletionCandidate[] {
-  const allowed = new Set(TYPE_ORDER.rowSource);
+function objectsAcrossSchemas(
+  index: DatabaseIndex,
+  context: SqlContextKind,
+): CompletionCandidate[] {
+  const allowed = new Set(TYPE_ORDER[context]);
   return index.objects
     .filter((object) => allowed.has(object.kind))
     .map((object) => ({
@@ -748,8 +780,9 @@ function objectsAcrossSchemas(index: DatabaseIndex): CompletionCandidate[] {
 function objectsInSchema(
   index: DatabaseIndex,
   schema: string,
+  context: SqlContextKind,
 ): CompletionCandidate[] {
-  const allowed = new Set(TYPE_ORDER.rowSource);
+  const allowed = new Set(TYPE_ORDER[context]);
   return index.objects
     .filter(
       (object) =>

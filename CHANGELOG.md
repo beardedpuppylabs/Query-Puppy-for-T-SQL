@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.12.2
+
+- Fixed Smart Alias phase resolution so the first legal whitespace after a
+  resolved row source replaces object discovery with `AS <alias>`; after an
+  explicit `AS`, only the alias itself is offered.
+- Added automatic semantic completion after typing whitespace following `JOIN ...
+ON`; real FK predicates appear when relationships exist, while unrelated joins
+  still expose legal aliases and columns without fabricated predicates.
+- Added target-object completion for `UPDATE`, `INSERT INTO`, and `DELETE FROM`
+  positions with normal Contains matching and schema/database qualification.
+  Blank target whitespace no longer forces the multi-provider Suggest Widget;
+  Ctrl+Space and typed target fragments retain the Query Puppy target domain.
+- Added explicit JOIN continuation phases. A completed unaliased INNER, LEFT,
+  RIGHT, or FULL JOIN source offers Smart Alias first and `ON` second; after a
+  completed alias only `ON` remains. Explicit `AS` requires an alias, and CROSS
+  JOIN/APPLY never receive `ON`.
+- Bound automatic completion to the current document version and cursor, with
+  automatic/manual semantic-domain parity covered in Extension Host tests.
+- Preserved the backend-neutral connection boundary, Microsoft mssql connection
+  sharing, relationship metadata safety, and existing DML expression behavior.
+
 ## 0.12.1
 
 - Added concise contribution and security-reporting guidance for the public

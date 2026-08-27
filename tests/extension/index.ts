@@ -909,10 +909,35 @@ const labels = (items: readonly vscode.CompletionItem[]) =>
         ? item.label
         : item.label.label,
   );
+const joinPhaseItems = (items: readonly vscode.CompletionItem[]) =>
+  items.filter(
+    (item) =>
+      item.detail?.startsWith("alias for ") ||
+      item.documentation === "T-SQL JOIN condition",
+  );
+const observedDomain = (invocation: AutomaticCompletionInvocation) =>
+  invocation.items.map((item) => `${item.semanticKind}:${item.name}`).sort();
+const markedDomain = (items: readonly MarkedCompletionItem[]) =>
+  items
+    .flatMap((item) =>
+      item.data?.semanticKind
+        ? [`${item.data.semanticKind}:${labels([item])[0] ?? ""}`]
+        : [],
+    )
+    .sort();
 
 type Invocation = {
   readonly triggerKind: vscode.SignatureHelpTriggerKind;
   readonly triggerCharacter?: string;
+};
+type AutomaticCompletionInvocation = {
+  readonly kind: string;
+  readonly documentVersion: number;
+  readonly offset: number;
+  readonly items: readonly {
+    readonly name: string;
+    readonly semanticKind: string;
+  }[];
 };
 const takeInvocations = () =>
   vscode.commands.executeCommand<readonly Invocation[]>(
@@ -922,6 +947,14 @@ const takeAutomaticAliasSuggestInvocations = () =>
   vscode.commands.executeCommand<number>(
     "queryPuppyForTSql.test.takeAutomaticAliasSuggestInvocations",
   );
+const takeAutomaticSemanticSuggestInvocations = () =>
+  vscode.commands.executeCommand<number>(
+    "queryPuppyForTSql.test.takeAutomaticSemanticSuggestInvocations",
+  );
+const takeAutomaticCompletionInvocations = () =>
+  vscode.commands.executeCommand<readonly AutomaticCompletionInvocation[]>(
+    "queryPuppyForTSql.test.takeAutomaticCompletionInvocations",
+  );
 async function waitForAutomaticAliasSuggest(): Promise<number> {
   for (let attempt = 0; attempt < 30; attempt++) {
     const count = await takeAutomaticAliasSuggestInvocations();
@@ -929,6 +962,26 @@ async function waitForAutomaticAliasSuggest(): Promise<number> {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   return 0;
+}
+async function waitForAutomaticSemanticSuggest(): Promise<number> {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const count = await takeAutomaticSemanticSuggestInvocations();
+    if (count > 0) return count;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return 0;
+}
+async function waitForAutomaticCompletion(
+  kind: string,
+): Promise<AutomaticCompletionInvocation | undefined> {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const invocation = (await takeAutomaticCompletionInvocations()).find(
+      (candidate) => candidate.kind === kind,
+    );
+    if (invocation) return invocation;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return undefined;
 }
 async function waitForInvocation(
   character?: string,
@@ -1082,6 +1135,15 @@ export async function run(): Promise<void> {
       forwardJoin[0],
     ),
     "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON oh.CustomerId = c.CustomerId",
+  );
+  assert.deepEqual(
+    predicateLabels(
+      await joinPredicates(
+        "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders ON",
+      ),
+    ),
+    ["OrderHeaders.CustomerId = c.CustomerId"],
+    "accepting ON without a Smart Alias must preserve FK intelligence",
   );
   for (const whitespace of [" ", "     ", "\n        "]) {
     const sql = `SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON${whitespace}`;
@@ -2074,19 +2136,19 @@ FROM ${database}.dbo.Customers c`;
   const aliasAfterWhitespace = (
     await semanticCompletion(aliasAfterWhitespaceSql)
   ).filter((item) => item.data?.semanticKind === "rowSourceAlias");
-  assert.deepEqual(labels(aliasAfterWhitespace), ["bp"]);
+  assert.deepEqual(labels(aliasAfterWhitespace), ["AS bp"]);
   const aliasAfterWhitespaceItem = aliasAfterWhitespace[0];
   assert.ok(aliasAfterWhitespaceItem);
   assert.deepEqual(aliasAfterWhitespaceItem.label, {
-    label: "bp",
+    label: "AS bp",
     description: "alias for BelegePositionen",
   });
   assert.equal(
     aliasAfterWhitespaceItem.kind,
     vscode.CompletionItemKind.Variable,
   );
-  assert.equal(aliasAfterWhitespaceItem.filterText, "bp");
-  assert.equal(aliasAfterWhitespaceItem.insertText, "bp");
+  assert.equal(aliasAfterWhitespaceItem.filterText, "AS bp");
+  assert.equal(aliasAfterWhitespaceItem.insertText, "AS bp");
   assert.equal(
     aliasAfterWhitespaceItem.detail,
     "alias for dbo.BelegePositionen",
@@ -2106,7 +2168,7 @@ FROM ${database}.dbo.Customers c`;
         (item) => item.detail === "alias for dbo.BelegePositionen",
       ),
     ),
-    ["bp"],
+    ["AS bp"],
   );
 
   const aliasAfterAsSql = `SELECT * FROM ${database}.dbo.BelegePositionen AS `;
@@ -2141,14 +2203,14 @@ FROM ${database}.dbo.Customers c`;
       `SELECT * FROM ${database}.dbo.BelegePositionenDetails `,
     )
   ).filter((item) => item.data?.semanticKind === "rowSourceAlias");
-  assert.deepEqual(labels(deepAlias), ["bpd"]);
+  assert.deepEqual(labels(deepAlias), ["AS bpd"]);
 
   const collisionAlias = (
     await semanticCompletion(
       `SELECT * FROM ${database}.dbo.Belege AS bpd JOIN ${database}.dbo.BelegePositionenDetails `,
     )
   ).filter((item) => item.data?.semanticKind === "rowSourceAlias");
-  assert.deepEqual(labels(collisionAlias), ["bpd2"]);
+  assert.deepEqual(labels(collisionAlias), ["AS bpd2"]);
 
   for (const sql of [
     `SELECT * FROM ${database}.dbo.BelegePositionen AS bp`,
@@ -2166,11 +2228,47 @@ FROM ${database}.dbo.Customers c`;
       `SELECT * FROM ${reportingDatabase}.dbo.AuftraegePositionen `,
     )
   ).filter((item) => item.data?.semanticKind === "rowSourceAlias");
-  assert.deepEqual(labels(crossDatabaseAlias), ["ap"]);
+  assert.deepEqual(labels(crossDatabaseAlias), ["AS ap"]);
+
+  const joinObjectPhase = `SELECT * FROM ${database}.reltest.Customers AS c JOIN ${database}.reltest.OrderHeaders `;
+  assert.deepEqual(
+    labels(
+      (await semanticCompletion(joinObjectPhase)).filter(
+        (item) => item.data?.semanticKind,
+      ),
+    ),
+    ["AS oh", "ON"],
+    "completed unaliased JOIN source must prefer Smart Alias and retain ON",
+  );
+  assert.deepEqual(
+    labels(joinPhaseItems(await registeredSemanticCompletion(joinObjectPhase))),
+    ["AS oh", "ON"],
+    "registered provider must expose the same JOIN continuation domain",
+  );
+  const joinAsPhase = `${joinObjectPhase}AS `;
+  assert.deepEqual(
+    labels(joinPhaseItems(await registeredSemanticCompletion(joinAsPhase))),
+    ["oh"],
+    "explicit AS requires an alias and must suppress ON/object discovery",
+  );
+  for (const sql of [`${joinObjectPhase}oh `, `${joinObjectPhase}AS oh `])
+    assert.deepEqual(
+      labels(joinPhaseItems(await registeredSemanticCompletion(sql))),
+      ["ON"],
+      `${sql} must expose only the JOIN continuation keyword`,
+    );
+  const crossJoinPhase = `SELECT * FROM ${database}.reltest.Customers AS c CROSS JOIN ${database}.reltest.OrderHeaders `;
+  assert.deepEqual(
+    labels(joinPhaseItems(await registeredSemanticCompletion(crossJoinPhase))),
+    ["AS oh"],
+    "CROSS JOIN may be aliased but must not offer ON",
+  );
 
   for (const sql of [
     `SELECT * FROM ${database}.dbo.BelegePositionen`,
     `SELECT * FROM ${database}.dbo.BelegePositionen AS`,
+    `SELECT * FROM ${database}.dbo.Belege AS b JOIN ${database}.dbo.BelegePositionen`,
+    `SELECT * FROM ${database}.dbo.Belege AS b JOIN ${database}.dbo.BelegePositionen AS`,
   ]) {
     const document = await vscode.workspace.openTextDocument({
       language: "sql",
@@ -2180,13 +2278,176 @@ FROM ${database}.dbo.Customers c`;
     const end = document.positionAt(document.getText().length);
     editor.selection = new vscode.Selection(end, end);
     await takeAutomaticAliasSuggestInvocations();
+    await takeAutomaticCompletionInvocations();
+    const beforeVersion = document.version;
+    const explicitAs = /\bAS$/i.test(sql);
+    const join = /\bJOIN\b/i.test(sql);
+    const expectedAlias = explicitAs ? "bp" : "AS bp";
     await vscode.commands.executeCommand("type", { text: " " });
-    assert.ok(
-      (await waitForAutomaticAliasSuggest()) > 0,
+    assert.equal(
+      await waitForAutomaticAliasSuggest(),
+      1,
       `typing alias-position whitespace did not trigger suggestions for ${sql}`,
+    );
+    const invocation = await waitForAutomaticCompletion("smartAlias");
+    assert.ok(invocation, `no registered Smart Alias domain for ${sql}`);
+    assert.equal(invocation.documentVersion, beforeVersion + 1, sql);
+    assert.ok(
+      invocation.items.some(
+        (item) =>
+          item.semanticKind === "rowSourceAlias" && item.name === expectedAlias,
+      ),
+      `first-space Smart Alias domain is missing ${expectedAlias} for ${sql}`,
+    );
+    assert.equal(
+      invocation.items.some(
+        (item) =>
+          ["table", "view", "tableValuedFunction", "synonym"].includes(
+            item.semanticKind,
+          ) && item.name === "BelegePositionen",
+      ),
+      false,
+      `first-space Smart Alias retained the stale object domain for ${sql}`,
+    );
+    assert.deepEqual(
+      invocation.items,
+      [
+        { name: expectedAlias, semanticKind: "rowSourceAlias" },
+        ...(join && !explicitAs
+          ? [{ name: "ON", semanticKind: "keyword" }]
+          : []),
+      ],
+      `${sql} automatic phase domain is not exact or deterministically ordered`,
+    );
+    assert.deepEqual(
+      observedDomain(invocation),
+      markedDomain(await semanticCompletion(document.getText())),
+      `${sql} automatic and manual Query Puppy domains differ`,
     );
     await vscode.commands.executeCommand("hideSuggestWidget");
   }
+
+  const joinContinuationDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: `SELECT * FROM ${database}.dbo.Belege AS b JOIN ${database}.dbo.BelegePositionen AS p`,
+  });
+  const joinContinuationEditor = await vscode.window.showTextDocument(
+    joinContinuationDocument,
+  );
+  const joinContinuationEnd = joinContinuationDocument.positionAt(
+    joinContinuationDocument.getText().length,
+  );
+  joinContinuationEditor.selection = new vscode.Selection(
+    joinContinuationEnd,
+    joinContinuationEnd,
+  );
+  await takeAutomaticCompletionInvocations();
+  await vscode.commands.executeCommand("type", { text: " " });
+  const joinContinuation = await waitForAutomaticCompletion("joinContinuation");
+  assert.ok(joinContinuation, "JOIN continuation did not invoke completion");
+  assert.deepEqual(joinContinuation.items, [
+    { name: "ON", semanticKind: "keyword" },
+  ]);
+  await vscode.commands.executeCommand("hideSuggestWidget");
+
+  const onTriggerDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: `SELECT * FROM ${database}.dbo.Belege AS b JOIN ${database}.dbo.BelegePositionen AS p ON`,
+  });
+  const onTriggerEditor =
+    await vscode.window.showTextDocument(onTriggerDocument);
+  const onTriggerEnd = onTriggerDocument.positionAt(
+    onTriggerDocument.getText().length,
+  );
+  onTriggerEditor.selection = new vscode.Selection(onTriggerEnd, onTriggerEnd);
+  await takeAutomaticSemanticSuggestInvocations();
+  await takeAutomaticCompletionInvocations();
+  await vscode.commands.executeCommand("type", { text: " " });
+  assert.equal(
+    await waitForAutomaticSemanticSuggest(),
+    1,
+    "typing whitespace after JOIN ON did not trigger semantic suggestions",
+  );
+  const onInvocation = await waitForAutomaticCompletion("joinOn");
+  assert.ok(
+    onInvocation,
+    "JOIN ON did not deliver a registered completion domain",
+  );
+  assert.ok(
+    onInvocation.items.some(
+      (item) =>
+        item.semanticKind === "joinPredicate" &&
+        item.name === "p.BelegId = b.BelegId",
+    ),
+    "automatic JOIN ON domain is missing the real FK predicate",
+  );
+  assert.deepEqual(
+    observedDomain(onInvocation),
+    markedDomain(await semanticCompletion(onTriggerDocument.getText())),
+    "automatic and manual JOIN ON domains differ",
+  );
+  await vscode.commands.executeCommand("hideSuggestWidget");
+
+  await takeAutomaticSemanticSuggestInvocations();
+  for (const sql of ["UPDATE", "INSERT INTO", "DELETE FROM"]) {
+    const document = await vscode.workspace.openTextDocument({
+      language: "sql",
+      content: sql,
+    });
+    const editor = await vscode.window.showTextDocument(document);
+    const end = document.positionAt(document.getText().length);
+    editor.selection = new vscode.Selection(end, end);
+    await takeAutomaticCompletionInvocations();
+    await vscode.commands.executeCommand("type", { text: " " });
+    const manual = await semanticCompletion(`${sql} `);
+    assert.ok(
+      manual.some(
+        (item) =>
+          item.data?.semanticKind === "table" && labels([item])[0] === "Belege",
+      ),
+      `${sql} manual blank target domain is missing tables`,
+    );
+    assert.equal(
+      manual.some((item) => item.data?.semanticKind === "builtinFunction"),
+      false,
+      `${sql} blank target domain leaked scalar built-ins`,
+    );
+    await vscode.commands.executeCommand("hideSuggestWidget");
+  }
+  assert.equal(
+    await takeAutomaticSemanticSuggestInvocations(),
+    0,
+    "blank DML target whitespace must not force the multi-provider Suggest Widget",
+  );
+  assert.deepEqual(
+    await takeAutomaticCompletionInvocations(),
+    [],
+    "blank DML target whitespace must not schedule a Query Puppy automatic invocation",
+  );
+
+  for (const sql of [
+    `UPDATE ${database}.dbo.BelegePos`,
+    `INSERT INTO ${database}.dbo.BelegePos`,
+    `DELETE FROM ${database}.dbo.BelegePos`,
+  ])
+    assert.deepEqual(
+      labels(
+        (await semanticCompletion(sql)).filter(
+          (item) => item.data?.semanticKind === "table",
+        ),
+      ),
+      ["BelegePositionen", "BelegePositionenDetails"],
+      sql,
+    );
+  assert.equal(
+    (
+      await semanticCompletion(
+        `UPDATE ${database}.dbo.Belege SET Belegnummer = BelegePos`,
+      )
+    ).some((item) => item.data?.semanticKind === "table"),
+    false,
+    "UPDATE RHS must not switch to DML target object completion",
+  );
 
   const unrelatedWhitespace = await vscode.workspace.openTextDocument({
     language: "sql",
@@ -2300,7 +2561,7 @@ WHERE b. AND p.`;
     labels(
       await semanticCompletion(`SELECT * FROM ${database}.dbo.Customers `),
     ),
-    ["c"],
+    ["AS c"],
   );
   assert.deepEqual(
     labels(
@@ -2309,7 +2570,7 @@ WHERE b. AND p.`;
 SELECT * FROM ${database}.dbo.Customers `,
       ),
     ),
-    ["c"],
+    ["AS c"],
   );
   assert.deepEqual(
     labels(
@@ -2318,7 +2579,7 @@ SELECT * FROM ${database}.dbo.Customers `,
 JOIN ${database}.dbo.CustomerAddresses `,
       ),
     ),
-    ["ca"],
+    ["AS ca", "ON"],
   );
   assert.deepEqual(
     labels(
@@ -2327,7 +2588,7 @@ JOIN ${database}.dbo.CustomerAddresses `,
 JOIN ${database}.dbo.Customers `,
       ),
     ),
-    ["c2"],
+    ["AS c2", "ON"],
   );
   const setDerived = `SELECT x. FROM
 (

@@ -283,8 +283,17 @@ or behavior.
 
 ## SQL connection contract
 
-Reuse the active SQL connection owned by the Microsoft SQL Server extension through
-the project's existing connection-sharing integration.
+Reuse the active SQL connection owned by the Microsoft SQL Server extension
+through the project's backend-neutral connection and metadata boundary. The
+current production backend is the Microsoft mssql Connection Sharing adapter.
+
+Semantic, parser, completion, type, relationship, presentation, metadata-cache,
+and document-analysis code must not call Microsoft mssql Connection Sharing APIs
+directly. Route active editor context, same-server database enumeration, and
+read-only catalog SQL execution through the backend-neutral contracts.
+
+Connection Sharing has not been removed yet. Do not claim it has been removed
+until the production adapter no longer uses it.
 
 Do not introduce:
 
@@ -302,8 +311,8 @@ Do not provision integration fixtures from extension runtime code.
 
 ## Catalog loading and performance contract
 
-Persistent SQL Server metadata is cached by the appropriate connection/database
-context.
+Persistent SQL Server metadata is cached by the appropriate backend
+connection/database context.
 
 A first access to an uncached database checks its versioned snapshot in
 `ExtensionContext.globalStorageUri`. A valid snapshot is hydrated into a rebuilt

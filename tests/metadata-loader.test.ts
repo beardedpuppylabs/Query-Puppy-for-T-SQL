@@ -5,27 +5,31 @@ import {
   METADATA_QUERY,
   MetadataLoader,
   RELATIONSHIP_QUERY,
-} from "../src/mssql/MetadataLoader.js";
-import type { ConnectionService } from "../src/mssql/ConnectionService.js";
-import type { DbCellValue } from "../src/mssql/SimpleExecuteResult.js";
+} from "../src/metadata/MetadataLoader.js";
+import type {
+  MetadataBackend,
+  MetadataCellValue,
+} from "../src/backend/MetadataBackend.js";
 
-const cell = (displayValue?: string): DbCellValue => ({
+const cell = (displayValue?: string): MetadataCellValue => ({
   displayValue: displayValue ?? "",
   isNull: displayValue === undefined,
 });
-const row = (...values: (string | undefined)[]): DbCellValue[] =>
+const row = (...values: (string | undefined)[]): MetadataCellValue[] =>
   values.map(cell);
 
 const metadataConnection = (
   query: (
     connection: unknown,
     sql: string,
-  ) => Promise<{ rowCount: number; rows: readonly DbCellValue[][] }>,
-): ConnectionService =>
+  ) => Promise<{ rowCount: number; rows: readonly MetadataCellValue[][] }>,
+): MetadataBackend =>
   ({
-    queryMany: async (connection: unknown, sqlStatements: readonly string[]) =>
-      Promise.all(sqlStatements.map((sql) => query(connection, sql))),
-  }) as unknown as ConnectionService;
+    executeMetadataQueries: async (
+      connection: unknown,
+      sqlStatements: readonly string[],
+    ) => Promise.all(sqlStatements.map((sql) => query(connection, sql))),
+  }) as unknown as MetadataBackend;
 
 test("metadata assembly is independent of result row order", async () => {
   const rows = [
@@ -74,7 +78,8 @@ test("metadata assembly is independent of result row order", async () => {
     },
   );
   const index = await new MetadataLoader(connections).load({
-    connectionId: "c",
+    backendId: "fake",
+    connectionIdentity: "c",
     database: "IntelliSenseLab",
   });
   assert.match(executedSql, /^USE \[IntelliSenseLab\];/);
@@ -110,7 +115,8 @@ test("contract: scalar return metadata supports the unnamed return parameter", a
     rows,
   }));
   const index = await new MetadataLoader(connections).load({
-    connectionId: "c",
+    backendId: "fake",
+    connectionIdentity: "c",
     database: "db",
   });
   assert.deepEqual(index.findObject("dbo", "GetName")?.returnType, {
@@ -149,7 +155,8 @@ test("developer-facing system views are mapped without enabling all system noise
     rows,
   }));
   const index = await new MetadataLoader(connections).load({
-    connectionId: "c",
+    backendId: "fake",
+    connectionIdentity: "c",
     database: "db",
   });
   assert.equal(index.findObject("sys", "tables")?.kind, "view");
@@ -240,7 +247,8 @@ test("column writability flags are retained from catalog metadata", async () => 
   }));
   const object = (
     await new MetadataLoader(connections).load({
-      connectionId: "c",
+      backendId: "fake",
+      connectionIdentity: "c",
       database: "db",
     })
   ).findObject("dbo", "Orders");
@@ -367,7 +375,8 @@ test("keys and foreign keys are assembled set-wise without duplicate constraint 
     },
   );
   const index = await new MetadataLoader(connections).load({
-    connectionId: "c",
+    backendId: "fake",
+    connectionIdentity: "c",
     database: "IntelliSenseLab",
   });
   assert.equal(queryCount, 2);
@@ -396,7 +405,7 @@ test("contract: Schema Intelligence runtime initialization is catalog-read-only"
   const statements: string[] = [];
   let metadataOperations = 0;
   const connections = {
-    queryMany: async (
+    executeMetadataQueries: async (
       _connection: unknown,
       sqlStatements: readonly string[],
     ) => {
@@ -406,9 +415,10 @@ test("contract: Schema Intelligence runtime initialization is catalog-read-only"
         return { rowCount: 0, rows: [] };
       });
     },
-  } as unknown as ConnectionService;
+  } as unknown as MetadataBackend;
   await new MetadataLoader(connections).load({
-    connectionId: "restricted-metadata-login",
+    backendId: "fake",
+    connectionIdentity: "restricted-metadata-login",
     database: "IntelliSenseLab",
   });
   assert.equal(metadataOperations, 1);

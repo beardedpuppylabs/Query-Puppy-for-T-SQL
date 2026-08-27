@@ -33,6 +33,7 @@ function isConnectionSharing(value: unknown): value is ConnectionSharingApi {
   return [
     "getActiveEditorConnectionId",
     "getActiveDatabase",
+    "getDatabaseForConnectionId",
     "connect",
     "disconnect",
     "isConnected",

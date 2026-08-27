@@ -32,9 +32,11 @@ Use for isolated logic such as:
 
 Unit tests should be fast and deterministic.
 
-Connection-boundary tests also verify session API reuse, concurrent active-context
-coalescing, transient shared-connection reuse within one metadata operation,
-failure/retry behavior, and dynamic connection/database switching.
+Connection-boundary tests also verify backend-neutral active context resolution,
+database enumeration, metadata query execution, fake-backend compatibility,
+session API reuse, concurrent active-context coalescing, transient
+shared-connection reuse within one metadata operation, failure/retry behavior, and
+dynamic connection/database switching.
 
 ### Persistent metadata lifecycle tests
 
@@ -214,7 +216,8 @@ promises.
 | Type normalization, ExpectedType, compatibility ranking, and visibility              | Implemented                      | `type-intelligence.test.ts` ExpectedType and ranking contracts                                             |
 | Canonical physical-column layout and long-name semantic preservation                 | Implemented                      | `presentation.test.ts` physical-column presentation contracts                                              |
 | Native Signature Help registration                                                   | Implemented                      | `provider-registration.test.ts` — Signature Help contract                                                  |
-| Shared mssql connection context without extension-owned credentials                  | Implemented                      | `connection.test.ts` connection-sharing contracts                                                          |
+| Backend-neutral connection and metadata boundary                                     | Implemented                      | `backend-boundary.test.ts` fake-backend contracts                                                          |
+| Shared mssql connection context without extension-owned credentials                  | Implemented                      | `connection.test.ts` mssql adapter contracts                                                               |
 | Read-only Schema Intelligence initialization                                         | Implemented                      | `metadata-loader.test.ts` — catalog-read-only contract                                                     |
 | Document semantic version cache                                                      | Implemented                      | `document-semantic-cache.test.ts` — invalidation contract                                                  |
 | Concurrent in-memory catalog load coalescing                                         | Implemented                      | `metadata-cache.test.ts` — catalog coalescing contract                                                     |
@@ -366,13 +369,23 @@ Alias Suggestions:
 - an identifier touching the cursor remains object-name completion
 - separating whitespace after a resolved RowSource enables alias completion
 - separating whitespace after `AS` enables the same preferred alias
+- a completed RowSource inserts `AS <alias>`, while explicit `AS` inserts only the
+  alias
+- an unaliased predicate-bearing JOIN phase contains Smart Alias first and `ON`
+  second; explicit `AS` contains only the alias
 - an already supplied alias does not receive a redundant alias suggestion
 - replacement ranges at alias positions are empty and never replace the RowSource
 - deterministic collision fallback considers only legally visible QueryScopes
 - automatic whitespace triggering waits for the post-edit cursor and occurs only
   when the provider resolves a semantic Smart Alias candidate
-- native CompletionItem presentation retains the semantic alias as `label`,
-  `insertText`, and `filterText`, identifies the short source name with
+- the registered provider invocation caused by automatic Suggest uses the
+  post-edit document version and contains the alias rather than the stale table
+  domain
+- first legal whitespace after a FROM/JOIN/APPLY RowSource or after `AS` is enough
+  to trigger Smart Alias; a second space must not be required
+- native CompletionItem presentation retains `AS <alias>` (or the alias alone
+  after explicit `AS`) consistently as `label`, `insertText`, and `filterText`,
+  identifies the short source name with
   `label.description`, retains schema-qualified source detail, and uses the stable
   local-binding kind
 
@@ -544,12 +557,42 @@ Protect:
 - cross-schema FK
 - disabled FK exclusion
 - unrelated table negative case
+- empty `ON` without an FK still returns legal semantic aliases and columns
+  without a fabricated predicate
+- automatic whitespace triggering after `ON` invokes native Suggest only after the
+  provider resolves Query Puppy semantic candidates
+- completed predicate-bearing JOIN sources offer `ON`; CROSS JOIN and APPLY do not
+- completed unaliased JOIN sources expose exactly Smart Alias then `ON`; explicit
+  `AS` exposes only the alias; completed aliases expose only `ON`
+- accepting `ON` without an alias preserves declared-FK predicate completion
+- the actual registered-provider domain after automatic ON triggering matches the
+  manual domain at the same version and position
 - positional visibility
 - relationship-aware table ranking
 - relationship-mapped member tie-breaking in both comparison directions
 - no comparison-member reordering without a real relationship
 
 Never treat same-name/type heuristic matches as proof of an FK relationship.
+
+## DML target tests
+
+Protect target-object completion for:
+
+- `UPDATE |`
+- `INSERT INTO |`
+- `DELETE FROM |`
+- Ctrl+Space at each empty target position contains target row sources and no
+  scalar built-ins
+- blank target whitespace does not schedule Query Puppy's forced multi-provider
+  Suggest command
+- schema-qualified and database-qualified target names
+- Contains prefix families where an exact shorter target does not suppress longer
+  legal matches
+- separation between target-object completion and UPDATE assignment RHS
+  expression completion
+
+Existing DML column, OUTPUT, DELETE alias, and EXEC parameter tests remain the
+guards for the non-target DML phases.
 
 ## Schema Intelligence tests
 

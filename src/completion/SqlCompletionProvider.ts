@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
-import type { ConnectionService } from "../mssql/ConnectionService.js";
-import type { MetadataLoader } from "../mssql/MetadataLoader.js";
+import type {
+  ConnectionContextResolver,
+  MetadataBackend,
+} from "../backend/MetadataBackend.js";
+import type { MetadataLoader } from "../metadata/MetadataLoader.js";
 import { MetadataCache } from "../metadata/MetadataCache.js";
 import { resolveSqlContext } from "../parser/SqlContextResolver.js";
 import { createCandidates, type CompletionScope } from "./CandidateFactory.js";
@@ -25,13 +28,24 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
   private readonly scopes: CompletionScopeResolver;
   private readonly documentSemantics = new DocumentSemanticCache();
   private readonly loggedEmptyProjections = new Set<string>();
+  private automaticCompletionExpectation:
+    | {
+        readonly kind: string;
+        readonly uri: string;
+        readonly documentVersion: number;
+        readonly offset: number;
+      }
+    | undefined;
+  private readonly automaticCompletionInvocations: AutomaticCompletionInvocation[] =
+    [];
   private testScope?: CompletionScope;
 
   constructor(
-    private readonly connections: ConnectionService,
+    private readonly connections: ConnectionContextResolver & MetadataBackend,
     private readonly loader: MetadataLoader,
     private readonly cache: MetadataCache,
     private readonly output: vscode.OutputChannel,
+    private readonly observeAutomaticCompletions = false,
   ) {
     this.scopes = new CompletionScopeResolver(
       connections,
@@ -103,6 +117,26 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     document: vscode.TextDocument,
     position: vscode.Position,
     token: vscode.CancellationToken,
+    completionContext?: vscode.CompletionContext,
+  ): Promise<vscode.CompletionList> {
+    const completion = await this.createCompletionItems(
+      document,
+      position,
+      token,
+    );
+    this.observeAutomaticCompletion(
+      document,
+      position,
+      completion,
+      completionContext,
+    );
+    return completion;
+  }
+
+  private async createCompletionItems(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    token: vscode.CancellationToken,
   ): Promise<vscode.CompletionList> {
     if (!(
       vscode.workspace
@@ -164,9 +198,10 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
         scope,
       );
       if (alias) {
+        const text = alias.explicitAs ? alias.alias : `AS ${alias.alias}`;
         const item = new vscode.CompletionItem(
           {
-            label: alias.alias,
+            label: text,
             description: `alias for ${alias.objectName}`,
           },
           vscode.CompletionItemKind.Variable,
@@ -176,11 +211,25 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
           semanticKind: "rowSourceAlias",
         };
         item.detail = `alias for ${alias.sourceName}`;
-        item.insertText = alias.alias;
+        item.insertText = text;
         item.range = new vscode.Range(position, position);
         item.sortText = "00000000";
-        item.filterText = alias.alias;
-        return new vscode.CompletionList([item], false);
+        item.filterText = text;
+        const continuation = createCandidates(context, scope, semantics)
+          .filter(
+            (candidate) =>
+              candidate.kind === "keyword" && candidate.name === "ON",
+          )
+          .map((candidate, rank) =>
+            presentCandidate(
+              candidate,
+              new vscode.Range(position, position),
+              "",
+              false,
+              rank + 1,
+            ),
+          );
+        return new vscode.CompletionList([item, ...continuation], false);
       }
     }
     const candidates = createCandidates(context, scope, semantics);
@@ -272,6 +321,83 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     this.documentSemantics.delete(uri.toString());
   }
 
+  expectAutomaticCompletionInvocation(
+    kind: string,
+    uri: vscode.Uri,
+    documentVersion: number,
+    offset: number,
+  ): void {
+    if (!this.observeAutomaticCompletions) return;
+    this.automaticCompletionExpectation = {
+      kind,
+      uri: uri.toString(),
+      documentVersion,
+      offset,
+    };
+  }
+
+  clearAutomaticCompletionExpectation(): void {
+    this.automaticCompletionExpectation = undefined;
+  }
+
+  takeAutomaticCompletionInvocations(): readonly AutomaticCompletionInvocation[] {
+    const invocations = this.automaticCompletionInvocations.splice(0);
+    return invocations;
+  }
+
+  private observeAutomaticCompletion(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    completion: vscode.CompletionList,
+    context: vscode.CompletionContext | undefined,
+  ): void {
+    if (!this.observeAutomaticCompletions) return;
+    const expected = this.automaticCompletionExpectation;
+    if (
+      !expected ||
+      !context ||
+      expected.uri !== document.uri.toString() ||
+      expected.documentVersion !== document.version ||
+      expected.offset !== document.offsetAt(position)
+    )
+      return;
+    this.automaticCompletionExpectation = undefined;
+    this.automaticCompletionInvocations.push({
+      kind: expected.kind,
+      documentVersion: document.version,
+      offset: expected.offset,
+      items: completion.items.flatMap((item) => {
+        const data = (
+          item as vscode.CompletionItem & {
+            readonly data?: {
+              readonly provider?: string;
+              readonly semanticKind?: string;
+              readonly decorative?: string;
+            };
+          }
+        ).data;
+        if (
+          data?.provider !== "query-puppy-for-t-sql" ||
+          data.decorative ||
+          !data.semanticKind
+        )
+          return [];
+        return [
+          {
+            name:
+              data.semanticKind === "column" &&
+              typeof item.filterText === "string"
+                ? item.filterText
+                : typeof item.label === "string"
+                  ? item.label
+                  : item.label.label,
+            semanticKind: data.semanticKind,
+          },
+        ];
+      }),
+    });
+  }
+
   private logFailureOnce(key: string, error: unknown): void {
     const message = error instanceof Error ? error.message : String(error);
     const identity = `${key}:${message}`;
@@ -288,4 +414,14 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     )
       this.output.appendLine(message);
   }
+}
+
+export interface AutomaticCompletionInvocation {
+  readonly kind: string;
+  readonly documentVersion: number;
+  readonly offset: number;
+  readonly items: readonly {
+    readonly name: string;
+    readonly semanticKind: string;
+  }[];
 }

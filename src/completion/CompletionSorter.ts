@@ -31,6 +31,16 @@ export const TYPE_ORDER: Readonly<
     "tableValuedFunction",
     "synonym",
   ],
+  dmlTarget: [
+    "schema",
+    "database",
+    "cte",
+    "tempTable",
+    "tableVariable",
+    "table",
+    "view",
+    "synonym",
+  ],
   execute: ["procedureParameter", "procedure", "variable"],
   expression: [
     "joinPredicate",

@@ -194,14 +194,16 @@ Runtime extension code must never provision those fixtures.
 
 ## Architecture entry point
 
-The mssql adapter is the project's SQL connection boundary.
+The backend-neutral connection and metadata contracts are the project's SQL
+connectivity boundary.
 
-The extension reuses the active Microsoft SQL Server connection through the
-existing mssql connection-sharing integration instead of opening an independent
-credentialed SQL connection.
+Production activation currently wires those contracts to the mssql connection
+sharing adapter. The extension still reuses the active Microsoft SQL Server
+connection through the existing mssql connection-sharing integration instead of
+opening an independent credentialed SQL connection.
 
-Catalog metadata is loaded lazily using set-based metadata operations and cached by
-the appropriate connection/database identity.
+Catalog metadata is loaded lazily using set-based metadata operations and cached
+by the appropriate backend connection/database identity.
 
 Concurrent requests for the same not-yet-loaded catalog use the project's existing
 coalesced loading path.
@@ -252,14 +254,26 @@ repair a missing prerequisite.
 ## External mssql integration
 
 The external mssql integration is intentionally isolated behind the project's
-adapter and connection-service boundary.
+backend-neutral `ConnectionContextResolver` and `MetadataBackend` contracts.
 
-This allows changes in the external connection API to be handled without coupling
-the semantic completion engine directly to editor/database integration details.
+The current `MssqlConnectionSharingAdapter` may continue using the mssql
+Connection Sharing API while it remains available. Connection Sharing has not
+been removed and Query Puppy does not yet implement a direct SQL Server backend.
 
-Do not call external mssql connection APIs throughout parser, completion, type, or
-semantic code when the existing adapter/service boundary can provide the required
-operation.
+This allows changes in the external connection API to be handled by replacing or
+rewriting the adapter without coupling the semantic completion engine directly to
+editor/database integration details.
+
+Do not call external mssql connection APIs throughout parser, completion, type,
+metadata-cache, or semantic code when the backend contracts can provide the
+required operation.
+
+The current mssql-owned credential model remains unchanged:
+
+- mssql owns connection profiles and authentication
+- Query Puppy does not request or store SQL credentials
+- no extension-owned SecretStorage, settings credentials, or connection UI exists
+  for SQL Server connectivity
 
 ## Catalog and document semantics
 

@@ -14,14 +14,21 @@ drifted or the documentation is stale before changing either.
 
 Conceptually:
 
-    Microsoft mssql extension
-              |
-              | connection sharing
-              v
-    Connection Context
+    Editor / User Context
               |
               v
-    Catalog Metadata Loader
+    Connection Context Resolver
+              |
+              v
+    Metadata / Connectivity Backend
+              |
+              +-- Mssql Connection Sharing Adapter
+              |      +-- current Microsoft mssql connection-sharing API
+              |
+              +-- future backend(s)
+              |
+              v
+    Canonical Catalog Metadata Loader
               |
               v
        Complete Refresh Snapshot
@@ -96,6 +103,28 @@ The editor's automatic Signature Help fallback remains UI coordination. It may
 restrict which edits are eligible, but semantic call interpretation comes from the
 shared call-site parser and callable resolver.
 
+## Connectivity boundary
+
+The semantic engine is backend-independent.
+
+Production activation currently composes one backend-neutral boundary with the
+temporary Microsoft mssql adapter:
+
+    ConnectionContextResolver
+        -> active editor connection context
+
+    MetadataBackend
+        -> read-only catalog SQL execution
+        -> same-server database enumeration
+
+The active context exposes a backend identifier, an opaque stable connection
+identity, and the active database. Semantic consumers use that identity only for
+catalog/cache isolation; they do not interpret it as a Microsoft mssql connection
+ID.
+
+The metadata backend is deliberately narrow. It is not a general query-execution
+SDK and must remain scoped to Query Puppy metadata/connectivity needs.
+
 ## Microsoft SQL Server extension integration
 
 Query Puppy for T-SQL provides its own completion semantics.
@@ -109,22 +138,35 @@ connection-sharing integration.
 
 Do not introduce independent connection ownership unless explicitly redesigned.
 
-The acquired mssql API/capability object is session-scoped. Concurrent acquisition
-and active-context lookups are coalesced, successful API acquisition is reused, and
-failed acquisition remains retryable. Active connection and database values are
-not memoized as session constants; they remain dynamic so editor, server, and
-database switches are observed.
+The current mssql connection-sharing implementation is isolated in the mssql
+adapter. The acquired mssql API/capability object is session-scoped. Concurrent
+acquisition and active-context lookups are coalesced, successful API acquisition
+is reused, and failed acquisition remains retryable. Active connection and
+database values are not memoized as session constants; they remain dynamic so
+editor, server, and database switches are observed.
 
 The mssql 1.45 public connection-sharing surface does not expose a standalone
 permission-initialization method or permission token. Its extension-ID methods
 validate stored permission internally on every call. The adapter must not bypass
 that validation through private mssql internals or by treating an editor URI as an
-ungranted connection capability.
+ungranted connection capability. Connection Sharing has not been removed yet; it
+is contained behind the adapter so a later backend can replace it without changing
+completion, scopes, callable analysis, type inference, relationship consumers, or
+metadata-cache consumers.
+
+The minimum future supported mssql integration surface Query Puppy needs is:
+
+- active SQL editor connection context
+- stable active server/database identity
+- change notifications or a reliable public polling/query mechanism
+- authenticated read-only metadata/catalog execution
+- same-server database enumeration
+- no raw password exposure
 
 ## Metadata loading
 
 Catalog metadata is loaded in set-based operations and cached by the appropriate
-connection/database identity.
+backend connection/database identity.
 
 The cache represents database objects such as where supported:
 
@@ -164,14 +206,16 @@ and manual refresh:
         -> swap the active DatabaseIndex reference
 
 Persistent files live under the supported extension-owned
-`ExtensionContext.globalStorageUri`. Each file is isolated by a one-way hash of the
-existing connection identity plus database name. The versioned envelope contains
-only allow-listed canonical catalog metadata and safe diagnostic timestamps/counts;
-it never contains credentials, secret-bearing connection strings, CompletionItems,
-built-in language definitions, editor state, QueryScopes, or document-local
-RowSources. Runtime `DatabaseIndex` maps and relationship adjacency indexes are
-rebuilt from canonical metadata after deserialization rather than serialized as
-implementation details.
+`ExtensionContext.globalStorageUri`. Each file is isolated by a one-way hash of
+the backend-neutral connection identity plus database name. The current mssql
+adapter preserves the previous identity string to avoid invalidating existing
+snapshots. The versioned envelope contains only allow-listed canonical catalog
+metadata and safe diagnostic timestamps/counts; it never contains credentials,
+secret-bearing connection strings, CompletionItems, built-in language
+definitions, editor state, QueryScopes, or document-local RowSources. Runtime
+`DatabaseIndex` maps and relationship adjacency indexes are rebuilt from
+canonical metadata after deserialization rather than serialized as implementation
+details.
 
 Snapshot persistence writes a complete temporary file, flushes it, and renames it
 over the database's cache entry. An incompatible, invalid, or corrupt snapshot is
@@ -203,9 +247,11 @@ entry after confirmation.
 Explicitly qualified secondary databases remain lazy and independently cached. No
 connection causes all discoverable databases to be hydrated or refreshed.
 
-A database metadata load uses one transient shared connection for its catalog and
-relationship queries, then disconnects it. The shared database connection is not
-retained as permanent extension state.
+A database metadata load asks the active metadata backend to execute one
+read-only catalog operation for its catalog and relationship queries. The current
+mssql adapter uses one transient shared connection for that operation, then
+disconnects it. The shared database connection is not retained as permanent
+extension state.
 
 ## Database identity
 
@@ -424,8 +470,8 @@ The following are architectural invariants:
 - after a database's coalesced load/hydration, the memory `DatabaseIndex` is the
   completion hot path: zero catalog queries and zero disk deserializations per
   keystroke
-- cache canonical persistent metadata by connection/database without persisting
-  credentials
+- cache canonical persistent metadata by backend connection/database without
+  persisting credentials
 - coalesce cold loads and refreshes independently for each cache identity
 - serve a valid old snapshot while a complete replacement is built and persisted
 - evaluate the fixed 15-minute refresh threshold only when a database is used; do

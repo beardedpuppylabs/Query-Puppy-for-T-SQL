@@ -18,8 +18,8 @@ import {
   type MetadataSnapshotStore,
   type PersistedDatabaseSnapshot,
 } from "../src/metadata/PersistentMetadataStore.js";
-import type { ConnectionService } from "../src/mssql/ConnectionService.js";
-import type { MetadataLoader } from "../src/mssql/MetadataLoader.js";
+import type { MetadataBackend } from "../src/backend/MetadataBackend.js";
+import type { MetadataLoader } from "../src/metadata/MetadataLoader.js";
 import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
 
 const metadata = (database: string, version = 1): DatabaseMetadata => ({
@@ -680,7 +680,7 @@ test("contract: memory is the hot path and secondary databases hydrate on demand
   } as unknown as MetadataLoader;
   const connections = {
     listDatabases: async () => ["DatabaseA", "DatabaseB", "DatabaseC"],
-  } as unknown as ConnectionService;
+  } as unknown as MetadataBackend;
   const cache = new MetadataCache({ store });
   const resolver = new CompletionScopeResolver(
     connections,
@@ -688,7 +688,11 @@ test("contract: memory is the hot path and secondary databases hydrate on demand
     cache,
     () => undefined,
   );
-  const active = { connectionId: "server", database: "DatabaseA" };
+  const active = {
+    backendId: "fake",
+    connectionIdentity: "server",
+    database: "DatabaseA",
+  };
   await resolver.resolve(active, resolveSqlContext("SELECT * FROM customer"));
   assert.deepEqual(store.loads, [store.key("server", "DatabaseA")]);
   await Promise.all(

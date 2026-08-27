@@ -203,8 +203,10 @@ const joins = (sql: string, cursor = sql.length) =>
   createCandidates(resolveSqlContext(sql, cursor), scope).filter(
     (candidate) => candidate.kind === "joinPredicate",
   );
+const candidates = (sql: string, cursor = sql.length) =>
+  createCandidates(resolveSqlContext(sql, cursor), scope);
 const members = (sql: string, cursor = sql.length) =>
-  createCandidates(resolveSqlContext(sql, cursor), scope)
+  candidates(sql, cursor)
     .filter((candidate) => candidate.kind === "column")
     .map((candidate) => candidate.name);
 
@@ -289,6 +291,42 @@ test("contract: cross-schema trusted FKs work while disabled FKs do not", () => 
       "SELECT * FROM reltest.Customers c JOIN reltest.LegacyCustomerLinks l ON",
     ).length,
     0,
+  );
+});
+
+test("contract: empty ON without an FK still offers legal semantic expressions only", () => {
+  const result = candidates(
+    "SELECT * FROM reltest.Customers c JOIN reltest.Products p ON ",
+  );
+  assert.deepEqual(
+    result
+      .filter((candidate) => candidate.kind === "joinPredicate")
+      .map((candidate) => candidate.name),
+    [],
+  );
+  assert.deepEqual(
+    result
+      .filter((candidate) => candidate.kind === "rowSourceAlias")
+      .map((candidate) => candidate.name),
+    ["c", "p"],
+  );
+  for (const name of ["CustomerId", "ProductId"])
+    assert.ok(
+      result.some(
+        (candidate) => candidate.kind === "column" && candidate.name === name,
+      ),
+      `missing legal ON column ${name}`,
+    );
+});
+
+test("contract: empty ON with an FK keeps the real predicate above other semantics", () => {
+  assert.deepEqual(
+    candidates(
+      "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON ",
+    )
+      .slice(0, 1)
+      .map((candidate) => candidate.name),
+    ["oh.CustomerId = c.CustomerId"],
   );
 });
 

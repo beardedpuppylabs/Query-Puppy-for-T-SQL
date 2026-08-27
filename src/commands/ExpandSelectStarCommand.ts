@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
+import type { ConnectionContextResolver } from "../backend/MetadataBackend.js";
 import type { MetadataCache } from "../metadata/MetadataCache.js";
-import type { ConnectionService } from "../mssql/ConnectionService.js";
 import {
   resolveSelectWildcard,
   wildcardColumnExpressions,
@@ -15,7 +15,7 @@ export class SelectStarExpansionController implements vscode.Disposable {
   private readonly subscriptions: vscode.Disposable[];
 
   constructor(
-    private readonly connections: ConnectionService,
+    private readonly connections: ConnectionContextResolver,
     private readonly cache: MetadataCache,
   ) {
     const update = (): void => void this.update();
@@ -93,8 +93,11 @@ export class SelectStarExpansionController implements vscode.Disposable {
       string,
       NonNullable<ReturnType<MetadataCache["get"]>>
     >();
-    for (const snapshot of this.cache.snapshots(active.connectionId)) {
-      const index = this.cache.get(active.connectionId, snapshot.database);
+    for (const snapshot of this.cache.snapshots(active.connectionIdentity)) {
+      const index = this.cache.get(
+        active.connectionIdentity,
+        snapshot.database,
+      );
       if (index)
         indexes.set(snapshot.database.toLocaleLowerCase("en-US"), index);
     }

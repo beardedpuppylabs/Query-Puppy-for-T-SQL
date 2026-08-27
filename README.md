@@ -52,6 +52,16 @@ can suggest:
 o.CustomerId = c.CustomerId
 ```
 
+Typing the whitespace after `ON` can open native completion automatically. When
+there is no actual FK relationship, Query Puppy still offers legal aliases and
+columns for the ON expression, but it does not fabricate a predicate from matching
+names or datatypes.
+
+After a completed unaliased INNER, LEFT, RIGHT, or FULL JOIN source, Query Puppy
+offers both the preferred Smart Alias and the `ON` continuation keyword. After a
+completed alias, only `ON` remains. CROSS JOIN and APPLY keep their own syntax and
+do not receive `ON`.
+
 ## Context-aware completion
 
 Completion follows the SQL position instead of showing every catalog object everywhere:
@@ -64,6 +74,8 @@ ORDER BY c.
 ```
 
 - `FROM`, `JOIN`, and `APPLY` offer row sources such as tables, views, synonyms, TVFs, and visible local sources.
+- `UPDATE`, `INSERT INTO`, and `DELETE FROM` target positions offer writable target row sources with the same Contains and qualification behavior.
+- Ctrl+Space works at a blank target position; typing a target fragment participates in normal editor suggestion behavior. Query Puppy does not force the multi-provider Suggest Widget open on the blank keyword-space boundary.
 - `alias.` offers columns projected by that row source.
 - `SELECT`, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, and function arguments offer meaningful expression candidates rather than databases, procedures, and tables.
 - Projection aliases are available where SQL Server permits them, including `ORDER BY`.
@@ -185,14 +197,14 @@ Server-maintained identity, computed, generated, and rowversion columns are excl
 
 ## Smart aliases
 
-At a legal alias position after a resolved row source in `FROM`, `JOIN`, or `APPLY`, the extension suggests an alias without replacing the object name:
+At a legal alias position after a resolved row source in `FROM`, `JOIN`, or `APPLY`, the extension suggests an explicit alias without replacing the object name:
 
 ```text
 FROM dbo.CustomerOrders <cursor>
-suggestion: co    alias for CustomerOrders
+suggestion: AS co    alias for CustomerOrders
 ```
 
-Accepting the completion inserts only `co`; it never inserts `AS` on your behalf. If you prefer explicit `AS`, type `AS ` first and the same alias suggestion is offered. Object-name completion remains active while the cursor is still part of the row-source identifier, already-aliased sources do not receive another alias, and collision fallback is deterministic.
+Accepting the completion inserts `AS co`. If `AS ` is already present, the suggestion inserts only `co` and never duplicates the keyword. At an unaliased predicate-bearing JOIN source, `AS co` ranks above the equally valid `ON` continuation; Smart Alias remains optional and never forces alias syntax. Object-name completion remains active while the cursor is still part of the row-source identifier, already-aliased sources do not receive another alias, and collision fallback is deterministic.
 
 Aliases are suggestions, not rewrites. They can be disabled with `queryPuppyForTSql.smartAliases.enabled`.
 

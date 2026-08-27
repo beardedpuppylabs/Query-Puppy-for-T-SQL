@@ -1,10 +1,10 @@
 import type { DatabaseIndex } from "../metadata/DatabaseIndex.js";
 import { MetadataCache } from "../metadata/MetadataCache.js";
 import type {
-  ActiveConnection,
-  ConnectionService,
-} from "../mssql/ConnectionService.js";
-import type { MetadataLoader } from "../mssql/MetadataLoader.js";
+  ActiveConnectionContext,
+  MetadataBackend,
+} from "../backend/MetadataBackend.js";
+import type { MetadataLoader } from "../metadata/MetadataLoader.js";
 import type { SqlCompletionContext } from "../parser/SqlContextResolver.js";
 import type { CompletionScope } from "./CandidateFactory.js";
 import { documentDatabaseReferences } from "../parser/DocumentSemanticAnalyzer.js";
@@ -17,13 +17,13 @@ export class CompletionScopeResolver {
     Promise<readonly string[]>
   >();
   constructor(
-    private readonly connections: ConnectionService,
+    private readonly backend: MetadataBackend,
     private readonly loader: MetadataLoader,
     private readonly cache: MetadataCache,
     private readonly onError: (key: string, error: unknown) => void,
   ) {}
   async resolve(
-    active: ActiveConnection,
+    active: ActiveConnectionContext,
     context: SqlCompletionContext,
   ): Promise<CompletionScope> {
     const indexes = new Map<string, DatabaseIndex>();
@@ -66,7 +66,7 @@ export class CompletionScopeResolver {
     };
   }
   private async requestedDatabase(
-    active: ActiveConnection,
+    active: ActiveConnectionContext,
     activeIndex: DatabaseIndex,
     context: SqlCompletionContext,
   ): Promise<string | undefined> {
@@ -83,26 +83,26 @@ export class CompletionScopeResolver {
     );
   }
   private ensureDatabase(
-    active: ActiveConnection,
+    active: ActiveConnectionContext,
     database: string,
   ): Promise<DatabaseIndex> {
-    return this.cache.ensureLoaded(active.connectionId, database, () =>
-      this.loader.load({ connectionId: active.connectionId, database }),
+    return this.cache.ensureLoaded(active.connectionIdentity, database, () =>
+      this.loader.load({ ...active, database }),
     );
   }
   private discoverDatabases(
-    active: ActiveConnection,
+    active: ActiveConnectionContext,
   ): Promise<readonly string[]> {
-    const existing = this.databaseLists.get(active.connectionId);
+    const existing = this.databaseLists.get(active.connectionIdentity);
     if (existing) return existing;
-    const promise = this.connections
+    const promise = this.backend
       .listDatabases(active)
       .catch((error: unknown) => {
-        this.databaseLists.delete(active.connectionId);
-        this.onError(`database-list:${active.connectionId}`, error);
+        this.databaseLists.delete(active.connectionIdentity);
+        this.onError(`database-list:${active.connectionIdentity}`, error);
         return [];
       });
-    this.databaseLists.set(active.connectionId, promise);
+    this.databaseLists.set(active.connectionIdentity, promise);
     return promise;
   }
 }

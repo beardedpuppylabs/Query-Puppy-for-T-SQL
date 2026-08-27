@@ -1,4 +1,9 @@
-import { DatabaseIndex } from "../metadata/DatabaseIndex.js";
+import type {
+  ActiveConnectionContext,
+  MetadataBackend,
+  MetadataCellValue,
+} from "../backend/MetadataBackend.js";
+import { DatabaseIndex } from "./DatabaseIndex.js";
 import type {
   ColumnMetadata,
   DatabaseObject,
@@ -6,14 +11,9 @@ import type {
   KeyMetadata,
   ParameterMetadata,
   SqlType,
-} from "../metadata/MetadataModels.js";
-import { normalizeName } from "../metadata/MetadataModels.js";
-import { quoteDatabaseIdentifier } from "../metadata/SqlTypeFormatter.js";
-import type {
-  ActiveConnection,
-  ConnectionService,
-} from "./ConnectionService.js";
-import type { DbCellValue } from "./SimpleExecuteResult.js";
+} from "./MetadataModels.js";
+import { normalizeName } from "./MetadataModels.js";
+import { quoteDatabaseIdentifier } from "./SqlTypeFormatter.js";
 
 /** Deliberately narrow developer-facing sys views; never index all shipped objects. */
 export const DEVELOPER_SYS_VIEWS = [
@@ -134,24 +134,24 @@ FROM (
 ) relationships ORDER BY record_kind,parent_schema,parent_object,relationship_name,ordinal;`;
 
 const value = (
-  row: readonly DbCellValue[],
+  row: readonly MetadataCellValue[],
   index: number,
 ): string | undefined => {
   const cell = row[index];
   return !cell || cell.isNull ? undefined : cell.displayValue;
 };
 const number = (
-  row: readonly DbCellValue[],
+  row: readonly MetadataCellValue[],
   index: number,
 ): number | undefined => {
   const text = value(row, index);
   return text === undefined ? undefined : Number(text);
 };
-const bool = (row: readonly DbCellValue[], index: number): boolean => {
+const bool = (row: readonly MetadataCellValue[], index: number): boolean => {
   const text = value(row, index)?.toLowerCase();
   return text === "true" || text === "1";
 };
-const sqlType = (row: readonly DbCellValue[]): SqlType | undefined => {
+const sqlType = (row: readonly MetadataCellValue[]): SqlType | undefined => {
   const name = value(row, 7);
   if (!name) return undefined;
   const schema = value(row, 6);
@@ -170,11 +170,11 @@ const sqlType = (row: readonly DbCellValue[]): SqlType | undefined => {
 
 export class MetadataLoader {
   constructor(
-    private readonly connections: ConnectionService,
+    private readonly backend: MetadataBackend,
     private readonly log: (message: string) => void = () => undefined,
   ) {}
-  async load(connection: ActiveConnection): Promise<DatabaseIndex> {
-    const results = await this.connections.queryMany(connection, [
+  async load(connection: ActiveConnectionContext): Promise<DatabaseIndex> {
+    const results = await this.backend.executeMetadataQueries(connection, [
       `USE ${quoteDatabaseIdentifier(connection.database)};\n${METADATA_QUERY}`,
       `USE ${quoteDatabaseIdentifier(connection.database)};\n${RELATIONSHIP_QUERY}`,
     ]);
@@ -313,7 +313,7 @@ export class MetadataLoader {
 
 function assembleKeys(
   database: string,
-  rows: readonly (readonly DbCellValue[])[],
+  rows: readonly (readonly MetadataCellValue[])[],
 ): KeyMetadata[] {
   const groups = new Map<
     string,
@@ -366,7 +366,7 @@ function assembleKeys(
 
 function assembleForeignKeys(
   database: string,
-  rows: readonly (readonly DbCellValue[])[],
+  rows: readonly (readonly MetadataCellValue[])[],
 ): ForeignKeyMetadata[] {
   const groups = new Map<
     number,
