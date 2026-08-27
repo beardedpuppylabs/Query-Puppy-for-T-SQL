@@ -39,7 +39,11 @@ shared-connection reuse within one metadata operation, failure/retry behavior, a
 dynamic connection/database switching. A deterministic source audit rejects
 mssql-only symbols outside `src/mssql`, imports from the mssql layer outside the
 composition root, and mssql-specific terminology in neutral backend, command,
-completion, metadata, and parser modules.
+completion, metadata, and parser modules. Separate fake context-resolver and
+metadata-backend implementations prove that completion scope discovery does not
+assume both capabilities have the same object identity. The source audit also
+rejects intersection dependencies that recombine the two neutral interfaces inside
+production consumers.
 
 ### Persistent metadata lifecycle tests
 

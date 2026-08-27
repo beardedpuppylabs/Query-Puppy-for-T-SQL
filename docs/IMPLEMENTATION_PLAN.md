@@ -38,6 +38,10 @@ next larger feature area remains Navigation & Code Understanding.
 
 - [x] Define backend-neutral active connection and metadata contracts for the
       current Query Puppy metadata needs.
+- [x] Keep connection-context discovery and metadata transport independently
+      injectable so semantic consumers do not require one combined implementation.
+- [x] Keep the active connection context limited to current cache/routing needs;
+      do not retain speculative provider or server identity fields.
 - [x] Isolate the current Microsoft mssql Connection Sharing API behind
       `MssqlConnectionSharingAdapter`.
 - [x] Keep mssql extension lookup/API acquisition inside the adapter layer so the

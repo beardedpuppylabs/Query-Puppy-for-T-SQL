@@ -117,13 +117,31 @@ temporary Microsoft mssql adapter:
         -> read-only catalog SQL execution
         -> same-server database enumeration
 
+These are independent capabilities. Each consumer receives only the capability it
+uses; a consumer that needs both accepts them through separate dependency slots.
+The current `MssqlConnectionSharingAdapter` implements both interfaces, and the
+composition root passes that same instance where both are needed, but semantic and
+metadata consumers do not require the interfaces to share an implementation or
+object identity. A context resolver and metadata backend from unrelated concrete
+implementations can therefore be composed without changing those consumers.
+
 The active context exposes a backend identifier, an opaque stable connection
 identity, and the active database. Semantic consumers use that identity only for
 catalog/cache isolation; they do not interpret it as a Microsoft mssql connection
 ID.
 
 The metadata backend is deliberately narrow. It is not a general query-execution
-SDK and must remain scoped to Query Puppy metadata/connectivity needs.
+SDK and must remain scoped to Query Puppy metadata/connectivity needs. Neutral
+contracts contain only data and operations required by current production behavior;
+speculative methods or identity fields are added only when a concrete responsibility
+needs them.
+
+Provider lifecycle, driver handles, raw provider result shapes, credential
+mechanisms, provider-specific identifiers, and provider-specific errors stay inside
+the concrete adapter. A future context resolver and metadata backend may be replaced
+together or independently without changing completion, parser, QueryScopes, type
+inference, callables, relationships, canonical metadata loading, or metadata-cache
+consumers.
 
 ## Microsoft SQL Server extension integration
 
@@ -164,7 +182,7 @@ metadata-cache consumers.
 The minimum future supported mssql integration surface Query Puppy needs is:
 
 - active SQL editor connection context
-- stable active server/database identity
+- stable opaque connection identity and active database
 - change notifications or a reliable public polling/query mechanism
 - authenticated read-only metadata/catalog execution
 - same-server database enumeration

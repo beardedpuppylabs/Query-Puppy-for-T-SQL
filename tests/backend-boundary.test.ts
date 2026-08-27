@@ -18,7 +18,6 @@ const activeContext = (database = "DatabaseA"): ActiveConnectionContext => ({
   backendId: "fake",
   connectionIdentity: "fake-server",
   database,
-  serverIdentity: "fake-server-name",
 });
 
 const cell = (displayValue?: string): MetadataCellValue => ({
@@ -56,11 +55,7 @@ const metadataResult = (database: string): MetadataQueryResult => ({
 
 const emptyRelationshipResult: MetadataQueryResult = { rowCount: 0, rows: [] };
 
-class FakeBackend implements ConnectionContextResolver, MetadataBackend {
-  readonly id = "fake";
-  readonly queriedDatabases: string[] = [];
-  databaseListCalls = 0;
-
+class FakeConnectionContextResolver implements ConnectionContextResolver {
   async active(): Promise<ActiveConnectionContext | undefined> {
     return activeContext();
   }
@@ -68,6 +63,12 @@ class FakeBackend implements ConnectionContextResolver, MetadataBackend {
   async available(): Promise<boolean> {
     return true;
   }
+}
+
+class FakeMetadataBackend implements MetadataBackend {
+  readonly id = "fake";
+  readonly queriedDatabases: string[] = [];
+  databaseListCalls = 0;
 
   async executeMetadataQueries(
     connection: ActiveConnectionContext,
@@ -87,17 +88,20 @@ class FakeBackend implements ConnectionContextResolver, MetadataBackend {
   }
 }
 
-test("contract: metadata and scope consumers operate through a fake backend", async () => {
-  const backend = new FakeBackend();
-  const loader = new MetadataLoader(backend);
+test("contract: context discovery and metadata transport use separate fake capabilities", async () => {
+  const contextResolver = new FakeConnectionContextResolver();
+  const metadataBackend = new FakeMetadataBackend();
+  assert.notEqual(contextResolver, metadataBackend);
+
+  const loader = new MetadataLoader(metadataBackend);
   const cache = new MetadataCache();
   const resolver = new CompletionScopeResolver(
-    backend,
+    metadataBackend,
     loader,
     cache,
     () => undefined,
   );
-  const active = await backend.active();
+  const active = await contextResolver.active();
   assert.deepEqual(active, activeContext());
 
   const scope = await resolver.resolve(
@@ -105,8 +109,11 @@ test("contract: metadata and scope consumers operate through a fake backend", as
     resolveSqlContext("SELECT * FROM DatabaseB.dbo.Customers"),
   );
 
-  assert.deepEqual(backend.queriedDatabases, ["DatabaseA", "DatabaseB"]);
-  assert.equal(backend.databaseListCalls, 1);
+  assert.deepEqual(metadataBackend.queriedDatabases, [
+    "DatabaseA",
+    "DatabaseB",
+  ]);
+  assert.equal(metadataBackend.databaseListCalls, 1);
   assert.ok(scope.indexes.has("databasea"));
   assert.ok(scope.indexes.has("databaseb"));
   assert.equal(
@@ -228,4 +235,24 @@ test("contract: mssql implementation details cannot leak above the adapter bound
   assert.deepEqual(symbolLeaks, []);
   assert.deepEqual(importLeaks, []);
   assert.deepEqual(terminologyLeaks, []);
+});
+
+test("contract: neutral backend capabilities remain independently composable", async () => {
+  const sourceRoot = path.resolve("src");
+  const files = await productionTypeScriptFiles(sourceRoot);
+  const combinedCapabilityLeaks: string[] = [];
+
+  for (const file of files) {
+    const source = await readFile(file, "utf8");
+    const relative = path.relative(sourceRoot, file);
+    if (
+      relative !== "extension.ts" &&
+      /\b(?:ConnectionContextResolver\s*&\s*MetadataBackend|MetadataBackend\s*&\s*ConnectionContextResolver)\b/.test(
+        source,
+      )
+    )
+      combinedCapabilityLeaks.push(relative);
+  }
+
+  assert.deepEqual(combinedCapabilityLeaks, []);
 });

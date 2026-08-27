@@ -41,14 +41,15 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
   private testScope?: CompletionScope;
 
   constructor(
-    private readonly connections: ConnectionContextResolver & MetadataBackend,
+    private readonly connectionContext: ConnectionContextResolver,
+    metadataBackend: MetadataBackend,
     private readonly loader: MetadataLoader,
     private readonly cache: MetadataCache,
     private readonly output: vscode.OutputChannel,
     private readonly observeAutomaticCompletions = false,
   ) {
     this.scopes = new CompletionScopeResolver(
-      connections,
+      metadataBackend,
       loader,
       cache,
       (key, error) => this.logFailureOnce(key, error),
@@ -67,7 +68,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     );
     let scope = this.testScope;
     if (!scope) {
-      const active = await this.connections.active();
+      const active = await this.connectionContext.active();
       if (active) scope = await this.scopes.resolve(active, context);
     }
     const semantics = this.documentSemantics.get(
@@ -152,7 +153,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     }
     let scope: CompletionScope | undefined = this.testScope;
     try {
-      const active = scope ? undefined : await this.connections.active();
+      const active = scope ? undefined : await this.connectionContext.active();
       if (!scope && active && !token.isCancellationRequested)
         scope = await this.scopes.resolve(active, context);
     } catch (error) {

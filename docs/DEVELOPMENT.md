@@ -260,6 +260,12 @@ The current `MssqlConnectionSharingAdapter` may continue using the mssql
 Connection Sharing API while it remains available. Connection Sharing has not
 been removed and Query Puppy does not yet implement a direct SQL Server backend.
 
+The adapter currently implements both neutral contracts, but they remain separate
+capabilities. The composition root may pass the same adapter instance into separate
+context-resolution and metadata-transport dependency slots. Consumers must accept
+only the capability they use and must not require both capabilities to have the same
+concrete implementation or object identity.
+
 This allows changes in the external connection API to be handled by replacing or
 rewriting the adapter without coupling the semantic completion engine directly to
 editor/database integration details.

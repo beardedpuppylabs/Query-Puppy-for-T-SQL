@@ -2,7 +2,6 @@ export interface ActiveConnectionContext {
   readonly backendId: string;
   readonly connectionIdentity: string;
   readonly database: string;
-  readonly serverIdentity?: string;
 }
 
 export interface ConnectionContextResolver {

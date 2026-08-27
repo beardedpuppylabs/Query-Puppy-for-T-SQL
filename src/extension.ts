@@ -51,6 +51,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   const provider = new SqlCompletionProvider(
     mssqlBackend,
+    mssqlBackend,
     loader,
     cache,
     output,
