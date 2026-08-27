@@ -40,6 +40,9 @@ next larger feature area remains Navigation & Code Understanding.
       current Query Puppy metadata needs.
 - [x] Isolate the current Microsoft mssql Connection Sharing API behind
       `MssqlConnectionSharingAdapter`.
+- [x] Keep mssql extension lookup/API acquisition inside the adapter layer so the
+      composition root constructs the concrete backend without handling mssql
+      capabilities.
 - [x] Move canonical catalog loading to the metadata layer so it consumes
       `MetadataBackend` rather than mssql-specific APIs or result types.
 - [x] Keep Microsoft mssql responsible for connection profiles and
@@ -51,6 +54,8 @@ next larger feature area remains Navigation & Code Understanding.
 - [x] Add fake-backend boundary tests and focused mssql adapter tests for active
       context mapping, database enumeration, metadata query execution, retryable
       failures, and coalescing.
+- [x] Add a deterministic source sentinel that rejects mssql implementation types,
+      imports, and error terminology above the adapter boundary.
 
 Direct SQL Server backend feasibility remains a later spike. Current Connection
 Sharing has not been removed.

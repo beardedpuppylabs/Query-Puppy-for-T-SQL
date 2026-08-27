@@ -36,7 +36,10 @@ Connection-boundary tests also verify backend-neutral active context resolution,
 database enumeration, metadata query execution, fake-backend compatibility,
 session API reuse, concurrent active-context coalescing, transient
 shared-connection reuse within one metadata operation, failure/retry behavior, and
-dynamic connection/database switching.
+dynamic connection/database switching. A deterministic source audit rejects
+mssql-only symbols outside `src/mssql`, imports from the mssql layer outside the
+composition root, and mssql-specific terminology in neutral backend, command,
+completion, metadata, and parser modules.
 
 ### Persistent metadata lifecycle tests
 

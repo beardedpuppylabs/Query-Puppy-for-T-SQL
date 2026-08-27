@@ -22,10 +22,6 @@ export interface MetadataQueryResult {
 
 export interface MetadataBackend {
   readonly id: string;
-  executeMetadataQuery(
-    connection: ActiveConnectionContext,
-    sql: string,
-  ): Promise<MetadataQueryResult>;
   executeMetadataQueries(
     connection: ActiveConnectionContext,
     sqlStatements: readonly string[],

@@ -9,7 +9,6 @@ import { MetadataLifecycleStatus } from "./metadata/MetadataLifecycleStatus.js";
 import { FileMetadataSnapshotStore } from "./metadata/PersistentMetadataStore.js";
 import { MetadataLoader } from "./metadata/MetadataLoader.js";
 import { MssqlConnectionSharingAdapter } from "./mssql/ConnectionSharingAdapter.js";
-import { getMssqlApi } from "./mssql/MssqlApi.js";
 import { SqlSignatureHelpProvider } from "./completion/SqlSignatureHelpProvider.js";
 import {
   parseCallSite,
@@ -46,10 +45,7 @@ export function activate(context: vscode.ExtensionContext): void {
     store: persistentStore,
     onEvent: (event) => metadataStatus.handle(event),
   });
-  const mssqlBackend = new MssqlConnectionSharingAdapter(
-    EXTENSION_ID,
-    getMssqlApi,
-  );
+  const mssqlBackend = new MssqlConnectionSharingAdapter(EXTENSION_ID);
   const loader = new MetadataLoader(mssqlBackend, (message) =>
     output.appendLine(`[metadata] ${message}`),
   );

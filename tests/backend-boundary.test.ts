@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import type {
   ActiveConnectionContext,
@@ -67,13 +69,6 @@ class FakeBackend implements ConnectionContextResolver, MetadataBackend {
     return true;
   }
 
-  async executeMetadataQuery(
-    connection: ActiveConnectionContext,
-    sql: string,
-  ): Promise<MetadataQueryResult> {
-    return (await this.executeMetadataQueries(connection, [sql]))[0]!;
-  }
-
   async executeMetadataQueries(
     connection: ActiveConnectionContext,
     sqlStatements: readonly string[],
@@ -128,8 +123,6 @@ test("contract: backend metadata failures remain retryable after a cold-load fai
   let attempts = 0;
   const backend: MetadataBackend = {
     id: "fake",
-    executeMetadataQuery: async (connection, sql) =>
-      (await backend.executeMetadataQueries(connection, [sql]))[0]!,
     executeMetadataQueries: async (connection) => {
       attempts++;
       if (attempts === 1) throw new Error("temporary backend failure");
@@ -161,8 +154,6 @@ test("contract: concurrent neutral metadata loads coalesce per database identity
   let loads = 0;
   const backend: MetadataBackend = {
     id: "fake",
-    executeMetadataQuery: async (connection, sql) =>
-      (await backend.executeMetadataQueries(connection, [sql]))[0]!,
     executeMetadataQueries: async (connection) => {
       loads++;
       await blocked;
@@ -183,4 +174,58 @@ test("contract: concurrent neutral metadata loads coalesce per database identity
   const loaded = await Promise.all(requests);
   assert.equal(loads, 1);
   assert.equal(new Set(loaded).size, 1);
+});
+
+const productionTypeScriptFiles = async (
+  directory: string,
+): Promise<string[]> => {
+  const entries = await readdir(directory, { withFileTypes: true });
+  return (
+    await Promise.all(
+      entries.map(async (entry) => {
+        const entryPath = path.join(directory, entry.name);
+        if (entry.isDirectory()) return productionTypeScriptFiles(entryPath);
+        return entry.isFile() && entry.name.endsWith(".ts") ? [entryPath] : [];
+      }),
+    )
+  ).flat();
+};
+
+test("contract: mssql implementation details cannot leak above the adapter boundary", async () => {
+  const sourceRoot = path.resolve("src");
+  const files = await productionTypeScriptFiles(sourceRoot);
+  const mssqlRoot = `${path.join(sourceRoot, "mssql")}${path.sep}`;
+  const prohibitedSymbols = [
+    "connectionSharing",
+    "ConnectionSharingApi",
+    "MssqlExtensionApi",
+    "getMssqlApi",
+    "ConnectionService",
+    "SimpleExecuteResult",
+    "DbCellValue",
+  ];
+  const symbolLeaks: string[] = [];
+  const importLeaks: string[] = [];
+  const terminologyLeaks: string[] = [];
+
+  for (const file of files) {
+    const source = await readFile(file, "utf8");
+    const relative = path.relative(sourceRoot, file);
+    if (!file.startsWith(mssqlRoot))
+      for (const symbol of prohibitedSymbols)
+        if (source.includes(symbol)) symbolLeaks.push(`${relative}: ${symbol}`);
+    if (relative !== "extension.ts" && /from\s+["'][^"']*mssql\//.test(source))
+      importLeaks.push(relative);
+    if (
+      ["backend", "commands", "completion", "metadata", "parser"].includes(
+        relative.split(path.sep)[0] ?? "",
+      ) &&
+      /mssql/i.test(source)
+    )
+      terminologyLeaks.push(relative);
+  }
+
+  assert.deepEqual(symbolLeaks, []);
+  assert.deepEqual(importLeaks, []);
+  assert.deepEqual(terminologyLeaks, []);
 });

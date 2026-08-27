@@ -145,6 +145,13 @@ is reused, and failed acquisition remains retryable. Active connection and
 database values are not memoized as session constants; they remain dynamic so
 editor, server, and database switches are observed.
 
+The composition root constructs only the concrete adapter. Lazy mssql extension
+lookup, activation, capability validation, and API acquisition are owned by the
+mssql layer; they do not cross into activation, completion, Signature Help,
+canonical metadata loading, or other neutral consumers. The adapter retains an
+injectable acquisition seam solely so headless contract tests can exercise its
+lifecycle without loading the VS Code runtime.
+
 The mssql 1.45 public connection-sharing surface does not expose a standalone
 permission-initialization method or permission token. Its extension-ID methods
 validate stored permission internally on every call. The adapter must not bypass

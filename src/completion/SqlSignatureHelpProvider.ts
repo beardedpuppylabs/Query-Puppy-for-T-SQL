@@ -80,7 +80,7 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
       if (!active || token.isCancellationRequested) {
         this.diagnostics.set(
           document.uri.toString(),
-          `provider result: returned no\nreason: ${active ? "request cancelled" : "no active mssql connection"}`,
+          `provider result: returned no\nreason: ${active ? "request cancelled" : "no active SQL connection"}`,
         );
         return undefined;
       }

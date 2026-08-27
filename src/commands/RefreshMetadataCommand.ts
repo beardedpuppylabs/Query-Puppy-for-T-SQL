@@ -12,7 +12,7 @@ export async function refreshMetadata(
     const active = await connections.active();
     if (!active) {
       await vscode.window.showInformationMessage(
-        "No active mssql editor connection.",
+        "No active SQL editor connection.",
       );
       return;
     }
@@ -44,7 +44,7 @@ export async function clearMetadataCache(
     const active = await connections.active();
     if (!active) {
       await vscode.window.showInformationMessage(
-        "No active mssql editor connection.",
+        "No active SQL editor connection.",
       );
       return;
     }

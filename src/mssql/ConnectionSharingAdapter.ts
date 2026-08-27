@@ -7,6 +7,9 @@ import type {
 import type { ConnectionSharingApi, MssqlExtensionApi } from "./MssqlApi.js";
 import { validateSimpleExecuteResult } from "./SimpleExecuteResult.js";
 
+const acquireMssqlApi = async (): Promise<MssqlExtensionApi | undefined> =>
+  (await import("./MssqlApi.js")).getMssqlApi();
+
 export class MssqlConnectionSharingAdapter
   implements ConnectionContextResolver, MetadataBackend
 {
@@ -18,7 +21,9 @@ export class MssqlConnectionSharingAdapter
 
   constructor(
     private readonly extensionId: string,
-    private readonly getApi: () => Promise<MssqlExtensionApi | undefined>,
+    private readonly getApi: () => Promise<
+      MssqlExtensionApi | undefined
+    > = acquireMssqlApi,
   ) {}
 
   async active(): Promise<ActiveConnectionContext | undefined> {
@@ -30,15 +35,6 @@ export class MssqlConnectionSharingAdapter
     } finally {
       if (this.activeRequest === pending) this.activeRequest = undefined;
     }
-  }
-
-  async executeMetadataQuery(
-    connection: ActiveConnectionContext,
-    sql: string,
-  ): Promise<MetadataQueryResult> {
-    const result = (await this.executeMetadataQueries(connection, [sql]))[0];
-    if (!result) throw new Error("mssql query returned no result.");
-    return result;
   }
 
   async executeMetadataQueries(
