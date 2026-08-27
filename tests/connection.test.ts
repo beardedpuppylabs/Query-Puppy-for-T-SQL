@@ -49,7 +49,6 @@ test("contract: connection sharing reuses one transient URI without owning crede
   );
   const active = await adapter.active();
   assert.deepEqual(active, {
-    backendId: "mssql-connection-sharing",
     connectionIdentity: "connection-1",
     database: "ERP",
   });
@@ -86,7 +85,6 @@ test("contract: database enumeration is exposed through the backend contract", a
   );
   assert.deepEqual(
     await adapter.listDatabases({
-      backendId: adapter.id,
       connectionIdentity: "connection-1",
       database: "ERP",
     }),
@@ -112,7 +110,6 @@ test("contract: mssql active database fallback maps to neutral active context", 
     }),
   );
   assert.deepEqual(await adapter.active(), {
-    backendId: "mssql-connection-sharing",
     connectionIdentity: "connection-1",
     database: "ERP",
   });
@@ -170,7 +167,6 @@ test("contract: concurrent active-context callers coalesce one lookup", async ()
   assert.deepEqual(
     await Promise.all(requests),
     Array.from({ length: 25 }, () => ({
-      backendId: "mssql-connection-sharing",
       connectionIdentity: "connection-1",
       database: "ERP",
     })),
@@ -196,14 +192,12 @@ test("contract: mssql API is reused while active connection context stays dynami
   );
 
   assert.deepEqual(await service.active(), {
-    backendId: "mssql-connection-sharing",
     connectionIdentity: "connection-1",
     database: "ERP",
   });
   connectionId = "connection-2";
   database = "Reporting";
   assert.deepEqual(await service.active(), {
-    backendId: "mssql-connection-sharing",
     connectionIdentity: "connection-2",
     database: "Reporting",
   });
@@ -224,7 +218,6 @@ test("failed mssql API acquisition does not wedge a later retry", async () => {
 
   await assert.rejects(service.active(), /activation failed/);
   assert.deepEqual(await service.active(), {
-    backendId: "mssql-connection-sharing",
     connectionIdentity: "connection-1",
     database: "ERP",
   });
@@ -244,7 +237,6 @@ test("temporarily unavailable mssql API does not become a cached failure", async
 
   assert.equal(await service.active(), undefined);
   assert.deepEqual(await service.active(), {
-    backendId: "mssql-connection-sharing",
     connectionIdentity: "connection-1",
     database: "ERP",
   });
@@ -269,7 +261,6 @@ test("failed active-context lookup remains retryable", async () => {
 
   await assert.rejects(service.active(), /permission unavailable/);
   assert.deepEqual(await service.active(), {
-    backendId: "mssql-connection-sharing",
     connectionIdentity: "connection-1",
     database: "ERP",
   });

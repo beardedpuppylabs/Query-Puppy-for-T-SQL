@@ -689,7 +689,6 @@ test("contract: memory is the hot path and secondary databases hydrate on demand
     () => undefined,
   );
   const active = {
-    backendId: "fake",
     connectionIdentity: "server",
     database: "DatabaseA",
   };

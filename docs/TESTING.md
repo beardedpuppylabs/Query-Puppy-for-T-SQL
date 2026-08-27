@@ -43,7 +43,9 @@ completion, metadata, and parser modules. Separate fake context-resolver and
 metadata-backend implementations prove that completion scope discovery does not
 assume both capabilities have the same object identity. The source audit also
 rejects intersection dependencies that recombine the two neutral interfaces inside
-production consumers.
+production consumers, including class or interface inheritance that requires both.
+The fake active context contains only the opaque connection identity and database
+used by current production routing and cache behavior.
 
 ### Persistent metadata lifecycle tests
 

@@ -78,7 +78,6 @@ test("metadata assembly is independent of result row order", async () => {
     },
   );
   const index = await new MetadataLoader(connections).load({
-    backendId: "fake",
     connectionIdentity: "c",
     database: "IntelliSenseLab",
   });
@@ -115,7 +114,6 @@ test("contract: scalar return metadata supports the unnamed return parameter", a
     rows,
   }));
   const index = await new MetadataLoader(connections).load({
-    backendId: "fake",
     connectionIdentity: "c",
     database: "db",
   });
@@ -155,7 +153,6 @@ test("developer-facing system views are mapped without enabling all system noise
     rows,
   }));
   const index = await new MetadataLoader(connections).load({
-    backendId: "fake",
     connectionIdentity: "c",
     database: "db",
   });
@@ -247,7 +244,6 @@ test("column writability flags are retained from catalog metadata", async () => 
   }));
   const object = (
     await new MetadataLoader(connections).load({
-      backendId: "fake",
       connectionIdentity: "c",
       database: "db",
     })
@@ -375,7 +371,6 @@ test("keys and foreign keys are assembled set-wise without duplicate constraint 
     },
   );
   const index = await new MetadataLoader(connections).load({
-    backendId: "fake",
     connectionIdentity: "c",
     database: "IntelliSenseLab",
   });
@@ -417,7 +412,6 @@ test("contract: Schema Intelligence runtime initialization is catalog-read-only"
     },
   } as unknown as MetadataBackend;
   await new MetadataLoader(connections).load({
-    backendId: "fake",
     connectionIdentity: "restricted-metadata-login",
     database: "IntelliSenseLab",
   });

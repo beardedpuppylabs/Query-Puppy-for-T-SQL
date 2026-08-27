@@ -125,10 +125,11 @@ metadata consumers do not require the interfaces to share an implementation or
 object identity. A context resolver and metadata backend from unrelated concrete
 implementations can therefore be composed without changing those consumers.
 
-The active context exposes a backend identifier, an opaque stable connection
-identity, and the active database. Semantic consumers use that identity only for
-catalog/cache isolation; they do not interpret it as a Microsoft mssql connection
-ID.
+The active context exposes only an opaque stable connection identity and the active
+database. Semantic consumers use that identity for catalog/cache isolation; they do
+not interpret it as a Microsoft mssql connection ID. A separate backend identifier
+is not part of the neutral context because current production behavior does not use
+one.
 
 The metadata backend is deliberately narrow. It is not a general query-execution
 SDK and must remain scoped to Query Puppy metadata/connectivity needs. Neutral

@@ -51,7 +51,6 @@ test(
 
     const connections = metadataConnection(pool);
     const index = await new MetadataLoader(connections).load({
-      backendId: "integration",
       connectionIdentity: "integration",
       database: process.env["MSSQL_TEST_DATABASE"] ?? "",
     });
@@ -749,7 +748,6 @@ test(
     const cache = new MetadataCache();
     const active = await cache.ensureLoaded("integration", activeDatabase, () =>
       loader.load({
-        backendId: "integration",
         connectionIdentity: "integration",
         database: activeDatabase,
       }),
@@ -759,7 +757,6 @@ test(
       secondaryDatabase,
       () =>
         loader.load({
-          backendId: "integration",
           connectionIdentity: "integration",
           database: secondaryDatabase,
         }),

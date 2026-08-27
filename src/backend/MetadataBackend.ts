@@ -1,5 +1,4 @@
 export interface ActiveConnectionContext {
-  readonly backendId: string;
   readonly connectionIdentity: string;
   readonly database: string;
 }
@@ -20,7 +19,6 @@ export interface MetadataQueryResult {
 }
 
 export interface MetadataBackend {
-  readonly id: string;
   executeMetadataQueries(
     connection: ActiveConnectionContext,
     sqlStatements: readonly string[],

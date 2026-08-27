@@ -35,7 +35,6 @@ test("contract: secondary metadata is lazy and unqualified scope stays database-
     () => undefined,
   );
   const active = {
-    backendId: "fake",
     connectionIdentity: "connection",
     database: "DatabaseA",
   };
@@ -91,7 +90,6 @@ test("contract: database discovery does not eagerly load secondary metadata", as
   );
   const scope = await resolver.resolve(
     {
-      backendId: "fake",
       connectionIdentity: "connection",
       database: "IntelliSenseLab",
     },
@@ -125,7 +123,6 @@ test("contract: database-qualified aliases request their originating database", 
   const sql = "SELECT b. FROM DatabaseB.sales.Customers b";
   await resolver.resolve(
     {
-      backendId: "fake",
       connectionIdentity: "connection",
       database: "DatabaseA",
     },
@@ -155,7 +152,6 @@ test("CTE projection loads databases explicitly referenced inside its statement"
     "WITH x AS (SELECT * FROM DatabaseB.archive.CustomerAddressArchive a) SELECT y. FROM x y";
   const scope = await resolver.resolve(
     {
-      backendId: "fake",
       connectionIdentity: "connection",
       database: "DatabaseA",
     },
@@ -181,11 +177,11 @@ test("changing the active database selects its own cached default scope", async 
   );
   const context = resolveSqlContext("SELECT * FROM cust");
   const first = await resolver.resolve(
-    { backendId: "fake", connectionIdentity: "same", database: "DatabaseA" },
+    { connectionIdentity: "same", database: "DatabaseA" },
     context,
   );
   const second = await resolver.resolve(
-    { backendId: "fake", connectionIdentity: "same", database: "DatabaseB" },
+    { connectionIdentity: "same", database: "DatabaseB" },
     context,
   );
   assert.deepEqual([...first.indexes.keys()], ["databasea"]);

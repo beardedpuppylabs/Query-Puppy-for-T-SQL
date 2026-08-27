@@ -15,7 +15,6 @@ import { MetadataLoader } from "../src/metadata/MetadataLoader.js";
 import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
 
 const activeContext = (database = "DatabaseA"): ActiveConnectionContext => ({
-  backendId: "fake",
   connectionIdentity: "fake-server",
   database,
 });
@@ -66,7 +65,6 @@ class FakeConnectionContextResolver implements ConnectionContextResolver {
 }
 
 class FakeMetadataBackend implements MetadataBackend {
-  readonly id = "fake";
   readonly queriedDatabases: string[] = [];
   databaseListCalls = 0;
 
@@ -102,7 +100,10 @@ test("contract: context discovery and metadata transport use separate fake capab
     () => undefined,
   );
   const active = await contextResolver.active();
-  assert.deepEqual(active, activeContext());
+  assert.deepEqual(active, {
+    connectionIdentity: "fake-server",
+    database: "DatabaseA",
+  });
 
   const scope = await resolver.resolve(
     active!,
@@ -129,7 +130,6 @@ test("contract: context discovery and metadata transport use separate fake capab
 test("contract: backend metadata failures remain retryable after a cold-load failure", async () => {
   let attempts = 0;
   const backend: MetadataBackend = {
-    id: "fake",
     executeMetadataQueries: async (connection) => {
       attempts++;
       if (attempts === 1) throw new Error("temporary backend failure");
@@ -160,7 +160,6 @@ test("contract: concurrent neutral metadata loads coalesce per database identity
   });
   let loads = 0;
   const backend: MetadataBackend = {
-    id: "fake",
     executeMetadataQueries: async (connection) => {
       loads++;
       await blocked;
@@ -240,16 +239,20 @@ test("contract: mssql implementation details cannot leak above the adapter bound
 test("contract: neutral backend capabilities remain independently composable", async () => {
   const sourceRoot = path.resolve("src");
   const files = await productionTypeScriptFiles(sourceRoot);
+  const mssqlRoot = `${path.join(sourceRoot, "mssql")}${path.sep}`;
   const combinedCapabilityLeaks: string[] = [];
+  const combinedCapabilityPatterns = [
+    /\b(?:ConnectionContextResolver\s*&\s*MetadataBackend|MetadataBackend\s*&\s*ConnectionContextResolver)\b/,
+    /\b(?:class|interface)\s+\w+[^{]*\b(?:extends|implements)\b(?=[^{]*\bConnectionContextResolver\b)(?=[^{]*\bMetadataBackend\b)[^{]*{/,
+  ];
 
   for (const file of files) {
     const source = await readFile(file, "utf8");
     const relative = path.relative(sourceRoot, file);
     if (
+      !file.startsWith(mssqlRoot) &&
       relative !== "extension.ts" &&
-      /\b(?:ConnectionContextResolver\s*&\s*MetadataBackend|MetadataBackend\s*&\s*ConnectionContextResolver)\b/.test(
-        source,
-      )
+      combinedCapabilityPatterns.some((pattern) => pattern.test(source))
     )
       combinedCapabilityLeaks.push(relative);
   }

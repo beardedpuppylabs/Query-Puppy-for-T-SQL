@@ -13,7 +13,6 @@ const acquireMssqlApi = async (): Promise<MssqlExtensionApi | undefined> =>
 export class MssqlConnectionSharingAdapter
   implements ConnectionContextResolver, MetadataBackend
 {
-  readonly id = "mssql-connection-sharing";
   private sharingApi: ConnectionSharingApi | undefined;
   private sharingRequest: Promise<ConnectionSharingApi | undefined> | undefined;
   private activeRequest:
@@ -115,7 +114,6 @@ export class MssqlConnectionSharingAdapter
       ));
     return database
       ? {
-          backendId: this.id,
           connectionIdentity: connectionId,
           database,
         }
