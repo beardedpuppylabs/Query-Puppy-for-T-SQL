@@ -206,7 +206,7 @@ equivalent:
 
 - semantic name
 - filterText
-- insertText
+- final syntax after acceptance for the same completion shape
 - role metadata
 - datatype
 - nullability
@@ -359,9 +359,17 @@ A displayed physical row may contain:
 - ellipsis
 
 Therefore `filterText` and `insertText` must be set explicitly to the complete
-semantic identifier.
+semantic identifier or the syntax-aware qualified expression described below.
 
 Do not rely on the formatted display label as the insertion value.
+
+When an unqualified semantic column is owned by a RowSource with an explicit alias,
+its insertion text is `<alias>.<column>`. The candidate retains the owning QueryScope
+binding, so same-name columns from different aliases remain distinct. When the user
+already typed `alias.` or `alias.fragment`, only the member fragment is replaced and
+the existing qualifier is not duplicated. Unaliased sources and projection aliases
+retain bare insertion. Syntax-restricted targets such as an `UPDATE SET` left-hand
+side also remain bare; legal expression RHS candidates use their explicit alias.
 
 ## Scope ranking
 
@@ -375,8 +383,10 @@ Type compatibility must not break these scope boundaries.
 
 ## JOIN predicate candidates
 
-Complete FK-based JOIN predicates are semantic expression candidates, not physical
-column members.
+Complete declared-FK-based JOIN predicates are semantic expression candidates, not
+physical column members. They retain their canonical relationship, including
+provenance and confidence, rather than carrying the physical catalog record as the
+semantic edge.
 
 At an empty relevant ON position, a real FK predicate may outrank ordinary column
 expressions.
@@ -386,16 +396,18 @@ operand such as:
 
     ON o.CustomerId = c.
 
-When both operands resolve to physical columns, real cached FK mappings may break a
-tie among otherwise equivalent type-compatible member candidates. Only the column
-paired with the resolved opposite operand receives the contextual advantage. This
-does not create a separate visible group, use name/type heuristics, or affect
-ordinary member completion outside a comparison.
+When both operands resolve to physical columns, enabled authoritative declared-FK
+mappings may break a tie among otherwise equivalent type-compatible member
+candidates. Only the column paired with the resolved opposite operand receives the
+contextual advantage. This does not create a separate visible group, use name/type
+heuristics, or affect ordinary member completion outside a comparison.
 
 ## JOIN source candidates
 
-At JOIN source positions, actual relationship metadata may influence semantic
-ranking.
+At JOIN source positions, enabled authoritative declared-FK relationships may
+influence semantic ranking. The canonical graph is provenance-aware, but future
+project-defined, learned, user-confirmed, and heuristic sources are not production
+completion inputs in this phase.
 
 Contains filtering remains intact.
 

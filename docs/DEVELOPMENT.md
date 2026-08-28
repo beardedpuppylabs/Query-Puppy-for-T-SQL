@@ -288,6 +288,13 @@ Persistent catalog metadata and document-local semantics are separate layers.
 Catalog/cache state contains persistent SQL Server metadata keyed by the
 appropriate connection/database identity.
 
+Physical SQL Server foreign-key records are converted during `DatabaseIndex`
+construction into the provenance-aware canonical relationship model and its single
+bidirectional runtime graph. Production suggestions remain enabled authoritative
+declared-FK-only. Future project-defined, user-confirmed, learned, and heuristic
+relationships are not persistence or completion inputs yet; see
+[Architecture](ARCHITECTURE.md#relationship-intelligence).
+
 Document semantic analysis derives query-local state such as:
 
 - QueryScopes

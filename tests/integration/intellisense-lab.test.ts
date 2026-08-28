@@ -22,6 +22,11 @@ import {
 } from "../../src/parser/CallableAnalyzer.js";
 import { isWritableColumn } from "../../src/metadata/MetadataModels.js";
 import { FileMetadataSnapshotStore } from "../../src/metadata/PersistentMetadataStore.js";
+import {
+  isDeclaredForeignKeyRelationship,
+  RelationshipConfidence,
+  RelationshipProvenance,
+} from "../../src/relationships/RelationshipModels.js";
 
 const names = [
   "MSSQL_TEST_SERVER",
@@ -104,7 +109,14 @@ test(
       relationshipCustomers,
       relationshipAddresses,
     );
-    assert.deepEqual(addressRelationships.map((fk) => fk.name).sort(), [
+    assert.ok(addressRelationships.every(isDeclaredForeignKeyRelationship));
+    const addressRelationshipNames = addressRelationships.flatMap(
+      (relationship) =>
+        isDeclaredForeignKeyRelationship(relationship)
+          ? [relationship.declaredForeignKey.constraintName]
+          : [],
+    );
+    assert.deepEqual(addressRelationshipNames.sort(), [
       "FK_reltest_Customers_BillingAddress",
       "FK_reltest_Customers_PrimaryAddress",
       "FK_reltest_Customers_ShippingAddress",
@@ -112,9 +124,13 @@ test(
     assert.deepEqual(
       index
         .relationshipsBetween(relationshipAddresses, relationshipCustomers)
-        .map((fk) => fk.name)
+        .flatMap((relationship) =>
+          isDeclaredForeignKeyRelationship(relationship)
+            ? [relationship.declaredForeignKey.constraintName]
+            : [],
+        )
         .sort(),
-      addressRelationships.map((fk) => fk.name).sort(),
+      addressRelationshipNames.sort(),
     );
     assert.equal(
       index.relationshipsBetween(orderHeaders, orderLines).length,
@@ -131,15 +147,24 @@ test(
       orderLines,
     )[0];
     assert.ok(compositeForeignKey);
+    assert.ok(isDeclaredForeignKeyRelationship(compositeForeignKey));
     assert.equal(
-      compositeForeignKey.name,
+      compositeForeignKey.provenance,
+      RelationshipProvenance.DeclaredForeignKey,
+    );
+    assert.equal(
+      compositeForeignKey.confidence,
+      RelationshipConfidence.Authoritative,
+    );
+    assert.equal(
+      compositeForeignKey.declaredForeignKey.constraintName,
       "FK_reltest_OrderLines_OrderHeaders",
     );
     assert.deepEqual(
-      compositeForeignKey.columns.map((mapping) => [
+      compositeForeignKey.mappings.map((mapping) => [
         mapping.ordinal,
-        mapping.parentColumnName,
-        mapping.referencedColumnName,
+        mapping.sourceColumnName,
+        mapping.targetColumnName,
       ]),
       [
         [1, "CompanyId", "CompanyId"],
@@ -539,7 +564,7 @@ test(
     assert.equal(region?.parentSchema, "reltest");
     assert.equal(region.referencedSchema, "relref");
     context.diagnostic(
-      `Schema Intelligence fixture verified: PK=8, UQ=7, FK=8, filtered=${filteredKey.name}, composite=${compositeForeignKey.name}.`,
+      `Schema Intelligence fixture verified: PK=8, UQ=7, FK=8, filtered=${filteredKey.name}, composite=${compositeForeignKey.declaredForeignKey.constraintName}.`,
     );
     context.diagnostic(
       "JOIN Intelligence verified: forward/reverse, 3 alternatives, composite, cross-schema, disabled exclusion, and related-table ranking.",

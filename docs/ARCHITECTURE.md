@@ -359,6 +359,13 @@ Sibling scopes are isolated.
 
 Local alias shadowing is respected.
 
+Independent sequential top-level SELECT statements are separate semantic statement
+ranges even when the preceding statement omits its optional semicolon. The tokenizer
+distinguishes later top-level query starts from SELECTs nested in parentheses and from
+UNION/INTERSECT/EXCEPT branches, so correlation and set expressions retain their
+existing scope structure. Statement-local aliases, RowSources, projection aliases,
+and clause state never cross that boundary.
+
 Do not replace this model with a flat document-wide alias dictionary.
 
 ## Correlation
@@ -411,9 +418,51 @@ Filtered unique indexes remain distinguishable from ordinary unique constraints.
 
 INCLUDE columns are not key members.
 
-## Relationship indexes
+## Relationship Intelligence
 
-Foreign-key metadata should support efficient navigation in both directions.
+SQL Server foreign-key catalog metadata and canonical semantic relationships are
+separate layers:
+
+    SQL Server ForeignKeyMetadata
+        -> declared-FK conversion boundary
+        -> canonical Relationship
+        -> one DatabaseIndex relationship graph
+
+Every canonical relationship contains:
+
+- structured provenance
+- structured confidence
+- a source object reference
+- a target object reference
+- ordered source/target column mappings
+- declared-FK-specific details only when it represents a physical SQL Server FK
+
+The model can distinguish declared foreign keys, project-defined relationships,
+user-confirmed relationships, learned query evidence, and heuristic candidates.
+Confidence distinguishes authoritative, confirmed, strong-evidence, and candidate
+states. The provenance/confidence combination is a discriminated semantic contract,
+not a display label or ranking score.
+
+Declared SQL Server FKs map to `DeclaredForeignKey` provenance and `Authoritative`
+confidence. Their constraint ID/name, referential actions, disabled/trust state,
+object identities, and composite ordinals remain available through explicit physical
+FK details. Logical relationships do not require or fabricate those details.
+
+Production completion currently admits only enabled authoritative declared-FK
+relationships. Project-defined, user-confirmed, learned, and heuristic sources are
+model-ready but are not loaded, persisted, suggested, ranked, or displayed in this
+phase. Never infer or label a foreign key from matching names or datatypes.
+
+Persistent snapshots continue storing canonical SQL Server catalog metadata,
+including physical FK records. Hydration rebuilds the canonical runtime relationship
+model and indexes. No project relationship persistence or generic evidence repository
+exists yet.
+
+## Relationship graph and indexes
+
+There is one canonical runtime relationship graph. A relationship is stored once;
+directional indexes reference that same object for source-to-target and
+target-to-source traversal.
 
 Conceptually maintain indexed access for:
 
@@ -425,7 +474,8 @@ Relationship-aware completion must avoid full-database scans per keystroke.
 
 ## JOIN Intelligence
 
-JOIN predicate suggestions are generated from actual cached FK relationships.
+JOIN predicate suggestions are currently generated only from enabled authoritative
+declared-FK relationships in the canonical cached graph.
 
 A relationship may generate a complete expression such as:
 
@@ -436,7 +486,7 @@ Composite relationships may generate:
     ol.CompanyId = oh.CompanyId
     AND ol.OrderId = oh.OrderId
 
-Multiple FKs between the same objects remain separate candidates.
+Multiple declared FKs between the same objects remain separate candidates.
 
 JOIN source ranking may boost related objects but must preserve Contains filtering.
 

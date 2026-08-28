@@ -8,6 +8,7 @@ import {
 } from "../metadata/MetadataModels.js";
 import type { SqlToken } from "./SqlTokenizer.js";
 import { tokenizeSql } from "./SqlTokenizer.js";
+import { statementTokenRangeAtCursor } from "./StatementBoundary.js";
 
 export interface RowSource {
   readonly sourceId: string;
@@ -36,6 +37,7 @@ export type QueryScopeKind =
 export interface ScopedRowSource {
   readonly source: RowSource;
   readonly qualifier: string;
+  readonly explicitAlias: boolean;
   readonly scopeDistance: number;
   readonly outer: boolean;
 }
@@ -181,16 +183,6 @@ const segments = (
   }
   if (begin < end) result.push(tokens.slice(begin, end));
   return result;
-};
-const statementStart = (
-  tokens: readonly SqlToken[],
-  cursor: number,
-): number => {
-  let start = 0;
-  for (let i = 0; i < tokens.length && (tokens[i]?.start ?? 0) < cursor; i++)
-    if (tokens[i]?.text === ";" || tokens[i]?.normalized === "go")
-      start = i + 1;
-  return start;
 };
 const batchStart = (tokens: readonly SqlToken[], cursor: number): number => {
   let start = 0;
@@ -795,16 +787,17 @@ const completionContinuationDepths = (
 
 function objectRowSource(
   parts: readonly string[],
-  alias: string,
+  qualifier: string,
   origin: { readonly start: number; readonly end: number },
   catalog?: SemanticCatalog,
+  explicitAlias?: string,
 ): RowSource {
   const database = parts.length === 3 ? parts[0] : catalog?.activeDatabase;
   const schema = parts.length >= 2 ? parts.at(-2) : undefined;
   const sourceObject = catalogObject(parts, catalog);
   return rowSource({
-    name: parts.at(-1) ?? alias,
-    alias,
+    name: parts.at(-1) ?? qualifier,
+    ...(explicitAlias ? { alias: explicitAlias } : {}),
     ...(database ? { database } : {}),
     ...(schema ? { schema } : {}),
     ...(sourceObject ? { sourceObject } : {}),
@@ -957,8 +950,15 @@ function queryScopeModel(
             end: aliasToken?.end ?? tokens[p]?.end ?? 0,
           },
           catalog,
+          aliasToken?.text,
         );
-      scope.local.push({ source, qualifier, scopeDistance: 0, outer: false });
+      scope.local.push({
+        source,
+        qualifier,
+        explicitAlias: Boolean(aliasToken),
+        scopeDistance: 0,
+        outer: false,
+      });
     }
   }
   const publicScopes: QueryScope[] = mutable.map((scope) => ({
@@ -1030,6 +1030,7 @@ export function resolveVisibleRowSource(
     ? {
         source: statementSource,
         qualifier: alias,
+        explicitAlias: false,
         scopeDistance: 0,
         outer: false,
       }
@@ -1042,14 +1043,11 @@ export function analyzeDocumentSemantics(
 ): DocumentSemanticModel {
   const tokens = tokenizeSql(sql);
   const before = tokens.filter((t) => t.start < cursor);
-  const batch = statementStart(before, cursor);
+  const statement = statementTokenRangeAtCursor(tokens, cursor);
+  const batch = statement.start;
   const currentBatch = batchStart(before, cursor);
   const rowSources: RowSource[] = [];
-  let statementEnd = tokens.findIndex(
-    (token, index) =>
-      index >= batch && token.start >= cursor && token.text === ";",
-  );
-  if (statementEnd < 0) statementEnd = tokens.length;
+  const statementEnd = statement.end;
   for (let i = 0; i < before.length; i++) {
     const create =
       before[i]?.normalized === "create" &&

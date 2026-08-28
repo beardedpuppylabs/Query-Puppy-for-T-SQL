@@ -21,6 +21,10 @@ import {
 import type { MetadataBackend } from "../src/backend/MetadataBackend.js";
 import type { MetadataLoader } from "../src/metadata/MetadataLoader.js";
 import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
+import {
+  RelationshipConfidence,
+  RelationshipProvenance,
+} from "../src/relationships/RelationshipModels.js";
 
 const metadata = (database: string, version = 1): DatabaseMetadata => ({
   database,
@@ -323,10 +327,14 @@ test("contract: persistent round trip rebuilds canonical catalog and relationshi
     ["uniqueIndex"],
   );
   assert.deepEqual(loaded.index.keysForColumn(orders, "IncludedOnly"), []);
+  const relationship = loaded.index.relationshipsBetween(customers, orders)[0];
+  assert.ok(relationship);
+  assert.equal(relationship.mappings.length, 2);
   assert.equal(
-    loaded.index.relationshipsBetween(customers, orders)[0]?.columns.length,
-    2,
+    relationship.provenance,
+    RelationshipProvenance.DeclaredForeignKey,
   );
+  assert.equal(relationship.confidence, RelationshipConfidence.Authoritative);
   assert.equal(isWritableColumn(customers.columns[0]!), false);
   assert.equal(isWritableColumn(customers.columns[1]!), true);
   assert.equal(

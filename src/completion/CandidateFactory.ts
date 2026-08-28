@@ -2,8 +2,12 @@ import { DatabaseIndex } from "../metadata/DatabaseIndex.js";
 import {
   normalizeName,
   type DatabaseObject,
-  type ForeignKeyMetadata,
 } from "../metadata/MetadataModels.js";
+import {
+  isDeclaredForeignKeyRelationship,
+  isEnabledDeclaredForeignKeyRelationship,
+  type Relationship,
+} from "../relationships/RelationshipModels.js";
 import { quoteIdentifier } from "../metadata/SqlTypeFormatter.js";
 import type {
   SqlCompletionContext,
@@ -17,6 +21,7 @@ import {
   type ScopedRowSource,
 } from "../parser/DocumentSemanticAnalyzer.js";
 import { tokenizeSql } from "../parser/SqlTokenizer.js";
+import { statementTokenRangeAtCursor } from "../parser/StatementBoundary.js";
 import { resolveDocumentSymbols } from "../parser/DocumentSymbols.js";
 import { containsMatch } from "./ContainsMatcher.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
@@ -196,6 +201,7 @@ export function createCandidates(
         binding.source,
         alias,
         context.sql,
+        context.cursor,
         scope,
       );
       candidates = scopedColumnCandidates(memberSource, scope);
@@ -214,6 +220,7 @@ export function createCandidates(
         binding.source,
         parts[0] ?? "",
         context.sql,
+        context.cursor,
         scope,
       );
       candidates = scopedColumnCandidates(memberSource, scope);
@@ -292,7 +299,21 @@ export function createCandidates(
         : [...context.symbols.aliases.keys()].flatMap((qualifier) => {
             const source = semantics.aliases.get(qualifier);
             return source
-              ? [{ source, qualifier, scopeDistance: 0, outer: false }]
+              ? [
+                  {
+                    source: rebindIdentityLessSource(
+                      source,
+                      qualifier,
+                      context.sql,
+                      context.cursor,
+                      scope,
+                    ),
+                    qualifier,
+                    explicitAlias: true,
+                    scopeDistance: 0,
+                    outer: false,
+                  },
+                ]
               : [];
           });
       const visible = clauseContext.join
@@ -309,6 +330,11 @@ export function createCandidates(
           ...scopedColumnCandidates(binding.source, scope).map((candidate) => ({
             ...candidate,
             sourceQualifier: binding.qualifier,
+            ...(binding.explicitAlias
+              ? {
+                  insertText: `${quoteIdentifier(binding.qualifier)}.${quoteIdentifier(candidate.name)}`,
+                }
+              : {}),
             outerScope: binding.outer,
             priority: clauseContext.allowProjectionAliases
               ? binding.scopeDistance + 2
@@ -476,24 +502,24 @@ function rankComparisonRelationshipCandidates(
   if (!comparison || !member || comparison.index !== member.index)
     return [...candidates];
   const relatedColumns = new Set<string>();
-  for (const foreignKey of comparison.index
+  for (const relationship of comparison.index
     .relationshipsBetween(comparison.object, member.object)
-    .filter((candidate) => !candidate.disabled)) {
-    for (const mapping of foreignKey.columns) {
+    .filter(isEnabledDeclaredForeignKeyRelationship)) {
+    for (const mapping of relationship.mappings) {
       if (
-        comparison.object.id === foreignKey.parentObjectId &&
-        member.object.id === foreignKey.referencedObjectId &&
-        normalizeName(mapping.parentColumnName) ===
+        comparison.object.id === relationship.source.objectId &&
+        member.object.id === relationship.target.objectId &&
+        normalizeName(mapping.sourceColumnName) ===
           expected.comparisonColumn.column.normalizedName
       )
-        relatedColumns.add(normalizeName(mapping.referencedColumnName));
+        relatedColumns.add(normalizeName(mapping.targetColumnName));
       if (
-        comparison.object.id === foreignKey.referencedObjectId &&
-        member.object.id === foreignKey.parentObjectId &&
-        normalizeName(mapping.referencedColumnName) ===
+        comparison.object.id === relationship.target.objectId &&
+        member.object.id === relationship.source.objectId &&
+        normalizeName(mapping.targetColumnName) ===
           expected.comparisonColumn.column.normalizedName
       )
-        relatedColumns.add(normalizeName(mapping.parentColumnName));
+        relatedColumns.add(normalizeName(mapping.sourceColumnName));
     }
   }
   if (!relatedColumns.size) return [...candidates];
@@ -541,12 +567,15 @@ function rebindIdentityLessSource(
   source: RowSource,
   alias: string,
   sql: string,
+  cursor: number,
   scope?: CompletionScope,
 ): RowSource {
   if (!scope || source.sourceObject || source.schema || source.database)
     return source;
+  const tokens = tokenizeSql(sql);
+  const statement = statementTokenRangeAtCursor(tokens, cursor);
   const reference = resolveDocumentSymbols(
-    tokenizeSql(sql),
+    tokens.slice(statement.start, statement.end),
     Number.POSITIVE_INFINITY,
   ).aliases.get(normalizeName(alias));
   if (!reference) return source;
@@ -579,20 +608,20 @@ function physicalBinding(
 }
 
 function renderJoinPredicate(
-  foreignKey: ForeignKeyMetadata,
+  relationship: Relationship,
   right: ScopedRowSource,
   left: ScopedRowSource,
   rightObject: DatabaseObject,
 ): string {
-  const rightIsParent = rightObject.id === foreignKey.parentObjectId;
-  return foreignKey.columns
+  const rightIsSource = rightObject.id === relationship.source.objectId;
+  return relationship.mappings
     .map((mapping) => {
-      const rightColumn = rightIsParent
-        ? mapping.parentColumnName
-        : mapping.referencedColumnName;
-      const leftColumn = rightIsParent
-        ? mapping.referencedColumnName
-        : mapping.parentColumnName;
+      const rightColumn = rightIsSource
+        ? mapping.sourceColumnName
+        : mapping.targetColumnName;
+      const leftColumn = rightIsSource
+        ? mapping.targetColumnName
+        : mapping.sourceColumnName;
       return `${quoteIdentifier(right.qualifier)}.${quoteIdentifier(rightColumn)} = ${quoteIdentifier(left.qualifier)}.${quoteIdentifier(leftColumn)}`;
     })
     .join(" AND ");
@@ -619,10 +648,10 @@ function joinPredicateCandidates(
     if (!resolvedLeft || resolvedLeft.index !== resolvedRight.index) return [];
     return resolvedRight.index
       .relationshipsBetween(resolvedRight.object, resolvedLeft.object)
-      .filter((foreignKey) => !foreignKey.disabled)
-      .map((foreignKey) => {
+      .filter(isEnabledDeclaredForeignKeyRelationship)
+      .map((relationship) => {
         const predicate = renderJoinPredicate(
-          foreignKey,
+          relationship,
           right,
           left,
           resolvedRight.object,
@@ -631,12 +660,12 @@ function joinPredicateCandidates(
           name: predicate,
           normalizedName: normalizeName(predicate),
           searchText: normalizeName(
-            `${predicate} ${foreignKey.name} ${foreignKey.columns.flatMap((mapping) => [mapping.parentColumnName, mapping.referencedColumnName]).join(" ")}`,
+            `${predicate} ${relationship.declaredForeignKey.constraintName} ${relationship.mappings.flatMap((mapping) => [mapping.sourceColumnName, mapping.targetColumnName]).join(" ")}`,
           ),
           kind: "joinPredicate" as const,
-          database: foreignKey.database,
+          database: relationship.source.database,
           insertText: predicate,
-          foreignKey,
+          relationship,
           priority: -100,
         };
       });
@@ -676,7 +705,7 @@ function rankRelatedRowSources(
       source.index === index
         ? index
             .relationshipsBetween(source.object, object)
-            .filter((foreignKey) => !foreignKey.disabled)
+            .filter(isEnabledDeclaredForeignKeyRelationship)
         : [],
     );
     return relationships.length
@@ -743,22 +772,23 @@ function relationshipProperties(
   index: DatabaseIndex | undefined,
   object: DatabaseObject | undefined,
   columnName: string,
-): Pick<CompletionCandidate, "keyRoles" | "keys" | "foreignKeys"> {
+): Pick<CompletionCandidate, "keyRoles" | "keys" | "relationships"> {
   if (!index || !object || object.kind !== "table") return {};
   const keys = index.keysForColumn(object, columnName);
-  const foreignKeys = index.foreignKeysForColumn(object, columnName);
-  const outgoingForeignKeys = index.outgoingForeignKeysForColumn(
-    object,
-    columnName,
-  );
+  const relationships = index
+    .relationshipsForColumn(object, columnName)
+    .filter(isDeclaredForeignKeyRelationship);
+  const outgoingRelationships = index
+    .outgoingRelationshipsForColumn(object, columnName)
+    .filter(isDeclaredForeignKeyRelationship);
   const roles: ("PK" | "UQ" | "FK")[] = [];
   if (keys.some((key) => key.kind === "primaryKey")) roles.push("PK");
   if (keys.some((key) => key.kind !== "primaryKey")) roles.push("UQ");
-  if (outgoingForeignKeys.length) roles.push("FK");
+  if (outgoingRelationships.length) roles.push("FK");
   return {
     ...(roles.length ? { keyRoles: roles } : {}),
     ...(keys.length ? { keys } : {}),
-    ...(foreignKeys.length ? { foreignKeys } : {}),
+    ...(relationships.length ? { relationships } : {}),
   };
 }
 

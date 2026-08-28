@@ -27,6 +27,8 @@ Use for isolated logic such as:
 - projection parsing
 - scope helpers
 - relationship indexing
+- relationship provenance/confidence discrimination
+- declared-FK physical-detail retention
 - sort-key construction
 - documentation helpers
 
@@ -212,6 +214,7 @@ promises.
 | Wildcard expansion qualification and Tab-only activation                             | Implemented                      | `productivity.test.ts` and `feature-contracts.test.ts` wildcard contracts                                  |
 | PK/UQ/FK roles and canonical column metadata                                         | Implemented                      | `schema-intelligence.test.ts` role contract and `dml-call.test.ts` canonical-metadata contract             |
 | Composite, directional, cross-schema, and disabled FK state                          | Implemented                      | `schema-intelligence.test.ts` relationship contract                                                        |
+| Provenance-aware canonical relationship model and single graph                       | Implemented, internal foundation | `relationship-model.test.ts` model, direction, determinism, and non-FK isolation contracts                 |
 | Same-named objects across schemas/databases                                          | Implemented                      | `schema-intelligence.test.ts` database-index contract                                                      |
 | FK-aware JOIN predicates, multiple FKs, and composite FKs                            | Implemented                      | `join-intelligence.test.ts` FK predicate contracts                                                         |
 | Relationship ranking after Contains                                                  | Implemented                      | `join-intelligence.test.ts` — relationship ranking contract                                                |
@@ -435,11 +438,14 @@ must produce equivalent:
 - datatype
 - nullability
 - filterText
-- insertText
+- insertion behavior within the same qualification shape
 - documentation
 - visible physical-row presentation
 
-Ignore only deliberate ranking/group positioning differences.
+Ignore deliberate ranking/group positioning differences. Syntax-aware qualification
+may change `insertText` and replacement range between unqualified and already
+qualified input, but accepting either must produce the same correctly qualified
+column reference without changing canonical physical metadata.
 
 Writable-target tests must separately prove that identity, computed, generated,
 hidden, and rowversion columns remain excluded. OUTPUT pseudo-source tests must prove
@@ -470,6 +476,8 @@ verify:
 Protect:
 
 - local aliases
+- implicit and explicit top-level statement isolation
+- FROM RowSource-domain classification after a previous ORDER BY
 - outer correlation
 - multi-level correlation
 - sibling isolation
@@ -480,6 +488,12 @@ Protect:
 
 Do not test only parser output; provider-level scope behavior should also be
 covered.
+
+For column insertion, protect explicit-alias qualification in unqualified
+expressions, bare insertion for unaliased sources and projection aliases, no duplicate
+qualification after `alias.`/`alias.fragment`, distinct insertion for same-name
+columns from different RowSources, correlated alias ownership, derived/CTE aliases,
+and syntax-restricted DML targets.
 
 ## Set operation tests
 
@@ -580,8 +594,14 @@ Protect:
 - relationship-aware table ranking
 - relationship-mapped member tie-breaking in both comparison directions
 - no comparison-member reordering without a real relationship
+- declared FKs map to authoritative provenance while retaining physical details
+- one canonical relationship instance is used for incoming and outgoing traversal
+- synthetic future provenances cannot fabricate FK details or enter production JOIN
+  suggestions
 
-Never treat same-name/type heuristic matches as proof of an FK relationship.
+Never treat same-name/type heuristic matches as proof of an FK relationship. A future
+provenance-tagged logical relationship is still not a physical FK and must never be
+tested or presented as one.
 
 ## DML target tests
 

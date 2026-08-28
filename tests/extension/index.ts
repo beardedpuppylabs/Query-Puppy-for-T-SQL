@@ -1117,6 +1117,114 @@ export async function run(): Promise<void> {
       sql,
     );
   };
+
+  const previousStatement = `SELECT *
+FROM reltest.Customers AS staleCustomer
+WHERE staleCustomer.CustomerId = 1
+ORDER BY staleCustomer.CustomerId`;
+  for (const separator of ["\n\n", ";\n\n"]) {
+    const sql = `${previousStatement}${separator}SELECT *\nFROM `;
+    const items = await semanticCompletion(sql);
+    const semanticKinds = items.flatMap((item) =>
+      item.data?.semanticKind ? [item.data.semanticKind] : [],
+    );
+    assert.ok(labels(items).includes("Customers"));
+    assert.ok(labels(items).includes("GetCustomerAddresses_0001"));
+    assert.equal(
+      semanticKinds.some((kind) =>
+        ["column", "rowSourceAlias", "scalarFunction", "procedure"].includes(
+          kind,
+        ),
+      ),
+      false,
+      `stale/expression candidate leaked across ${JSON.stringify(separator)}`,
+    );
+  }
+
+  const aliasedWhere = "SELECT * FROM reltest.Customers AS c WHERE Customer";
+  const aliasedCustomerId = (await semanticCompletion(aliasedWhere)).find(
+    (item) => item.filterText === "CustomerId",
+  );
+  assert.ok(aliasedCustomerId);
+  assert.equal(aliasedCustomerId.insertText, "c.CustomerId");
+  assert.equal(
+    accept(aliasedWhere, aliasedCustomerId),
+    "SELECT * FROM reltest.Customers AS c WHERE c.CustomerId",
+  );
+
+  const unaliasedWhere = "SELECT * FROM reltest.Customers WHERE Customer";
+  const unaliasedCustomerId = (await semanticCompletion(unaliasedWhere)).find(
+    (item) => item.filterText === "CustomerId",
+  );
+  assert.ok(unaliasedCustomerId);
+  assert.equal(unaliasedCustomerId.insertText, "CustomerId");
+
+  for (const sql of [
+    "SELECT * FROM reltest.Customers AS c WHERE c.",
+    "SELECT * FROM reltest.Customers AS c WHERE c.Cust",
+  ]) {
+    const item = (await semanticCompletion(sql)).find(
+      (candidate) => candidate.filterText === "CustomerId",
+    );
+    assert.ok(item);
+    assert.equal(item.insertText, "CustomerId");
+    assert.equal(
+      accept(sql, item),
+      "SELECT * FROM reltest.Customers AS c WHERE c.CustomerId",
+    );
+  }
+
+  const ambiguousAliases =
+    "SELECT * FROM reltest.Customers AS c JOIN reltest.OrderHeaders AS oh ON CustomerId";
+  const ambiguousCustomerIds = (
+    await semanticCompletion(ambiguousAliases)
+  ).filter(
+    (item) =>
+      item.data?.semanticKind === "column" && item.filterText === "CustomerId",
+  );
+  assert.deepEqual(
+    ambiguousCustomerIds.map((item) => item.insertText),
+    ["c.CustomerId", "oh.CustomerId"],
+  );
+
+  const correlatedAliases =
+    "SELECT * FROM reltest.Customers AS c WHERE EXISTS (SELECT 1 FROM reltest.OrderHeaders AS oh WHERE Customer)";
+  const correlatedCursor =
+    correlatedAliases.indexOf("Customer)") + "Customer".length;
+  const correlatedItems = await semanticCompletion(
+    correlatedAliases,
+    correlatedCursor,
+  );
+  assert.ok(correlatedItems.some((item) => item.insertText === "c.CustomerId"));
+  assert.ok(
+    correlatedItems.some((item) => item.insertText === "oh.CustomerId"),
+  );
+
+  const derivedAlias =
+    "SELECT * FROM (SELECT CustomerId AS Id FROM reltest.Customers) AS d WHERE I";
+  assert.equal(
+    (await semanticCompletion(derivedAlias)).find(
+      (item) => item.filterText === "Id",
+    )?.insertText,
+    "d.Id",
+  );
+  const cteAlias =
+    "WITH x AS (SELECT CustomerId AS Id FROM reltest.Customers) SELECT * FROM x AS q WHERE I";
+  assert.equal(
+    (await semanticCompletion(cteAlias)).find(
+      (item) => item.filterText === "Id",
+    )?.insertText,
+    "q.Id",
+  );
+  const projectionAlias =
+    "SELECT c.CustomerId AS DisplayId FROM reltest.Customers AS c ORDER BY Display";
+  assert.equal(
+    (await semanticCompletion(projectionAlias)).find(
+      (item) => item.filterText === "DisplayId",
+    )?.insertText,
+    "DisplayId",
+  );
+
   const forwardJoin = await joinPredicates(
     "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON",
   );

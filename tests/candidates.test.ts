@@ -184,6 +184,98 @@ test("contract: exact RowSource matches retain longer prefix-family Contains can
   }
 });
 
+test("contract: sequential SELECT boundaries keep FROM completion in the RowSource domain", () => {
+  const statementIndex = new DatabaseIndex({
+    database: "Db",
+    schemas: ["dbo", "reporting"],
+    loadedAt: 0,
+    objects: [
+      {
+        id: 101,
+        schema: "dbo",
+        name: "Artikel",
+        normalizedName: "artikel",
+        kind: "table",
+        parameters: [],
+        columns: [
+          {
+            name: "Mandant",
+            normalizedName: "mandant",
+            type,
+            nullable: false,
+            ordinal: 1,
+          },
+        ],
+      },
+      {
+        id: 102,
+        schema: "reporting",
+        name: "ArtikelOverview",
+        normalizedName: "artikeloverview",
+        kind: "view",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 103,
+        schema: "reporting",
+        name: "GetArtikel",
+        normalizedName: "getartikel",
+        kind: "tableValuedFunction",
+        parameters: [],
+        columns: [],
+      },
+      {
+        id: 104,
+        schema: "dbo",
+        name: "CalculateArtikel",
+        normalizedName: "calculateartikel",
+        kind: "scalarFunction",
+        parameters: [],
+        columns: [],
+        returnType: type,
+      },
+      {
+        id: 105,
+        schema: "dbo",
+        name: "DropArtikel",
+        normalizedName: "dropartikel",
+        kind: "procedure",
+        parameters: [],
+        columns: [],
+      },
+    ],
+  });
+  const prefix = `select *
+from Artikel as a
+where a.Mandant = 1
+order by a.Mandant`;
+  for (const separator of ["\n\n", ";\n\n"]) {
+    const sql = `${prefix}${separator}select *\nfrom `;
+    const context = resolveSqlContext(sql);
+    const candidates = createCandidates(context, statementIndex);
+    assert.equal(context.kind, "rowSource");
+    assert.deepEqual(
+      candidates.map((candidate) => [candidate.name, candidate.kind]),
+      [
+        ["dbo", "schema"],
+        ["reporting", "schema"],
+        ["Artikel", "table"],
+        ["ArtikelOverview", "view"],
+        ["GetArtikel", "tableValuedFunction"],
+      ],
+    );
+    assert.equal(
+      candidates.some((candidate) =>
+        ["column", "rowSourceAlias", "scalarFunction", "procedure"].includes(
+          candidate.kind,
+        ),
+      ),
+      false,
+    );
+  }
+});
+
 const reportingIndex = new DatabaseIndex({
   database: "ReportingDb",
   schemas: ["dbo", "reporting", "sales"],

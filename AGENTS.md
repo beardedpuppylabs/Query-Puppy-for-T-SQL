@@ -444,7 +444,7 @@ completion, it must retain the same:
 - datatype
 - nullability
 - filterText
-- insertText
+- canonical column identity
 - documentation
 - constraint/index metadata
 
@@ -465,6 +465,13 @@ Context may change:
 - compatibility group
 - group placement
 - preselection
+- syntax-aware insertion text and replacement range
+
+When an unqualified semantic column belongs to a RowSource with an explicit alias,
+acceptance inserts `<alias>.<column>`. Explicit `alias.`/`alias.fragment` input must
+not duplicate the qualifier, unaliased RowSources retain bare-column insertion, and
+projection aliases remain bare. Syntax-restricted targets such as the left side of
+`UPDATE SET` must not be forcibly qualified.
 
 Context must not change the physical-column identity or strip metadata.
 
@@ -609,11 +616,35 @@ A nested QueryScope may resolve:
 
 Sibling scopes do not leak into each other.
 
+Independent sequential top-level statements do not leak aliases, RowSources,
+projection aliases, or clause state into each other. A semicolon is not required to
+separate consecutive ordinary top-level SELECT statements. Nested queries and
+set-operation branches remain within their containing query expression.
+
 Local aliases shadow correlated aliases with the same name.
 
 Ordinary derived tables are non-correlated unless SQL semantics allow otherwise.
 
 CROSS APPLY and OUTER APPLY may correlate to legally visible left-side sources.
+
+## Relationship Intelligence
+
+Relationship Intelligence uses one canonical relationship model and one canonical
+runtime graph. Evidence sources must not create parallel FK, project, learned, or
+heuristic graph implementations.
+
+Every relationship carries structured provenance and confidence plus source/target
+object references and ordered column mappings. Supported model provenance includes
+declared foreign key, project-defined, user-confirmed, learned-from-query, and
+heuristic-candidate relationships. Declared SQL Server foreign keys are authoritative
+and retain their physical constraint identity, actions, disabled/trust state, and
+composite mapping order in declared-FK-specific details.
+
+Physical foreign-key metadata and semantic relationships are distinct. Never invent a
+foreign key: non-FK relationships must never receive fabricated constraint names,
+catalog IDs, trust state, or other physical FK metadata. Production completion and
+JOIN behavior remain declared-FK-only until a later phase explicitly implements and
+accepts another provenance source.
 
 ## JOIN semantics
 
@@ -621,7 +652,8 @@ JOIN visibility is positional.
 
 A future RowSource must not be visible in an earlier ON condition.
 
-FK-aware JOIN intelligence uses actual SQL Server relationship metadata.
+Current JOIN intelligence uses enabled, authoritative declared-FK relationships from
+the canonical relationship graph.
 
 Do not infer an FK merely because names or datatypes match.
 
@@ -631,7 +663,7 @@ Composite FKs remain one relationship and should generate one ordered predicate.
 
 Disabled FKs are not normal trusted JOIN suggestions.
 
-FK relationship intelligence is database-local.
+Declared-FK relationship intelligence is database-local.
 
 Do not infer cross-database or cross-server foreign keys.
 
@@ -779,8 +811,10 @@ Incoming FKs must not incorrectly mark principal columns as FK columns.
 Object identity must include sufficient database/schema context to avoid collapsing
 same-named objects.
 
-Relationship intelligence must use actual catalog relationships rather than
-name/type guessing.
+Physical FK roles and constraint documentation must use actual SQL Server catalog
+metadata. Never relabel same-name/type guesses or provenance-tagged logical
+relationships as foreign keys. No learned or heuristic relationship source is active
+until explicitly implemented and tested by a later phase.
 
 ## Presentation must not affect semantics
 

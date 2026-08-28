@@ -84,6 +84,15 @@ const at = (sql: string, needle: string, occurrence = 0) => {
   );
 };
 
+const acceptAtCursor = (
+  sql: string,
+  cursor: number,
+  candidate: ReturnType<typeof createCandidates>[number],
+): string => {
+  const context = resolveSqlContext(sql, cursor);
+  return `${sql.slice(0, context.replacementStart)}${candidate.insertText ?? candidate.name}${sql.slice(cursor)}`;
+};
+
 test("contract: nested scopes resolve local and legally correlated aliases", () => {
   const sql =
     "SELECT c. FROM dbo.Customers c WHERE EXISTS (SELECT o. FROM sales.CustomerOrders o WHERE c.)";
@@ -256,6 +265,52 @@ test("contract: comments strings and statements do not create or share scopes", 
   assert.deepEqual(at(statements, "c."), []);
 });
 
+test("contract: independent top-level SELECTs are isolated without semicolons", () => {
+  const sql = `SELECT * FROM dbo.Customers firstCustomer
+ORDER BY firstCustomer.CustomerId
+
+SELECT * FROM sales.CustomerOrders secondOrder
+ORDER BY secondOrder.CustomerOrderId -- completed second statement
+
+/* third statement */
+SELECT *
+FROM dbo.CustomerAddresses thirdAddress
+WHERE thirdAddress.`;
+  assert.deepEqual(at(sql, "thirdAddress."), [
+    "AddressLabel",
+    "CustomerAddressId",
+  ]);
+  assert.deepEqual(at(sql, "firstCustomer.CustomerId"), ["CustomerId"]);
+  const model = analyzeDocumentSemantics(sql, sql.length, scope);
+  assert.equal(model.activeQueryScope?.kind, "topLevelQuery");
+  assert.deepEqual(
+    model.visibleRowSources.map((source) => source.qualifier),
+    ["thirdAddress"],
+  );
+  assert.equal(model.aliases.has("firstcustomer"), false);
+  assert.equal(model.aliases.has("secondorder"), false);
+});
+
+test("set branches remain one query expression while later SELECTs are isolated", () => {
+  const sql = `SELECT c.CustomerId AS Id FROM dbo.Customers c
+UNION ALL
+SELECT o.CustomerOrderId FROM sales.CustomerOrders o
+ORDER BY Id
+
+SELECT * FROM dbo.CustomerAddresses a WHERE a.`;
+  assert.deepEqual(at(sql, "a."), ["AddressLabel", "CustomerAddressId"]);
+  const firstCursor = sql.indexOf("ORDER BY Id") + "ORDER BY Id".length;
+  const first = createCandidates(resolveSqlContext(sql, firstCursor), scope);
+  assert.equal(
+    first.some((candidate) => candidate.name === "Id"),
+    true,
+  );
+  assert.equal(
+    analyzeDocumentSemantics(sql, sql.length, scope).setQueryExpressions.length,
+    0,
+  );
+});
+
 test("unqualified columns preserve local-before-outer scope tiers and origins", () => {
   const sql =
     "SELECT * FROM dbo.Customers c WHERE EXISTS (SELECT Ord FROM sales.CustomerOrders o WHERE Cust)";
@@ -270,6 +325,124 @@ test("unqualified columns preserve local-before-outer scope tiers and origins", 
       (candidate) => candidate.sourceQualifier === "c" && candidate.outerScope,
     ),
   );
+});
+
+test("contract: explicit RowSource aliases qualify unqualified column insertion", () => {
+  const aliased = "SELECT * FROM dbo.Customers AS c WHERE Customer";
+  const aliasedCandidates = createCandidates(resolveSqlContext(aliased), scope);
+  assert.equal(
+    aliasedCandidates.find((candidate) => candidate.name === "CustomerId")
+      ?.insertText,
+    "c.CustomerId",
+  );
+
+  const unaliased = "SELECT * FROM dbo.Customers WHERE Customer";
+  const unaliasedCandidate = createCandidates(
+    resolveSqlContext(unaliased),
+    scope,
+  ).find((candidate) => candidate.name === "CustomerId");
+  assert.ok(unaliasedCandidate);
+  assert.equal(unaliasedCandidate.insertText, undefined);
+  assert.equal(
+    acceptAtCursor(unaliased, unaliased.length, unaliasedCandidate),
+    "SELECT * FROM dbo.Customers WHERE CustomerId",
+  );
+});
+
+test("explicit and partial member completion never duplicate an alias", () => {
+  for (const sql of [
+    "SELECT * FROM dbo.Customers AS c WHERE c.",
+    "SELECT * FROM dbo.Customers AS c WHERE c.Cust",
+  ]) {
+    const candidate = createCandidates(resolveSqlContext(sql), scope).find(
+      (item) => item.name === "CustomerId",
+    );
+    assert.ok(candidate);
+    assert.equal(candidate.insertText, undefined);
+    assert.equal(
+      acceptAtCursor(sql, sql.length, candidate),
+      "SELECT * FROM dbo.Customers AS c WHERE c.CustomerId",
+    );
+  }
+});
+
+test("same-name columns retain distinct alias-qualified source identities", () => {
+  const sql =
+    "SELECT * FROM Lab.dbo.Customers a JOIN Reporting.dbo.Customers g ON CustomerId";
+  const candidates = createCandidates(resolveSqlContext(sql), scope).filter(
+    (candidate) => candidate.name === "CustomerId",
+  );
+  assert.deepEqual(
+    candidates.map((candidate) => [
+      candidate.sourceQualifier,
+      candidate.insertText,
+      candidate.sourceObject?.name,
+      candidate.database,
+    ]),
+    [
+      ["a", "a.CustomerId", "Customers", "Lab"],
+      ["g", "g.CustomerId", "Customers", "Reporting"],
+    ],
+  );
+});
+
+test("correlated, derived, and CTE columns use their owning visible aliases", () => {
+  const correlated =
+    "SELECT * FROM dbo.Customers a WHERE EXISTS (SELECT 1 FROM sales.CustomerOrders b WHERE Customer)";
+  const cursor = correlated.indexOf("Customer)") + "Customer".length;
+  const correlatedCandidates = createCandidates(
+    resolveSqlContext(correlated, cursor),
+    scope,
+  );
+  assert.equal(
+    correlatedCandidates.find(
+      (candidate) =>
+        candidate.name === "CustomerOrderId" &&
+        candidate.sourceQualifier === "b",
+    )?.insertText,
+    "b.CustomerOrderId",
+  );
+  assert.equal(
+    correlatedCandidates.find(
+      (candidate) =>
+        candidate.name === "CustomerId" && candidate.sourceQualifier === "a",
+    )?.insertText,
+    "a.CustomerId",
+  );
+
+  const derived =
+    "SELECT * FROM (SELECT CustomerId AS Id FROM dbo.Customers) AS d WHERE I";
+  assert.equal(
+    createCandidates(resolveSqlContext(derived), scope).find(
+      (candidate) => candidate.name === "Id",
+    )?.insertText,
+    "d.Id",
+  );
+
+  const cte =
+    "WITH x AS (SELECT CustomerId AS Id FROM dbo.Customers) SELECT * FROM x AS q WHERE I";
+  assert.equal(
+    createCandidates(resolveSqlContext(cte), scope).find(
+      (candidate) => candidate.name === "Id",
+    )?.insertText,
+    "q.Id",
+  );
+});
+
+test("projection aliases remain bare while physical ORDER BY columns use table aliases", () => {
+  const sql =
+    "SELECT c.CustomerId AS DisplayId FROM dbo.Customers AS c ORDER BY Id";
+  const candidates = createCandidates(resolveSqlContext(sql), scope);
+  const projection = candidates.find(
+    (candidate) => candidate.name === "DisplayId" && !candidate.sourceQualifier,
+  );
+  const physical = candidates.find(
+    (candidate) =>
+      candidate.name === "CustomerId" && candidate.sourceQualifier === "c",
+  );
+  assert.ok(projection);
+  assert.equal(projection.insertText, undefined);
+  assert.equal(physical?.insertText, "c.CustomerId");
 });
 
 test("SELECT modifiers preserve the first derived projection item", () => {

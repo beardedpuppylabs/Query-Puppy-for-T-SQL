@@ -353,6 +353,25 @@ test("contract: DML target completion stays out of assignment expressions", () =
   );
 });
 
+test("UPDATE alias qualification is syntax-aware across SET targets and RHS expressions", () => {
+  const lhsSql = "UPDATE c SET Customer FROM dbo.Customers AS c";
+  const lhs = candidates(lhsSql, lhsSql.indexOf(" FROM")).find(
+    (candidate) => candidate.name === "CustomerCode",
+  );
+  assert.ok(lhs);
+  assert.equal(lhs.insertText, undefined);
+
+  const sql = "UPDATE c SET EmailAddress = Customer FROM dbo.Customers AS c";
+  const cursor = sql.indexOf(" FROM");
+  const rhs = candidates(sql, cursor).find(
+    (candidate) => candidate.name === "CustomerCode",
+  );
+  assert.ok(rhs);
+  assert.equal(rhs.insertText, "c.CustomerCode");
+  assert.equal(rhs.sourceQualifier, "c");
+  assert.equal(rhs.sourceObject?.name, "Customers");
+});
+
 test("contract: INSERT columns are target-only Contains-matched and exclude used columns", () => {
   assert.deepEqual(names("INSERT INTO dbo.Customers (Ema"), ["EmailAddress"]);
   assert.deepEqual(names("INSERT INTO dbo.Customers (CustomerCode, Ema"), [
@@ -399,7 +418,7 @@ test("contract: DML physical columns preserve canonical metadata", () => {
       assert.equal(actual.column, expected.column);
       assert.deepEqual(actual.keyRoles, expected.keyRoles);
       assert.deepEqual(actual.keys, expected.keys);
-      assert.deepEqual(actual.foreignKeys, expected.foreignKeys);
+      assert.deepEqual(actual.relationships, expected.relationships);
       assert.equal(
         physicalColumnDisplayRow(actual),
         physicalColumnDisplayRow(expected),

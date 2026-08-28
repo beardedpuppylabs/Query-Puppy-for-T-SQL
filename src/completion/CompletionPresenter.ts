@@ -7,6 +7,7 @@ import {
   friendlyKind,
   type SqlObjectKind,
 } from "../metadata/MetadataModels.js";
+import { isDeclaredForeignKeyRelationship } from "../relationships/RelationshipModels.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
 import { completionSortText } from "./CompletionSorter.js";
 import {
@@ -130,11 +131,15 @@ export function documentation(
 ): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.supportHtml = false;
-  if (candidate.foreignKey) {
-    const foreignKey = candidate.foreignKey;
-    md.appendMarkdown(`**${foreignKey.name}**\n\n`);
+  if (
+    candidate.relationship &&
+    isDeclaredForeignKeyRelationship(candidate.relationship)
+  ) {
+    const relationship = candidate.relationship;
+    const foreignKey = relationship.declaredForeignKey;
+    md.appendMarkdown(`**${foreignKey.constraintName}**\n\n`);
     md.appendMarkdown(
-      `Foreign key: \`${foreignKey.parentSchema}.${foreignKey.parentObjectName} (${foreignKey.columns.map((column) => column.parentColumnName).join(", ")})\`  \n→ \`${foreignKey.referencedSchema}.${foreignKey.referencedObjectName} (${foreignKey.columns.map((column) => column.referencedColumnName).join(", ")})\`\n`,
+      `Foreign key: \`${relationship.source.schema}.${relationship.source.objectName} (${relationship.mappings.map((mapping) => mapping.sourceColumnName).join(", ")})\`  \n→ \`${relationship.target.schema}.${relationship.target.objectName} (${relationship.mappings.map((mapping) => mapping.targetColumnName).join(", ")})\`\n`,
     );
     return md;
   }
@@ -163,15 +168,18 @@ export function documentation(
       `\n${label}: **${key.name}** (${key.columns.map((column) => `\`${column.columnName}\``).join(", ")})${key.filtered ? `  \nFilter: \`${key.filterDefinition ?? "filtered"}\`` : ""}\n`,
     );
   }
-  for (const foreignKey of candidate.foreignKeys ?? []) {
-    const outgoing = foreignKey.parentObjectId === candidate.sourceObject?.id;
-    const mappings = foreignKey.columns.map((column) =>
+  for (const relationship of candidate.relationships ?? []) {
+    if (!isDeclaredForeignKeyRelationship(relationship)) continue;
+    const foreignKey = relationship.declaredForeignKey;
+    const outgoing =
+      relationship.source.objectId === candidate.sourceObject?.id;
+    const mappings = relationship.mappings.map((mapping) =>
       outgoing
-        ? `${column.parentColumnName} → ${foreignKey.referencedSchema}.${foreignKey.referencedObjectName}.${column.referencedColumnName}`
-        : `${foreignKey.parentSchema}.${foreignKey.parentObjectName}.${column.parentColumnName} → ${column.referencedColumnName}`,
+        ? `${mapping.sourceColumnName} → ${relationship.target.schema}.${relationship.target.objectName}.${mapping.targetColumnName}`
+        : `${relationship.source.schema}.${relationship.source.objectName}.${mapping.sourceColumnName} → ${mapping.targetColumnName}`,
     );
     md.appendMarkdown(
-      `\n${outgoing ? "Foreign key" : "Referenced by"}: **${foreignKey.name}**  \n${mappings.map((mapping) => `- \`${mapping}\``).join("\n")}  \nActions: ON DELETE ${foreignKey.deleteAction}; ON UPDATE ${foreignKey.updateAction}${foreignKey.disabled ? "; disabled" : ""}${foreignKey.notTrusted ? "; not trusted" : ""}\n`,
+      `\n${outgoing ? "Foreign key" : "Referenced by"}: **${foreignKey.constraintName}**  \n${mappings.map((mapping) => `- \`${mapping}\``).join("\n")}  \nActions: ON DELETE ${foreignKey.deleteAction}; ON UPDATE ${foreignKey.updateAction}${foreignKey.disabled ? "; disabled" : ""}${foreignKey.notTrusted ? "; not trusted" : ""}\n`,
     );
   }
   if (candidate.parameters?.length) {

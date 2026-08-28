@@ -1,4 +1,5 @@
 import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
+import { statementTokenRangeAtCursor } from "./StatementBoundary.js";
 
 export type RowSourceCompletionPhaseKind =
   "completedObject" | "explicitAs" | "completedAlias";
@@ -39,13 +40,7 @@ export function resolveRowSourceCompletionPhase(
 ): RowSourceCompletionPhase | undefined {
   if (!/\s/.test(sql[cursor - 1] ?? "")) return undefined;
   const tokens = tokenizeSql(sql.slice(0, cursor));
-  let statementStart = 0;
-  for (let index = tokens.length - 1; index >= 0; index--) {
-    if (tokens[index]?.text === ";" || tokens[index]?.normalized === "go") {
-      statementStart = index + 1;
-      break;
-    }
-  }
+  const statementStart = statementTokenRangeAtCursor(tokens, cursor).start;
   let keywordIndex = -1;
   for (let index = tokens.length - 1; index >= statementStart; index--) {
     if (["from", "join", "apply"].includes(tokens[index]?.normalized ?? "")) {

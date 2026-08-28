@@ -1,9 +1,13 @@
 import type {
   DatabaseMetadata,
   DatabaseObject,
-  ForeignKeyMetadata,
   KeyMetadata,
 } from "./MetadataModels.js";
+import {
+  compareRelationships,
+  relationshipFromForeignKey,
+  type Relationship,
+} from "../relationships/RelationshipModels.js";
 
 const objectKey = (schema: string, name: string): string =>
   `${schema}.${name}`.toLowerCase();
@@ -22,24 +26,29 @@ const append = <T>(
 export class DatabaseIndex {
   readonly metadata: DatabaseMetadata;
   readonly columnCount: number;
+  readonly relationships: readonly Relationship[];
   private readonly qualified = new Map<string, DatabaseObject>();
   private readonly byId = new Map<number, DatabaseObject>();
   private readonly schemas = new Set<string>();
   private readonly keysByObject = new Map<number, KeyMetadata[]>();
   private readonly keysByColumn = new Map<string, KeyMetadata[]>();
-  private readonly outgoing = new Map<number, ForeignKeyMetadata[]>();
-  private readonly incoming = new Map<number, ForeignKeyMetadata[]>();
-  private readonly foreignKeysByColumn = new Map<
+  private readonly outgoing = new Map<number, Relationship[]>();
+  private readonly incoming = new Map<number, Relationship[]>();
+  private readonly relationshipsByColumn = new Map<string, Relationship[]>();
+  private readonly outgoingRelationshipsByColumn = new Map<
     string,
-    ForeignKeyMetadata[]
-  >();
-  private readonly outgoingForeignKeysByColumn = new Map<
-    string,
-    ForeignKeyMetadata[]
+    Relationship[]
   >();
 
-  constructor(metadata: DatabaseMetadata) {
+  constructor(
+    metadata: DatabaseMetadata,
+    additionalRelationships: readonly Relationship[] = [],
+  ) {
     this.metadata = metadata;
+    this.relationships = [
+      ...(metadata.foreignKeys ?? []).map(relationshipFromForeignKey),
+      ...additionalRelationships,
+    ].sort(compareRelationships);
     let columnCount = 0;
     for (const schema of metadata.schemas)
       this.schemas.add(schema.toLowerCase());
@@ -58,25 +67,30 @@ export class DatabaseIndex {
           key,
         );
     }
-    for (const foreignKey of metadata.foreignKeys ?? []) {
-      append(this.outgoing, foreignKey.parentObjectId, foreignKey);
-      append(this.incoming, foreignKey.referencedObjectId, foreignKey);
-      for (const column of foreignKey.columns) {
-        append(
-          this.foreignKeysByColumn,
-          columnKey(foreignKey.parentObjectId, column.parentColumnName),
-          foreignKey,
-        );
-        append(
-          this.outgoingForeignKeysByColumn,
-          columnKey(foreignKey.parentObjectId, column.parentColumnName),
-          foreignKey,
-        );
-        append(
-          this.foreignKeysByColumn,
-          columnKey(foreignKey.referencedObjectId, column.referencedColumnName),
-          foreignKey,
-        );
+    for (const relationship of this.relationships) {
+      const sourceId = relationship.source.objectId;
+      const targetId = relationship.target.objectId;
+      if (sourceId !== undefined) append(this.outgoing, sourceId, relationship);
+      if (targetId !== undefined) append(this.incoming, targetId, relationship);
+      for (const mapping of relationship.mappings) {
+        if (sourceId !== undefined) {
+          append(
+            this.relationshipsByColumn,
+            columnKey(sourceId, mapping.sourceColumnName),
+            relationship,
+          );
+          append(
+            this.outgoingRelationshipsByColumn,
+            columnKey(sourceId, mapping.sourceColumnName),
+            relationship,
+          );
+        }
+        if (targetId !== undefined)
+          append(
+            this.relationshipsByColumn,
+            columnKey(targetId, mapping.targetColumnName),
+            relationship,
+          );
       }
     }
   }
@@ -105,49 +119,49 @@ export class DatabaseIndex {
       ? []
       : (this.keysByColumn.get(columnKey(id, column)) ?? []);
   }
-  outgoingForeignKeys(
+  outgoingRelationships(
     object: DatabaseObject | number,
-  ): readonly ForeignKeyMetadata[] {
+  ): readonly Relationship[] {
     const id = typeof object === "number" ? object : object.id;
     return id === undefined ? [] : (this.outgoing.get(id) ?? []);
   }
-  incomingForeignKeys(
+  incomingRelationships(
     object: DatabaseObject | number,
-  ): readonly ForeignKeyMetadata[] {
+  ): readonly Relationship[] {
     const id = typeof object === "number" ? object : object.id;
     return id === undefined ? [] : (this.incoming.get(id) ?? []);
   }
-  foreignKeysForColumn(
+  relationshipsForColumn(
     object: DatabaseObject | number,
     column: string,
-  ): readonly ForeignKeyMetadata[] {
+  ): readonly Relationship[] {
     const id = typeof object === "number" ? object : object.id;
     return id === undefined
       ? []
-      : (this.foreignKeysByColumn.get(columnKey(id, column)) ?? []);
+      : (this.relationshipsByColumn.get(columnKey(id, column)) ?? []);
   }
-  outgoingForeignKeysForColumn(
+  outgoingRelationshipsForColumn(
     object: DatabaseObject | number,
     column: string,
-  ): readonly ForeignKeyMetadata[] {
+  ): readonly Relationship[] {
     const id = typeof object === "number" ? object : object.id;
     return id === undefined
       ? []
-      : (this.outgoingForeignKeysByColumn.get(columnKey(id, column)) ?? []);
+      : (this.outgoingRelationshipsByColumn.get(columnKey(id, column)) ?? []);
   }
   relationshipsBetween(
     left: DatabaseObject | number,
     right: DatabaseObject | number,
-  ): readonly ForeignKeyMetadata[] {
+  ): readonly Relationship[] {
     const leftId = typeof left === "number" ? left : left.id;
     const rightId = typeof right === "number" ? right : right.id;
     if (leftId === undefined || rightId === undefined) return [];
     return [
       ...(this.outgoing.get(leftId) ?? []).filter(
-        (fk) => fk.referencedObjectId === rightId,
+        (relationship) => relationship.target.objectId === rightId,
       ),
       ...(this.outgoing.get(rightId) ?? []).filter(
-        (fk) => fk.referencedObjectId === leftId,
+        (relationship) => relationship.target.objectId === leftId,
       ),
     ];
   }
@@ -155,8 +169,16 @@ export class DatabaseIndex {
     const id = typeof object === "number" ? object : object.id;
     if (id === undefined) return [];
     const ids = new Set([
-      ...(this.outgoing.get(id) ?? []).map((fk) => fk.referencedObjectId),
-      ...(this.incoming.get(id) ?? []).map((fk) => fk.parentObjectId),
+      ...(this.outgoing.get(id) ?? []).flatMap((relationship) =>
+        relationship.target.objectId === undefined
+          ? []
+          : [relationship.target.objectId],
+      ),
+      ...(this.incoming.get(id) ?? []).flatMap((relationship) =>
+        relationship.source.objectId === undefined
+          ? []
+          : [relationship.source.objectId],
+      ),
     ]);
     return [...ids].flatMap((relatedId) => {
       const related = this.byId.get(relatedId);

@@ -6,6 +6,7 @@ import type {
 import { tokenizeSql } from "./SqlTokenizer.js";
 import { resolveDocumentSymbols } from "./DocumentSymbols.js";
 import { resolveRowSourceCompletionPhase } from "./RowSourceCompletionPhase.js";
+import { statementTokenRangeAtCursor } from "./StatementBoundary.js";
 
 export function aliasFromObjectName(name: string): string {
   const words = name
@@ -80,10 +81,7 @@ export function resolveSmartAliasContext(
       .filter((binding) => binding.source.origin.start < cursor)
       .map((binding) => normalizeName(binding.qualifier)),
   );
-  let statementStart = 0;
-  for (let i = 0; i < tokens.length; i++)
-    if (tokens[i]?.text === ";" || tokens[i]?.normalized === "go")
-      statementStart = i + 1;
+  const statementStart = statementTokenRangeAtCursor(tokens, cursor).start;
   for (const alias of resolveDocumentSymbols(
     tokens.slice(statementStart),
     cursor,

@@ -564,6 +564,21 @@ test("smart alias collisions are limited to the current visible query scope", ()
     )?.alias,
     "c",
   );
+  const implicitSeparate =
+    "SELECT * FROM dbo.Customers AS c ORDER BY c.CustomerId\nSELECT * FROM dbo.Customers ";
+  assert.equal(
+    resolveSmartAliasContext(
+      implicitSeparate,
+      implicitSeparate.length,
+      analyzeDocumentSemantics(
+        implicitSeparate,
+        implicitSeparate.length,
+        catalog,
+      ),
+      catalog,
+    )?.alias,
+    "c",
+  );
   const collision = "SELECT * FROM dbo.Customers AS c JOIN dbo.Contacts ";
   assert.equal(
     resolveSmartAliasContext(

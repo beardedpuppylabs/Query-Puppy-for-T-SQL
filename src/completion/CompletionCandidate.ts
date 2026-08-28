@@ -1,12 +1,12 @@
 import type {
   ColumnMetadata,
   DatabaseObject,
-  ForeignKeyMetadata,
   KeyMetadata,
   ParameterMetadata,
   SqlObjectKind,
   SqlType,
 } from "../metadata/MetadataModels.js";
+import type { Relationship } from "../relationships/RelationshipModels.js";
 import type { CallableParameter } from "../parser/CallableAnalyzer.js";
 import type { BuiltinReturnRule } from "../parser/BuiltinFunctionCatalog.js";
 import type {
@@ -33,8 +33,8 @@ export interface CompletionCandidate {
   readonly physicalColumn?: boolean;
   readonly keyRoles?: readonly ("PK" | "UQ" | "FK")[];
   readonly keys?: readonly KeyMetadata[];
-  readonly foreignKeys?: readonly ForeignKeyMetadata[];
-  readonly foreignKey?: ForeignKeyMetadata;
+  readonly relationships?: readonly Relationship[];
+  readonly relationship?: Relationship;
   /** Additional normalized text used only for contiguous Contains filtering. */
   readonly searchText?: string;
   readonly relatedRelationshipCount?: number;

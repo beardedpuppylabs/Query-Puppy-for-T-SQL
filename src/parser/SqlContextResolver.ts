@@ -4,6 +4,7 @@ import {
   type SourceReference,
 } from "./DocumentSymbols.js";
 import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
+import { statementTokenRangeAtCursor } from "./StatementBoundary.js";
 import {
   resolveRowSourceCompletionPhase,
   type RowSourceCompletionPhase,
@@ -49,25 +50,13 @@ export function resolveSqlContext(
   cursor = sql.length,
 ): SqlCompletionContext {
   const prefix = sql.slice(0, cursor);
-  const tokens = tokenizeSql(prefix);
   const allTokens = tokenizeSql(sql);
-  let symbolStart = 0;
-  let symbolEnd = allTokens.length;
-  for (let i = 0; i < allTokens.length; i++) {
-    const token = allTokens[i];
-    if (!token) continue;
-    if (
-      token.end <= cursor &&
-      (token.text === ";" || token.normalized === "go")
-    )
-      symbolStart = i + 1;
-    if (token.start >= cursor && token.text === ";") {
-      symbolEnd = i;
-      break;
-    }
-  }
+  const statement = statementTokenRangeAtCursor(allTokens, cursor);
+  const tokens = allTokens
+    .slice(statement.start, statement.end)
+    .filter((token) => token.start < prefix.length);
   const symbols = resolveDocumentSymbols(
-    allTokens.slice(symbolStart, symbolEnd),
+    allTokens.slice(statement.start, statement.end),
     cursor,
   );
   const last = tokens.at(-1);

@@ -4,6 +4,11 @@ import { createCandidates } from "../src/completion/CandidateFactory.js";
 import { presentationModel } from "../src/completion/PresentationModel.js";
 import { DatabaseIndex } from "../src/metadata/DatabaseIndex.js";
 import type { DatabaseMetadata } from "../src/metadata/MetadataModels.js";
+import {
+  isDeclaredForeignKeyRelationship,
+  RelationshipConfidence,
+  RelationshipProvenance,
+} from "../src/relationships/RelationshipModels.js";
 import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
 
 const column = (name: string, ordinal: number) => ({
@@ -171,23 +176,34 @@ test("contract: relationship graph preserves composite direction state and cross
     ["CompanyId", "OrderId"],
   );
   const relationship = index.relationshipsBetween(headers, lines)[0]!;
+  assert.equal(
+    relationship.provenance,
+    RelationshipProvenance.DeclaredForeignKey,
+  );
+  assert.equal(relationship.confidence, RelationshipConfidence.Authoritative);
+  assert.ok(isDeclaredForeignKeyRelationship(relationship));
   assert.deepEqual(
-    relationship.columns.map(
-      (item) => `${item.parentColumnName}->${item.referencedColumnName}`,
+    relationship.mappings.map(
+      (item) => `${item.sourceColumnName}->${item.targetColumnName}`,
     ),
     ["CompanyId->CompanyId", "OrderId->OrderId"],
   );
-  assert.equal(relationship.disabled, true);
-  assert.equal(relationship.notTrusted, true);
-  assert.equal(index.outgoingForeignKeys(lines)[0], relationship);
-  assert.equal(index.incomingForeignKeys(headers)[0], relationship);
+  assert.equal(relationship.declaredForeignKey.constraintId, 10);
+  assert.equal(
+    relationship.declaredForeignKey.constraintName,
+    "FK_OrderLines_OrderHeaders",
+  );
+  assert.equal(relationship.declaredForeignKey.disabled, true);
+  assert.equal(relationship.declaredForeignKey.notTrusted, true);
+  assert.equal(index.outgoingRelationships(lines)[0], relationship);
+  assert.equal(index.incomingRelationships(headers)[0], relationship);
   assert.deepEqual(
     index.relatedObjects(headers).map((item) => item.name),
     ["OrderLines"],
   );
   assert.equal(
-    index.outgoingForeignKeys(index.findObject("reltest", "Customers")!)[0]
-      ?.referencedSchema,
+    index.outgoingRelationships(index.findObject("reltest", "Customers")!)[0]
+      ?.target.schema,
     "relref",
   );
 });

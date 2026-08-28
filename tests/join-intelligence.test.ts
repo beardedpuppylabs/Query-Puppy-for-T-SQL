@@ -7,6 +7,11 @@ import type {
   ForeignKeyMetadata,
 } from "../src/metadata/MetadataModels.js";
 import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
+import {
+  isDeclaredForeignKeyRelationship,
+  RelationshipConfidence,
+  RelationshipProvenance,
+} from "../src/relationships/RelationshipModels.js";
 
 const column = (name: string, ordinal: number) => ({
   name,
@@ -211,12 +216,21 @@ const members = (sql: string, cursor = sql.length) =>
     .map((candidate) => candidate.name);
 
 test("contract: FK JOIN predicates render deterministically in both query orders", () => {
+  const forward = joins(
+    "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON",
+  );
   assert.deepEqual(
-    joins(
-      "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON",
-    ).map((item) => item.name),
+    forward.map((item) => item.name),
     ["oh.CustomerId = c.CustomerId"],
   );
+  const relationship = forward[0]?.relationship;
+  assert.ok(relationship);
+  assert.ok(isDeclaredForeignKeyRelationship(relationship));
+  assert.equal(
+    relationship.provenance,
+    RelationshipProvenance.DeclaredForeignKey,
+  );
+  assert.equal(relationship.confidence, RelationshipConfidence.Authoritative);
   assert.deepEqual(
     joins(
       "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.Customers c ON",

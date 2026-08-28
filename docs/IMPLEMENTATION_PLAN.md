@@ -30,9 +30,13 @@ architecture documents describe the intended present-day design.
 - 0.12.1 repository, contributor, security, CI, and release hygiene — complete
 - 0.12.2 daily-workflow stabilization — complete; manual acceptance pending
 - P0 connection-resilience stage 1 — complete; backend-neutral boundary in place
+- Relationship Intelligence Phase C foundation — complete; declared-FK production
+  behavior preserved
+- P1 statement-scope and alias-qualified insertion stabilization — complete
 
 0.12.2 is a focused stabilization patch for existing completion workflows. The
-next larger feature area remains Navigation & Code Understanding.
+next relationship slice is Phase D project-defined/user-confirmed relationships;
+Navigation & Code Understanding remains a larger forward-roadmap area.
 
 ## P0 Connection Resilience Stage 1
 
@@ -61,8 +65,30 @@ next larger feature area remains Navigation & Code Understanding.
 - [x] Add a deterministic source sentinel that rejects mssql implementation types,
       imports, and error terminology above the adapter boundary.
 
-Direct SQL Server backend feasibility remains a later spike. Current Connection
+The direct SQL Server backend feasibility spike concluded that Tedious is viable only
+as a limited fallback. No production direct backend exists, and current Connection
 Sharing has not been removed.
+
+## Relationship Intelligence Phase C foundation
+
+- [x] Separate physical SQL Server `ForeignKeyMetadata` from the canonical semantic
+      relationship model.
+- [x] Add structured provenance for declared, project-defined, user-confirmed,
+      learned-query, and heuristic-candidate relationships.
+- [x] Add structured confidence with a discriminated model that makes declared FKs
+      authoritative and prevents heuristic candidates from masquerading as physical
+      FKs.
+- [x] Convert every declared FK into one canonical relationship with ordered mappings
+      and retained constraint ID/name, actions, disabled state, and trust state.
+- [x] Rebuild one deterministic bidirectional relationship graph in `DatabaseIndex`
+      and preserve one relationship instance across incoming/outgoing traversal.
+- [x] Migrate JOIN predicates, relationship-aware source/member ranking, physical FK
+      roles, and completion documentation to canonical relationship semantics.
+- [x] Keep production suggestions restricted to enabled authoritative declared FKs;
+      synthetic future provenances remain unit-model inputs only.
+- [x] Preserve physical FK snapshot persistence and defer project relationship
+      storage, evidence history, heuristics, learning, UI, and multi-hop paths to later
+      phases.
 
 ## 0.12.2 daily-workflow stabilization
 
@@ -93,6 +119,14 @@ Sharing has not been removed.
 
 This patch adds no navigation/code-understanding surface, custom UI, inferred
 relationships, direct SQL backend, or new credential path.
+
+The subsequent P1 semantic-correctness repair adds tokenizer-backed implicit
+top-level SELECT boundaries so statement-local QueryScopes cannot leak when optional
+semicolons are omitted. It also preserves explicit RowSource alias ownership through
+column candidate insertion: unqualified expression completion inserts
+`alias.column`, explicit member input does not duplicate the alias, and
+syntax-restricted DML targets remain bare. No completion provider is scraped or
+filtered.
 
 INSERT required/all-writable column-list generation remains a focused follow-up.
 It must distinguish required writable columns from nullable/defaulted columns and
