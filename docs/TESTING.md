@@ -207,6 +207,7 @@ promises.
 | UNION/UNION ALL/INTERSECT/EXCEPT projection semantics                                | Implemented                      | `query-scopes.test.ts` — set-operator contract                                                             |
 | CTEs and chained CTEs                                                                | Implemented                      | `document-semantics.test.ts` — chained CTE contract                                                        |
 | Temp tables, global temp tables, and table variables                                 | Implemented                      | `document-semantics.test.ts` — local declared-source contract                                              |
+| Batch-scoped typed scalar-variable completion and native `@` trigger                 | Implemented                      | `variables.test.ts` and activated Extension Host contracts                                                 |
 | SELECT INTO inference                                                                | Implemented                      | `document-semantics.test.ts` — SELECT INTO contract                                                        |
 | Derived tables                                                                       | Implemented                      | `document-semantics.test.ts` — derived projection contract                                                 |
 | VALUES and APPLY RowSources                                                          | Implemented                      | `document-semantics.test.ts` — VALUES/APPLY contract                                                       |
@@ -485,6 +486,9 @@ Protect:
 - ordinary derived-table non-correlation
 - APPLY correlation
 - incomplete SQL
+- SELECT/INSERT/UPDATE/DELETE/EXEC statement transitions without semicolons
+- INSERT ... SELECT, CTE consumer, nested SELECT, and set-operation ownership
+- standalone `GO` batch reset without treating `[go]` or `"go"` as separators
 
 Do not test only parser output; provider-level scope behavior should also be
 covered.
@@ -655,6 +659,25 @@ Test:
     aliased source
     multiple sources
     local RowSources
+    sequential statement isolation
+
+Activated Extension Host coverage must execute the registered expansion command
+against both `*` and `alias.*`, and prove an ordinary Enter edit leaves the wildcard
+unchanged.
+
+## Local variable tests
+
+Protect:
+
+- one and multiple scalar declarations, including no initializer
+- declared SQL type/facets and native Variable presentation
+- `@` registered trigger and partial Contains matching
+- exact replacement without duplicated `@`
+- same-batch visibility across semicolon and implicit statement boundaries
+- nested/correlated query visibility
+- standalone `GO` reset and non-separator `[go]`/`"go"` identifiers
+- scalar/table-variable separation and scalar exclusion from FROM
+- undeclared SET targets never becoming declarations
 
 ## Verification claims
 

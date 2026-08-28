@@ -209,6 +209,28 @@ test("contract: local RowSource wildcard expansion preserves qualification polic
   assert.equal(tempExpansion.qualification, "unqualified");
 });
 
+test("contract: wildcard expansion is isolated to its owning sequential statement", () => {
+  const sql =
+    "SELECT * FROM dbo.Customers AS c\nSELECT * FROM sales.CustomerOrders AS o";
+  const first = resolveSelectWildcard(sql, sql.indexOf("*") + 1, catalog);
+  const second = resolveSelectWildcard(sql, sql.lastIndexOf("*") + 1, catalog);
+  assert.ok(first);
+  assert.ok(second);
+  assert.deepEqual(
+    first.sources.map((source) => source.qualifier),
+    ["c"],
+  );
+  assert.deepEqual(
+    second.sources.map((source) => source.qualifier),
+    ["o"],
+  );
+  assert.deepEqual(wildcardColumnExpressions(second), [
+    "o.Column1",
+    "o.Column2",
+    "o.Column3",
+  ]);
+});
+
 test("smart aliases split names and avoid visible collisions", () => {
   assert.deepEqual(
     [

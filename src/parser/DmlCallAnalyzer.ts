@@ -7,6 +7,7 @@ import {
 } from "../metadata/MetadataModels.js";
 import type { RowSource } from "./DocumentSemanticAnalyzer.js";
 import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
+import { statementTokenRangeAtCursor } from "./StatementBoundary.js";
 import {
   resolveCatalogObject,
   type CatalogScope,
@@ -24,19 +25,8 @@ export type DmlCompletion =
 
 const statementTokens = (sql: string, cursor: number): readonly SqlToken[] => {
   const tokens = tokenizeSql(sql);
-  let start = 0;
-  let end = tokens.length;
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (!token) continue;
-    const boundary = token.text === ";" || token.normalized === "go";
-    if (boundary && token.end <= cursor) start = i + 1;
-    if (boundary && token.start >= cursor) {
-      end = i;
-      break;
-    }
-  }
-  return tokens.slice(start, end);
+  const statement = statementTokenRangeAtCursor(tokens, cursor);
+  return tokens.slice(statement.start, statement.end);
 };
 
 const reference = (

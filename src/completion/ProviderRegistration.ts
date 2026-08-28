@@ -4,6 +4,8 @@ export const SQL_DOCUMENT_SELECTOR = [
   { language: "sql" },
 ] as const;
 
+export const COMPLETION_TRIGGER_CHARACTERS = [".", "@"] as const;
+
 export const SIGNATURE_HELP_METADATA = {
   triggerCharacters: ["(", ","],
   retriggerCharacters: [","],

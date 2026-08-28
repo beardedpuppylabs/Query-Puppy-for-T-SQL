@@ -1225,6 +1225,106 @@ ORDER BY staleCustomer.CustomerId`;
     "DisplayId",
   );
 
+  const variableSql =
+    "DECLARE @Mandant int = 1; DECLARE @Artikelnummer varchar(50); SELECT @";
+  const registeredVariableItems = await registeredSemanticCompletion(
+    variableSql,
+    variableSql.length,
+    "@",
+  );
+  const triggeredVariables = registeredVariableItems.filter((item) =>
+    ["@Artikelnummer", "@Mandant"].includes(labels([item])[0] ?? ""),
+  );
+  assert.deepEqual(
+    labels(triggeredVariables),
+    ["@Artikelnummer", "@Mandant"],
+    JSON.stringify(
+      registeredVariableItems.map((item) => ({
+        label: labels([item])[0],
+        data: item.data,
+      })),
+    ),
+  );
+  const mandantVariable = triggeredVariables.find(
+    (item) => labels([item])[0] === "@Mandant",
+  );
+  assert.ok(mandantVariable);
+  assert.equal(mandantVariable.kind, vscode.CompletionItemKind.Variable);
+  assert.ok(mandantVariable.documentation instanceof vscode.MarkdownString);
+  assert.match(mandantVariable.documentation.value, /variable/i);
+  assert.match(mandantVariable.documentation.value, /Type: `int`/);
+  assert.equal(mandantVariable.insertText, "@Mandant");
+  assert.equal(
+    accept(variableSql, mandantVariable),
+    "DECLARE @Mandant int = 1; DECLARE @Artikelnummer varchar(50); SELECT @Mandant",
+  );
+  assert.equal(
+    (await semanticCompletion("DECLARE @Mandant int = 1;\nGO\nSELECT @")).some(
+      (item) => labels([item])[0] === "@Mandant",
+    ),
+    false,
+  );
+
+  const expandStar = async (sql: string, expected: string): Promise<void> => {
+    const document = await vscode.workspace.openTextDocument({
+      language: "sql",
+      content: sql,
+    });
+    const editor = await vscode.window.showTextDocument(document);
+    const cursor = sql.indexOf("*") + 1;
+    editor.selection = new vscode.Selection(
+      document.positionAt(cursor),
+      document.positionAt(cursor),
+    );
+    for (let attempt = 0; attempt < 20; attempt++) {
+      await vscode.commands.executeCommand(
+        "queryPuppyForTSql.expandSelectStar",
+      );
+      if (document.getText() === expected) return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal(document.getText(), expected);
+  };
+  await expandStar(
+    "SELECT *\nFROM reltest.Customers AS c",
+    `SELECT c.CustomerId,
+       c.CustomerCode,
+       c.ExternalKey,
+       c.BillingAddressId,
+       c.PrimaryAddressId,
+       c.ShippingAddressId,
+       c.DisplayName,
+       c.RegionId,
+       c.CreatedAt,
+       c.Amount
+FROM reltest.Customers AS c`,
+  );
+  await expandStar(
+    "SELECT c.*\nFROM reltest.Customers AS c",
+    `SELECT c.CustomerId,
+       c.CustomerCode,
+       c.ExternalKey,
+       c.BillingAddressId,
+       c.PrimaryAddressId,
+       c.ShippingAddressId,
+       c.DisplayName,
+       c.RegionId,
+       c.CreatedAt,
+       c.Amount
+FROM reltest.Customers AS c`,
+  );
+  const enterDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: "SELECT *\nFROM reltest.Customers AS c",
+  });
+  const enterEditor = await vscode.window.showTextDocument(enterDocument);
+  enterEditor.selection = new vscode.Selection(
+    enterDocument.positionAt("SELECT *".length),
+    enterDocument.positionAt("SELECT *".length),
+  );
+  await vscode.commands.executeCommand("type", { text: "\n" });
+  assert.match(enterDocument.getText(), /^SELECT \*\n/);
+
   const forwardJoin = await joinPredicates(
     "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON",
   );

@@ -15,6 +15,7 @@ import {
   resolveBuiltinCallable,
 } from "./parser/CallableAnalyzer.js";
 import {
+  COMPLETION_TRIGGER_CHARACTERS,
   SIGNATURE_HELP_METADATA,
   SQL_DOCUMENT_SELECTOR,
 } from "./completion/ProviderRegistration.js";
@@ -193,14 +194,15 @@ export function activate(context: vscode.ExtensionContext): void {
     fallbackInvoked = true;
     await vscode.commands.executeCommand("editor.action.triggerParameterHints");
   };
+  const starExpansion = new SelectStarExpansionController(mssqlBackend, cache);
   context.subscriptions.push(
     output,
     metadataStatus,
-    new SelectStarExpansionController(mssqlBackend, cache),
+    starExpansion,
     vscode.languages.registerCompletionItemProvider(
       SQL_DOCUMENT_SELECTOR,
       provider,
-      ".",
+      ...COMPLETION_TRIGGER_CHARACTERS,
     ),
     vscode.languages.registerSignatureHelpProvider(
       SQL_DOCUMENT_SELECTOR,
@@ -397,8 +399,10 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
       vscode.commands.registerCommand(
         "queryPuppyForTSql.test.setCompletionScope",
-        (scope: import("./completion/CandidateFactory.js").CompletionScope) =>
-          provider.setTestScope(scope),
+        (scope: import("./completion/CandidateFactory.js").CompletionScope) => {
+          provider.setTestScope(scope);
+          starExpansion.setTestCatalog(scope);
+        },
       ),
       vscode.commands.registerCommand(
         "queryPuppyForTSql.test.provideCompletions",

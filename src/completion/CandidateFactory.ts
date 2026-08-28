@@ -364,6 +364,17 @@ export function createCandidates(
             priority: binding.scopeDistance + 50,
           })),
         );
+      candidates.push(
+        ...semantics.localVariables
+          .filter((variable) => variable.kind === "scalar")
+          .map((variable) => ({
+            name: variable.name,
+            normalizedName: variable.normalizedName,
+            kind: "variable" as const,
+            ...(variable.type ? { sqlType: variable.type } : {}),
+            nullable: true,
+          })),
+      );
     }
     if (
       (context.kind === "rowSource" || context.kind === "dmlTarget") &&

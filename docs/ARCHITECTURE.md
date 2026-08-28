@@ -332,6 +332,7 @@ Examples include:
 - APPLY results
 - projection aliases
 - set-operation results
+- batch-scoped scalar variables
 
 Document-local metadata should preserve known:
 
@@ -359,12 +360,18 @@ Sibling scopes are isolated.
 
 Local alias shadowing is respected.
 
-Independent sequential top-level SELECT statements are separate semantic statement
-ranges even when the preceding statement omits its optional semicolon. The tokenizer
-distinguishes later top-level query starts from SELECTs nested in parentheses and from
-UNION/INTERSECT/EXCEPT branches, so correlation and set expressions retain their
-existing scope structure. Statement-local aliases, RowSources, projection aliases,
-and clause state never cross that boundary.
+Independent top-level SELECT, INSERT, UPDATE, DELETE, and EXEC/EXECUTE statements
+have separate semantic statement ranges even when the preceding statement omits its
+optional semicolon. INSERT ... SELECT, the consuming query after a CTE, SELECTs
+nested in parentheses, and UNION/INTERSECT/EXCEPT branches remain within their
+owning statement. Statement-local aliases, RowSources, projection aliases, and
+clause state never cross an independent-statement boundary.
+
+Client batches are a separate ownership level. The tokenizer emits a batch
+separator only for a standalone, non-delimited `GO` line. `[go]`, `"go"`, and bare
+identifiers named `go` inside SQL remain identifiers. Declared scalar variables and
+table variables are visible to later statements in the same batch and disappear
+after a real `GO`; query-local aliases do not acquire batch lifetime.
 
 Do not replace this model with a flat document-wide alias dictionary.
 
@@ -398,6 +405,11 @@ Examples:
 
 RowSource member resolution should use one semantic abstraction rather than
 hard-coding physical tables everywhere.
+
+Scalar local variables are typed document symbols rather than RowSources. Their
+declarations are indexed once per semantic document analysis for the current batch,
+and expression completion consumes that canonical list. Table variables keep their
+existing RowSource representation and are excluded from scalar-variable candidates.
 
 ## Schema Intelligence
 

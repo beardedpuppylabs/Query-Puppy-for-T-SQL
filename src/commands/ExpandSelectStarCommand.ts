@@ -11,6 +11,7 @@ export const CAN_EXPAND_SELECT_STAR = "queryPuppyForTSql.canExpandSelectStar";
 
 export class SelectStarExpansionController implements vscode.Disposable {
   private expansion: ReturnType<typeof resolveSelectWildcard>;
+  private testCatalog?: SemanticCatalog;
   private generation = 0;
   private readonly subscriptions: vscode.Disposable[];
 
@@ -33,6 +34,11 @@ export class SelectStarExpansionController implements vscode.Disposable {
 
   dispose(): void {
     for (const subscription of this.subscriptions) subscription.dispose();
+  }
+
+  setTestCatalog(catalog: SemanticCatalog): void {
+    this.testCatalog = catalog;
+    void this.update();
   }
 
   private async update(): Promise<void> {
@@ -87,6 +93,7 @@ export class SelectStarExpansionController implements vscode.Disposable {
   }
 
   private async cachedCatalog(): Promise<SemanticCatalog | undefined> {
+    if (this.testCatalog) return this.testCatalog;
     const active = await this.connections.active();
     if (!active) return undefined;
     const indexes = new Map<

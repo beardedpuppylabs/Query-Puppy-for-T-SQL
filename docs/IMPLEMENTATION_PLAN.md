@@ -33,6 +33,7 @@ architecture documents describe the intended present-day design.
 - Relationship Intelligence Phase C foundation — complete; declared-FK production
   behavior preserved
 - P1 statement-scope and alias-qualified insertion stabilization — complete
+- P1 semantic ownership, wildcard, and local-variable stabilization — complete
 
 0.12.2 is a focused stabilization patch for existing completion workflows. The
 next relationship slice is Phase D project-defined/user-confirmed relationships;
@@ -127,6 +128,14 @@ column candidate insertion: unqualified expression completion inserts
 `alias.column`, explicit member input does not duplicate the alias, and
 syntax-restricted DML targets remain bare. No completion provider is scraped or
 filtered.
+
+The follow-up semantic stabilization generalizes implicit statement ownership to
+the currently supported top-level SELECT/DML/EXEC forms, distinguishes standalone
+GO batches from identifiers, restores wildcard expansion to the shared current
+statement range, and adds typed batch-local scalar-variable completion through the
+native `@` trigger. Table variables remain RowSources, INSERT ... SELECT and nested
+query forms retain statement ownership, and Tab remains the only wildcard expansion
+keybinding.
 
 INSERT required/all-writable column-list generation remains a focused follow-up.
 It must distinguish required writable columns from nullable/defaulted columns and

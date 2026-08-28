@@ -20,6 +20,7 @@ import {
 } from "./CallableAnalyzer.js";
 import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
 import { resolveDocumentSymbols } from "./DocumentSymbols.js";
+import { statementTokenRangeAtCursor } from "./StatementBoundary.js";
 
 export type ExpectedTypeSource =
   | "comparisonOperand"
@@ -54,13 +55,8 @@ export function updateAssignmentAtCursor(
   cursor: number,
 ): UpdateAssignment | undefined {
   const tokens = tokenizeSql(sql);
-  let statementStart = 0;
-  for (let index = 0; index < tokens.length; index++) {
-    const token = tokens[index];
-    if (!token || token.start >= cursor) break;
-    if (token.text === ";" || token.normalized === "go")
-      statementStart = index + 1;
-  }
+  const statement = statementTokenRangeAtCursor(tokens, cursor);
+  const statementStart = statement.start;
   let depth = 0;
   const depths = tokens.map((token) => {
     const current = depth;
@@ -69,7 +65,7 @@ export function updateAssignmentAtCursor(
     return current;
   });
   let update = -1;
-  for (let index = statementStart; index < tokens.length; index++) {
+  for (let index = statementStart; index < statement.end; index++) {
     const token = tokens[index];
     if (!token || token.start >= cursor) break;
     if (token.normalized === "update" && depths[index] === 0) update = index;
@@ -77,7 +73,7 @@ export function updateAssignmentAtCursor(
   const updateTarget = tokens[update + 1];
   if (update < 0 || updateTarget?.kind !== "identifier") return undefined;
   let set = -1;
-  for (let index = update + 2; index < tokens.length; index++) {
+  for (let index = update + 2; index < statement.end; index++) {
     const token = tokens[index];
     if (!token || token.start >= cursor) break;
     if (token.normalized === "set" && depths[index] === depths[update]) {
@@ -89,8 +85,8 @@ export function updateAssignmentAtCursor(
   const baseDepth = depths[set] ?? 0;
   let segmentStart = set + 1;
   let ordinal = 1;
-  for (let index = set + 1; index <= tokens.length; index++) {
-    const token = tokens[index];
+  for (let index = set + 1; index <= statement.end; index++) {
+    const token = index < statement.end ? tokens[index] : undefined;
     const boundary =
       !token ||
       token.text === ";" ||
@@ -145,6 +141,7 @@ const visibleSource = (
 
 const updateTargetSource = (
   sql: string,
+  cursor: number,
   qualifier: string,
   scope: CompletionScope,
   semantics: DocumentSemanticModel,
@@ -155,7 +152,11 @@ const updateTargetSource = (
   // textually after the completion cursor. Resolve that alias from the complete
   // statement, then bind it directly to the already-cached catalog.
   const reference = resolveDocumentSymbols(
-    tokenizeSql(sql),
+    (() => {
+      const tokens = tokenizeSql(sql);
+      const statement = statementTokenRangeAtCursor(tokens, cursor);
+      return tokens.slice(statement.start, statement.end);
+    })(),
     Number.POSITIVE_INFINITY,
   ).aliases.get(normalizeName(qualifier));
   if (!reference) return semantic;
@@ -772,6 +773,7 @@ export function inferExpectedTypeAtCursor(
   if (update) {
     const targetSource = updateTargetSource(
       sql,
+      cursor,
       update.updateTarget,
       scope,
       semantics,

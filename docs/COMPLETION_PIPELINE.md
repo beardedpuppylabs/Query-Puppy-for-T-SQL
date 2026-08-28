@@ -63,6 +63,11 @@ if this loses:
 - constraint metadata
 - documentation
 
+Batch-local scalar-variable candidates retain their declared name and known SQL
+type. They are a distinct semantic kind from physical columns, RowSources,
+procedures, and keywords. Table variables remain RowSources rather than scalar
+expression candidates.
+
 ## Matching contract
 
 Matching is case-insensitive contiguous Contains.
@@ -537,7 +542,25 @@ Star expansion is separate from CompletionItem display.
 
 Tab-based expansion uses semantic RowSource members.
 
+The wildcard resolver uses the same tokenizer-backed current-statement range as
+QueryScope and completion. It never scans into an adjacent statement, while CTE,
+derived, table-variable, temp-table, VALUES, TVF/APPLY, and set-result RowSources
+retain their established expansion behavior. Source and column order remain
+semantic order.
+
+The native keybinding remains Tab-only. Enter has no expansion binding and ordinary
+Enter edits never invoke the expansion command.
+
 Decorative type headers and presentation strings must never enter expansion logic.
+
+## Local variable completion
+
+Typing `@` is a native CompletionItemProvider trigger alongside `.`. At `@` or a
+partial token such as `@Man`, the provider replaces the complete variable token with
+the declared name, so acceptance produces exactly one `@`. Variables use normal
+case-insensitive contiguous Contains filtering, deterministic ordering, canonical
+type metadata, and the native Variable CompletionItem kind. They participate only
+in legal expression domains; scalar variables never enter FROM/DML-target domains.
 
 ## Regression invariants
 

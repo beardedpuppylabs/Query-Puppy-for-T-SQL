@@ -1,4 +1,5 @@
 import type { SqlToken } from "./SqlTokenizer.js";
+import { batchTokenRangeAtCursor, isBatchSeparator } from "./BatchBoundary.js";
 
 export interface StatementTokenRange {
   readonly start: number;
@@ -6,16 +7,23 @@ export interface StatementTokenRange {
 }
 
 const isExplicitBoundary = (token: SqlToken): boolean =>
-  token.text === ";" || token.normalized === "go";
+  token.text === ";" || isBatchSeparator(token);
 
-const tokenDepths = (tokens: readonly SqlToken[]): readonly number[] => {
+const tokenDepths = (
+  tokens: readonly SqlToken[],
+  start: number,
+  end: number,
+): readonly number[] => {
   let depth = 0;
-  return tokens.map((token) => {
+  const depths: number[] = [];
+  for (let index = start; index < end; index++) {
+    const token = tokens[index];
     const current = depth;
-    if (token.text === "(") depth++;
-    else if (token.text === ")") depth--;
-    return current;
-  });
+    if (token?.text === "(") depth++;
+    else if (token?.text === ")") depth = Math.max(0, depth - 1);
+    depths[index] = current;
+  }
+  return depths;
 };
 
 const continuesSetExpression = (
@@ -27,19 +35,103 @@ const continuesSetExpression = (
   return previous === "all" && tokens[select - 2]?.normalized === "union";
 };
 
+const statementStarter = (token: SqlToken | undefined): string | undefined => {
+  if (!token || token.kind !== "identifier" || token.delimited)
+    return undefined;
+  return [
+    "select",
+    "insert",
+    "update",
+    "delete",
+    "exec",
+    "execute",
+    "merge",
+    "declare",
+    "set",
+  ].includes(token.normalized)
+    ? token.normalized
+    : undefined;
+};
+
+const implicitStatementStarts = (
+  tokens: readonly SqlToken[],
+  start: number,
+  end: number,
+): readonly number[] => {
+  const depths = tokenDepths(tokens, start, end);
+  const starts: number[] = [];
+  const first = tokens[start];
+  let currentKind =
+    first?.kind === "identifier" && !first.delimited
+      ? first.normalized
+      : undefined;
+  if (currentKind === "with") starts.push(start);
+  let insertSourceConsumed = false;
+  for (let index = start; index < end; index++) {
+    if (depths[index] !== 0) continue;
+    const token = tokens[index];
+    const starter = statementStarter(token);
+    if (
+      currentKind === "insert" &&
+      token?.kind === "identifier" &&
+      !token.delimited &&
+      token.normalized === "values"
+    )
+      insertSourceConsumed = true;
+    if (!starter) continue;
+    if (!currentKind) {
+      starts.push(index);
+      currentKind = starter;
+      insertSourceConsumed = false;
+      continue;
+    }
+    if (starter === "select") {
+      if (continuesSetExpression(tokens, index)) continue;
+      if (currentKind === "with") {
+        currentKind = "select";
+        continue;
+      }
+      if (currentKind === "insert" && !insertSourceConsumed) {
+        insertSourceConsumed = true;
+        continue;
+      }
+    }
+    if (
+      currentKind === "insert" &&
+      !insertSourceConsumed &&
+      ["exec", "execute"].includes(starter)
+    ) {
+      insertSourceConsumed = true;
+      continue;
+    }
+    if (starter === "set" && currentKind === "update") continue;
+    if (
+      currentKind === "merge" &&
+      ["select", "insert", "update", "delete", "set"].includes(starter)
+    )
+      continue;
+    starts.push(index);
+    currentKind = starter;
+    insertSourceConsumed = false;
+  }
+  return starts;
+};
+
 /**
  * Resolves the semantic statement containing the cursor. Besides explicit `;` and
- * `GO` boundaries, a later independent top-level SELECT starts a new statement.
- * SELECTs nested in parentheses and set-operation branches remain part of their
- * containing query expression.
+ * tokenizer-validated `GO` boundaries, supported independent top-level query, DML,
+ * declaration, and execution starts form implicit statement boundaries. Nested
+ * SELECTs, INSERT SELECT sources, CTE consumers, set branches, and MERGE actions
+ * remain part of their containing statement.
  */
 export function statementTokenRangeAtCursor(
   tokens: readonly SqlToken[],
   cursor: number,
 ): StatementTokenRange {
-  let explicitStart = 0;
-  let explicitEnd = tokens.length;
-  for (let index = 0; index < tokens.length; index++) {
+  const batch = batchTokenRangeAtCursor(tokens, cursor);
+  let explicitStart = batch.start;
+  let explicitEnd = batch.end;
+  for (let index = batch.start; index < batch.end; index++) {
     const token = tokens[index];
     if (!token || !isExplicitBoundary(token)) continue;
     if (token.end <= cursor) explicitStart = index + 1;
@@ -49,30 +141,18 @@ export function statementTokenRangeAtCursor(
     }
   }
 
-  const depths = tokenDepths(tokens);
-  const topLevelSelects: number[] = [];
-  for (let index = explicitStart; index < explicitEnd; index++) {
-    if (
-      tokens[index]?.normalized === "select" &&
-      depths[index] === 0 &&
-      !continuesSetExpression(tokens, index)
-    )
-      topLevelSelects.push(index);
+  const starts = implicitStatementStarts(tokens, explicitStart, explicitEnd);
+  let active = -1;
+  for (let index = 0; index < starts.length; index++) {
+    const statement = starts[index];
+    if (statement === undefined || (tokens[statement]?.start ?? 0) >= cursor)
+      break;
+    active = index;
   }
-
-  let activeSelect = -1;
-  for (let index = 0; index < topLevelSelects.length; index++) {
-    const select = topLevelSelects[index];
-    if (select === undefined || (tokens[select]?.start ?? 0) >= cursor) break;
-    activeSelect = index;
-  }
-  if (activeSelect < 0) return { start: explicitStart, end: explicitEnd };
+  if (active < 0) return { start: explicitStart, end: explicitEnd };
 
   return {
-    start:
-      activeSelect === 0
-        ? explicitStart
-        : (topLevelSelects[activeSelect] ?? explicitStart),
-    end: topLevelSelects[activeSelect + 1] ?? explicitEnd,
+    start: starts[active] ?? explicitStart,
+    end: starts[active + 1] ?? explicitEnd,
   };
 }

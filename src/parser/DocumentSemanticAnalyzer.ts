@@ -9,6 +9,11 @@ import {
 import type { SqlToken } from "./SqlTokenizer.js";
 import { tokenizeSql } from "./SqlTokenizer.js";
 import { statementTokenRangeAtCursor } from "./StatementBoundary.js";
+import { batchTokenRangeAtCursor } from "./BatchBoundary.js";
+import {
+  resolveBatchLocalVariables,
+  type LocalVariableSymbol,
+} from "./LocalVariableSymbols.js";
 
 export interface RowSource {
   readonly sourceId: string;
@@ -72,6 +77,7 @@ export interface DocumentSemanticModel {
   readonly visibleRowSources: readonly ScopedRowSource[];
   readonly setQueryExpressions: readonly SetQueryExpression[];
   readonly orderByColumns: readonly ColumnMetadata[];
+  readonly localVariables: readonly LocalVariableSymbol[];
 }
 export interface SemanticCatalog {
   readonly activeDatabase: string;
@@ -183,12 +189,6 @@ const segments = (
   }
   if (begin < end) result.push(tokens.slice(begin, end));
   return result;
-};
-const batchStart = (tokens: readonly SqlToken[], cursor: number): number => {
-  let start = 0;
-  for (let i = 0; i < tokens.length && (tokens[i]?.start ?? 0) < cursor; i++)
-    if (tokens[i]?.normalized === "go") start = i + 1;
-  return start;
 };
 function catalogColumns(
   parts: readonly string[],
@@ -1045,7 +1045,7 @@ export function analyzeDocumentSemantics(
   const before = tokens.filter((t) => t.start < cursor);
   const statement = statementTokenRangeAtCursor(tokens, cursor);
   const batch = statement.start;
-  const currentBatch = batchStart(before, cursor);
+  const currentBatch = batchTokenRangeAtCursor(tokens, cursor).start;
   const rowSources: RowSource[] = [];
   const statementEnd = statement.end;
   for (let i = 0; i < before.length; i++) {
@@ -1238,6 +1238,7 @@ export function analyzeDocumentSemantics(
     visibleRowSources: queryModel.visible,
     setQueryExpressions,
     orderByColumns: inOrderBy ? currentProjection : [],
+    localVariables: resolveBatchLocalVariables(tokens, cursor),
   };
 }
 
@@ -1252,6 +1253,9 @@ export function resolveSelectWildcard(
     (token) => token.text === "*" && token.end === cursor,
   );
   if (starIndex < 0) return undefined;
+  const statement = statementTokenRangeAtCursor(tokens, cursor);
+  if (starIndex < statement.start || starIndex >= statement.end)
+    return undefined;
   let depth = 0;
   const depths = tokens.map((token) => {
     const current = depth;
@@ -1261,9 +1265,8 @@ export function resolveSelectWildcard(
   });
   const starDepth = depths[starIndex];
   let select = -1;
-  for (let i = starIndex - 1; i >= 0; i--) {
+  for (let i = starIndex - 1; i >= statement.start; i--) {
     if (depths[i] !== starDepth) continue;
-    if (tokens[i]?.text === ";" || tokens[i]?.normalized === "go") break;
     if (tokens[i]?.normalized === "from") return undefined;
     if (tokens[i]?.normalized === "select") {
       select = i;
@@ -1291,14 +1294,7 @@ export function resolveSelectWildcard(
       after.normalized !== "from")
   )
     return undefined;
-  let end = tokens.length;
-  for (let i = starIndex + 1; i < tokens.length; i++) {
-    if (depths[i] !== starDepth) continue;
-    if (tokens[i]?.text === ";" || tokens[i]?.normalized === "go") {
-      end = i;
-      break;
-    }
-  }
+  const end = statement.end;
   const from = tokens.findIndex(
     (token, index) =>
       index > starIndex &&

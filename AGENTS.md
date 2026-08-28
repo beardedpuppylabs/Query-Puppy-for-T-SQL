@@ -623,6 +623,17 @@ set-operation branches remain within their containing query expression.
 
 Local aliases shadow correlated aliases with the same name.
 
+QueryScope, statement, and client batch are distinct ownership levels. Table
+aliases, RowSources, projection aliases, and clause state are query/statement
+local. Declared scalar variables and table variables remain visible across later
+statements in the same batch. Only a tokenizer-validated standalone `GO` starts a
+new batch; delimited identifiers such as `[go]` and `"go"` never do.
+
+Independent top-level SELECT, INSERT, UPDATE, DELETE, and EXEC/EXECUTE statements
+must not share query-local state when optional semicolons are omitted. INSERT ...
+SELECT, CTE consumers, set-operation branches, and nested/correlated SELECTs remain
+within their owning statement.
+
 Ordinary derived tables are non-correlated unless SQL semantics allow otherwise.
 
 CROSS APPLY and OUTER APPLY may correlate to legally visible left-side sources.
@@ -699,6 +710,12 @@ Preserve semantic support where implemented for:
 
 Preserve datatype/nullability information through local projections where it can be
 inferred reliably.
+
+Declared scalar variables are batch-scoped expression candidates, not RowSources.
+Table variables remain RowSources and must not enter scalar-variable completion.
+Typing `@` uses the registered native CompletionItemProvider trigger and normal
+case-insensitive contiguous Contains matching; accepting a candidate replaces the
+typed `@`/partial variable token exactly once.
 
 Do not replace known type information with Unknown unnecessarily.
 
@@ -784,6 +801,9 @@ Tab may expand semantic:
 to explicit columns.
 
 Enter must never trigger wildcard expansion.
+
+Expansion resolves only RowSources owned by the wildcard's current semantic
+statement. Adjacent statements must never contribute sources or columns.
 
 This behavior is intentional and protects normal workflows on very wide tables.
 
