@@ -653,9 +653,11 @@ composite mapping order in declared-FK-specific details.
 
 Physical foreign-key metadata and semantic relationships are distinct. Never invent a
 foreign key: non-FK relationships must never receive fabricated constraint names,
-catalog IDs, trust state, or other physical FK metadata. Production completion and
-JOIN behavior remain declared-FK-only until a later phase explicitly implements and
-accepts another provenance source.
+catalog IDs, trust state, or other physical FK metadata. Production completion admits
+enabled authoritative declared FKs and explicit workspace ProjectDefined/Confirmed
+relationships loaded from `.query-puppy/relationships.json`. Project relationships
+are validated against canonical metadata and overlaid after physical cache hydration;
+they must never enter physical SQL metadata snapshots or be presented as FKs.
 
 ## JOIN semantics
 
@@ -663,8 +665,10 @@ JOIN visibility is positional.
 
 A future RowSource must not be visible in an earlier ON condition.
 
-Current JOIN intelligence uses enabled, authoritative declared-FK relationships from
-the canonical relationship graph.
+Current JOIN intelligence uses enabled authoritative declared-FK and confirmed
+ProjectDefined relationships from the canonical relationship graph. Declared FKs rank
+above project relationships, and UserConfirmed/learned/heuristic sources remain
+excluded until their own production workflows exist.
 
 Do not infer an FK merely because names or datatypes match.
 

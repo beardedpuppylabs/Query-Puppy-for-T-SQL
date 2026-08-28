@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/schemas/project-relationships.schema.json",
+  "title": "Query Puppy for T-SQL project relationships",
+  "description": "Explicit logical SQL Server relationships for this workspace. These definitions do not create or represent physical foreign keys.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "relationships"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1,
+      "description": "Project relationship file format version."
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "target", "mappings"],
+        "properties": {
+          "source": {
+            "$ref": "#/$defs/endpoint",
+            "description": "The logical dependent/source table."
+          },
+          "target": {
+            "$ref": "#/$defs/endpoint",
+            "description": "The logical principal/target table."
+          },
+          "mappings": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Ordered source-to-target column mappings.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source", "target"],
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "target": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database", "schema", "object"],
+      "properties": {
+        "database": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "object": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

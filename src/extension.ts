@@ -31,6 +31,7 @@ import {
   type MicrosoftSuggestionInspection,
   type SuggestionConfigurationScope,
 } from "./config/MicrosoftSuggestions.js";
+import { WorkspaceProjectRelationships } from "./relationships/WorkspaceProjectRelationships.js";
 
 const EXTENSION_ID = "BeardedPuppyLabs.query-puppy-for-t-sql";
 let suggestionNoticePending = false;
@@ -50,6 +51,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const loader = new MetadataLoader(mssqlBackend, (message) =>
     output.appendLine(`[metadata] ${message}`),
   );
+  const projectRelationships = new WorkspaceProjectRelationships(output);
   const provider = new SqlCompletionProvider(
     mssqlBackend,
     mssqlBackend,
@@ -57,6 +59,7 @@ export function activate(context: vscode.ExtensionContext): void {
     cache,
     output,
     context.extensionMode === vscode.ExtensionMode.Test,
+    projectRelationships,
   );
   const signatureProvider = new SqlSignatureHelpProvider(
     mssqlBackend,
@@ -198,6 +201,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     output,
     metadataStatus,
+    projectRelationships,
     starExpansion,
     vscode.languages.registerCompletionItemProvider(
       SQL_DOCUMENT_SELECTOR,
@@ -294,6 +298,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "queryPuppyForTSql.clearMetadataCache",
       () => clearMetadataCache(mssqlBackend, cache),
+    ),
+    vscode.commands.registerCommand(
+      "queryPuppyForTSql.openProjectRelationships",
+      () => projectRelationships.openForActiveWorkspace(),
     ),
     vscode.commands.registerCommand(
       "queryPuppyForTSql.showStatus",
@@ -403,6 +411,13 @@ export function activate(context: vscode.ExtensionContext): void {
           provider.setTestScope(scope);
           starExpansion.setTestCatalog(scope);
         },
+      ),
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.applyProjectRelationships",
+        (
+          document: vscode.TextDocument,
+          scope: import("./completion/CandidateFactory.js").CompletionScope,
+        ) => projectRelationships.apply(document, scope),
       ),
       vscode.commands.registerCommand(
         "queryPuppyForTSql.test.provideCompletions",

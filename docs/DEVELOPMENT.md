@@ -290,10 +290,19 @@ appropriate connection/database identity.
 
 Physical SQL Server foreign-key records are converted during `DatabaseIndex`
 construction into the provenance-aware canonical relationship model and its single
-bidirectional runtime graph. Production suggestions remain enabled authoritative
-declared-FK-only. Future project-defined, user-confirmed, learned, and heuristic
-relationships are not persistence or completion inputs yet; see
+bidirectional runtime graph. A workspace's versioned
+`.query-puppy/relationships.json` is parsed once per file lifecycle, validated against
+the current physical index, and reapplied as ProjectDefined/Confirmed relationships
+after cache hydration or refresh. It is not stored in the physical metadata snapshot.
+Future user-confirmed, learned, and heuristic relationships are not production inputs;
+see
 [Architecture](ARCHITECTURE.md#relationship-intelligence).
+
+Use **Query Puppy for T-SQL: Open Project Relationships** to create or open the file
+for the active workspace folder. Native JSON schema validation is contributed from
+`schemas/project-relationships.schema.json`. Automated tests should use controlled
+metadata and temporary/injected project configuration; runtime code must never create
+database objects while resolving project relationships.
 
 Document semantic analysis derives query-local state such as:
 

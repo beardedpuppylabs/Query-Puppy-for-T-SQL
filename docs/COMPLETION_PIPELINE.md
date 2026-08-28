@@ -388,13 +388,16 @@ Type compatibility must not break these scope boundaries.
 
 ## JOIN predicate candidates
 
-Complete declared-FK-based JOIN predicates are semantic expression candidates, not
+Complete relationship-based JOIN predicates are semantic expression candidates, not
 physical column members. They retain their canonical relationship, including
-provenance and confidence, rather than carrying the physical catalog record as the
-semantic edge.
+provenance and confidence, rather than carrying the physical catalog record or
+project definition as a parallel semantic edge.
 
-At an empty relevant ON position, a real FK predicate may outrank ordinary column
-expressions.
+At an empty relevant ON position, a declared-FK or explicit project-relationship
+predicate may outrank ordinary column expressions. DeclaredForeignKey/Authoritative
+ranks above ProjectDefined/Confirmed. Native detail/documentation distinguishes `FK
+JOIN` from `Project relationship JOIN`; project documentation lists the explicit
+mappings and states that it is not a SQL Server foreign key.
 
 Type-aware member ranking applies normally once the developer explicitly writes an
 operand such as:
@@ -409,10 +412,10 @@ heuristics, or affect ordinary member completion outside a comparison.
 
 ## JOIN source candidates
 
-At JOIN source positions, enabled authoritative declared-FK relationships may
-influence semantic ranking. The canonical graph is provenance-aware, but future
-project-defined, learned, user-confirmed, and heuristic sources are not production
-completion inputs in this phase.
+At JOIN source positions, enabled authoritative declared-FK and confirmed
+ProjectDefined relationships may influence semantic ranking after Contains filtering.
+Declared FKs rank above project relationships. User-confirmed, learned, and heuristic
+sources remain excluded until their own production workflows exist.
 
 Contains filtering remains intact.
 

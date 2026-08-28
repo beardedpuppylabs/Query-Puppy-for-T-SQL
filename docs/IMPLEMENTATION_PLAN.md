@@ -34,10 +34,33 @@ architecture documents describe the intended present-day design.
   behavior preserved
 - P1 statement-scope and alias-qualified insertion stabilization — complete
 - P1 semantic ownership, wildcard, and local-variable stabilization — complete
+- Relationship Intelligence Phase D ProjectDefined relationships — complete
 
-0.12.2 is a focused stabilization patch for existing completion workflows. The
-next relationship slice is Phase D project-defined/user-confirmed relationships;
-Navigation & Code Understanding remains a larger forward-roadmap area.
+0.12.2 is a focused stabilization patch for existing completion workflows. Phase D
+now ships explicit project-defined relationships. UserConfirmed promotion UX remains
+deferred; Navigation & Code Understanding remains a larger forward-roadmap area.
+
+## Relationship Intelligence Phase D — ProjectDefined
+
+- [x] Add one source-controlled, versioned workspace relationship file at
+      `.query-puppy/relationships.json` with native JSON schema support.
+- [x] Validate endpoint identity, ordered mappings, duplicates, known incompatible
+      types, and current same-database applicability against canonical metadata.
+- [x] Resolve valid definitions as ProjectDefined/Confirmed canonical relationships
+      without fabricating physical FK details.
+- [x] Overlay project relationships after SQL snapshot hydration/refresh and keep
+      them out of physical metadata persistence.
+- [x] Deduplicate exact logical edges with authoritative declared-FK precedence while
+      retaining distinct mappings between the same object pair.
+- [x] Admit ProjectDefined relationships to existing JOIN predicates, comparison
+      tie-breaking, and related RowSource ranking below declared FKs.
+- [x] Add project-scoped caching, native file-watcher invalidation, multi-root
+      isolation, safe no-workspace behavior, and an open/create command.
+- [x] Add model/config/graph/ranking/JOIN/cache/provider/Extension Host contracts and
+      user/developer documentation.
+
+No UserConfirmed workflow, learning, heuristics, query mining, multi-hop discovery,
+relationship editor, or release automation is part of this phase.
 
 ## P0 Connection Resilience Stage 1
 

@@ -12,7 +12,7 @@ In a schema with hundreds or thousands of objects, remembering part of a name sh
 - Context- and query-scope-aware completion
 - Type-aware ranking that keeps legal alternatives available
 - PK, UQ, and FK metadata on physical columns
-- JOIN predicates and comparison ranking based on actual foreign keys
+- JOIN predicates and comparison ranking based on actual foreign keys or explicit project relationships
 - Built-in and catalog function completion, typing, and Signature Help
 - Smart Alias and Tab-only wildcard productivity features
 - Query-local sources and same-server cross-database completion
@@ -147,6 +147,60 @@ AND ol.OrderId = oh.OrderId
 
 At a `JOIN` source position, objects connected to a legally visible left source by an enabled FK receive a semantic ranking boost. In an explicit comparison, the relationship-mapped column can also break a tie between equally compatible members. Contains filtering still applies, unrelated matching objects remain available, and relationship intelligence stays within one database.
 
+## Project-defined relationships
+
+Legacy and ERP databases often have valid logical relationships without physical SQL
+Server foreign keys. A workspace can define those relationships explicitly in:
+
+```text
+.query-puppy/relationships.json
+```
+
+Run **Query Puppy for T-SQL: Open Project Relationships** to create or open the file.
+The file is ordinary source-control-friendly JSON with native schema validation:
+
+```json
+{
+  "version": 1,
+  "relationships": [
+    {
+      "source": {
+        "database": "IntelliSenseLab",
+        "schema": "qpacc",
+        "object": "ProjectChild"
+      },
+      "target": {
+        "database": "IntelliSenseLab",
+        "schema": "qpacc",
+        "object": "ProjectParent"
+      },
+      "mappings": [
+        { "source": "CompanyId", "target": "CompanyId" },
+        { "source": "ParentRef", "target": "ParentId" }
+      ]
+    }
+  ]
+}
+```
+
+`source` is the logical dependent table and `target` is the logical principal table.
+Mappings are ordered and composite mappings remain one relationship. Query Puppy
+validates every endpoint and column against current cached metadata, ignores invalid
+definitions safely, and reports specific errors in its output channel. Changes are
+noticed by a native file watcher and applied on the next completion without refreshing
+or rewriting the SQL metadata cache.
+
+Project relationships generate the same correctly qualified JOIN predicate shape in
+either query order, but native completion identifies them as **Project relationship
+JOIN**, not as an FK. A matching physical declared FK wins and is shown first. No
+relationship is inferred when the file contains no definition.
+
+Version 1 supports same-database table relationships. Applicability is scoped by the
+owning workspace folder and database name. In a multi-root workspace, each SQL file
+uses only its folder's relationship file; untitled or outside-workspace documents use
+declared FKs only. Projects targeting different servers that reuse the same database
+name should use separate workspace relationship files.
+
 ## Query-local intelligence
 
 Document-local row sources participate in the same completion model as catalog objects:
@@ -270,6 +324,7 @@ Requires VS Code 1.105 or a compatible VSCodium release.
 - **Query Puppy for T-SQL: Expand SELECT \* to Columns**
 - **Query Puppy for T-SQL: Refresh Schema Metadata**
 - **Query Puppy for T-SQL: Clear Schema Cache for Active Database**
+- **Query Puppy for T-SQL: Open Project Relationships**
 - **Query Puppy for T-SQL: Show Status**
 - **Query Puppy for T-SQL: Disable Microsoft SQL Suggestions**
 - **Query Puppy for T-SQL: Diagnose Signature Help**
@@ -292,7 +347,8 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 - Type inference is conservative. Unnamed computed projections may be omitted, and recursive CTE/set-branch type reconciliation is best-effort.
 - Type-aware ranking does not implement SQL Server's complete conversion and datatype-precedence engine. Built-in intelligence is intentionally limited to the documented supported set rather than a complete SQL Server function catalog.
 - Stored-procedure result-set discovery is not performed, so the extension does not fabricate procedure result columns.
-- JOIN predicates require real, enabled FK metadata. The extension does not infer relationships from naming conventions or similar datatypes.
+- JOIN predicates require either real enabled FK metadata or an explicit valid project relationship. The extension does not infer relationships from naming conventions or similar datatypes.
+- Project relationship format version 1 supports same-database tables only and binds by workspace folder plus database name; cross-database project edges and stable cross-server identities are not yet supported.
 - Background refresh replaces a complete snapshot rather than applying incremental schema changes. A recent DDL change may remain absent until refresh completes; run **Query Puppy for T-SQL: Refresh Schema Metadata** when immediate discovery is needed.
 - Completion detail width is controlled by the native Suggest Widget and may be truncated in narrow layouts.
 

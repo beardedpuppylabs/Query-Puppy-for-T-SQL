@@ -432,11 +432,14 @@ INCLUDE columns are not key members.
 
 ## Relationship Intelligence
 
-SQL Server foreign-key catalog metadata and canonical semantic relationships are
-separate layers:
+SQL Server foreign-key catalog metadata, project relationship configuration, and
+canonical semantic relationships are separate layers:
 
     SQL Server ForeignKeyMetadata
         -> declared-FK conversion boundary
+    workspace .query-puppy/relationships.json
+        -> project definition validation/resolution
+    both
         -> canonical Relationship
         -> one DatabaseIndex relationship graph
 
@@ -460,15 +463,41 @@ confidence. Their constraint ID/name, referential actions, disabled/trust state,
 object identities, and composite ordinals remain available through explicit physical
 FK details. Logical relationships do not require or fabricate those details.
 
-Production completion currently admits only enabled authoritative declared-FK
-relationships. Project-defined, user-confirmed, learned, and heuristic sources are
-model-ready but are not loaded, persisted, suggested, ranked, or displayed in this
-phase. Never infer or label a foreign key from matching names or datatypes.
+Production completion admits enabled authoritative declared FKs and explicitly
+configured confirmed ProjectDefined relationships. Project relationships are never
+inferred, never receive physical FK details, and are presented as project
+relationships rather than constraints. User-confirmed, learned, and heuristic
+sources remain model-ready but are not loaded or suggested. Never infer or label a
+foreign key from matching names or datatypes.
 
 Persistent snapshots continue storing canonical SQL Server catalog metadata,
-including physical FK records. Hydration rebuilds the canonical runtime relationship
-model and indexes. No project relationship persistence or generic evidence repository
-exists yet.
+including physical FK records. Project relationships live separately in the owning
+workspace's human-readable `.query-puppy/relationships.json`. Hydration or refresh
+first rebuilds the physical index, then the workspace overlay validates definitions
+against that current index and creates a runtime `DatabaseIndex` containing both
+relationship sources. Project definitions and graph indexes are never serialized into
+the physical SQL metadata snapshot.
+
+The version 1 project format requires database/schema/object identities and ordered
+column mappings. It currently resolves same-database table relationships only. The
+backend-neutral active context exposes no stable source-control-safe server identity,
+so applicability is the owning workspace folder plus database name; projects that use
+the same database name on different servers must keep separate workspace relationship
+files. Cross-database definitions are structurally representable by endpoint identity
+but rejected by version 1 until the graph can resolve them safely.
+
+Version 1 derives ProjectDefined/Confirmed semantics from the file rather than storing
+redundant provenance or confidence fields. A future version can add explicit
+UserConfirmed entries through this same workspace file, parser/cache, validation, and
+canonical-graph boundary; it does not need a second persistence architecture. No
+confirmation workflow exists today.
+
+Each file-backed SQL document uses only the relationship file in its owning workspace
+folder. Multi-root workspaces therefore remain deterministic. Untitled/outside-
+workspace documents and sessions with no workspace receive declared-FK behavior only.
+Native file watchers invalidate the parsed definition and runtime overlay; the next
+completion re-reads and revalidates it. Invalid relationships are ignored individually
+and reported once per load/index lifecycle in the Query Puppy output channel.
 
 ## Relationship graph and indexes
 
@@ -486,8 +515,10 @@ Relationship-aware completion must avoid full-database scans per keystroke.
 
 ## JOIN Intelligence
 
-JOIN predicate suggestions are currently generated only from enabled authoritative
-declared-FK relationships in the canonical cached graph.
+JOIN predicate suggestions are generated from enabled authoritative declared FKs and
+confirmed ProjectDefined relationships in the canonical runtime graph. Declared FKs
+rank first. Exact logical duplicates collapse, and an equivalent physical FK wins;
+distinct mappings between the same pair remain distinct.
 
 A relationship may generate a complete expression such as:
 

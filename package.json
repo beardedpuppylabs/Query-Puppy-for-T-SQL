@@ -1,7 +1,7 @@
 {
   "name": "query-puppy-for-t-sql",
   "displayName": "Query Puppy for T-SQL",
-  "description": "Context-aware T-SQL IntelliSense for SQL Server with Contains discovery, type-aware completion, FK-aware JOINs, and persistent schema caching.",
+  "description": "Context-aware T-SQL IntelliSense for SQL Server with Contains discovery, type-aware completion, relationship-aware JOINs, and persistent schema caching.",
   "version": "0.12.2",
   "publisher": "BeardedPuppyLabs",
   "author": "Bearded Puppy Labs",
@@ -69,6 +69,10 @@
         "title": "Query Puppy for T-SQL: Clear Schema Cache for Active Database"
       },
       {
+        "command": "queryPuppyForTSql.openProjectRelationships",
+        "title": "Query Puppy for T-SQL: Open Project Relationships"
+      },
+      {
         "command": "queryPuppyForTSql.showStatus",
         "title": "Query Puppy for T-SQL: Show Status"
       },
@@ -110,6 +114,12 @@
         "command": "queryPuppyForTSql.expandSelectStar",
         "key": "tab",
         "when": "editorTextFocus && editorLangId == sql && queryPuppyForTSql.canExpandSelectStar && !suggestWidgetVisible && !inSnippetMode"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": ".query-puppy/relationships.json",
+        "url": "./schemas/project-relationships.schema.json"
       }
     ]
   },

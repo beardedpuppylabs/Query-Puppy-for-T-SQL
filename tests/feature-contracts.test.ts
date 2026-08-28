@@ -263,14 +263,14 @@ test("contract: Smart Alias respects object, whitespace, AS, alias, collision, a
 
 test("contract: wildcard expansion is bound to Tab and never Enter", async () => {
   const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
-    contributes?: {
+    contributes: {
       keybindings?: readonly {
         readonly command?: string;
         readonly key?: string;
       }[];
     };
   };
-  const bindings = (manifest.contributes?.keybindings ?? []).filter(
+  const bindings = (manifest.contributes.keybindings ?? []).filter(
     (binding) => binding.command === "queryPuppyForTSql.expandSelectStar",
   );
   assert.deepEqual(
@@ -281,4 +281,33 @@ test("contract: wildcard expansion is bound to Tab and never Enter", async () =>
     bindings.some((binding) => binding.key === "enter"),
     false,
   );
+});
+
+test("contract: project relationships use one workspace file and native JSON validation", async () => {
+  const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
+    contributes: {
+      commands?: readonly { readonly command?: string }[];
+      jsonValidation?: readonly {
+        readonly fileMatch?: string;
+        readonly url?: string;
+      }[];
+    };
+  };
+  assert.equal(
+    manifest.contributes.commands?.some(
+      (command) =>
+        command.command === "queryPuppyForTSql.openProjectRelationships",
+    ),
+    true,
+  );
+  assert.deepEqual(manifest.contributes.jsonValidation, [
+    {
+      fileMatch: ".query-puppy/relationships.json",
+      url: "./schemas/project-relationships.schema.json",
+    },
+  ]);
+  const schema = JSON.parse(
+    await readFile("schemas/project-relationships.schema.json", "utf8"),
+  ) as { properties?: { version?: { const?: number } } };
+  assert.equal(schema.properties?.version?.const, 1);
 });

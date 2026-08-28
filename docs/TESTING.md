@@ -216,6 +216,7 @@ promises.
 | PK/UQ/FK roles and canonical column metadata                                         | Implemented                      | `schema-intelligence.test.ts` role contract and `dml-call.test.ts` canonical-metadata contract             |
 | Composite, directional, cross-schema, and disabled FK state                          | Implemented                      | `schema-intelligence.test.ts` relationship contract                                                        |
 | Provenance-aware canonical relationship model and single graph                       | Implemented, internal foundation | `relationship-model.test.ts` model, direction, determinism, and non-FK isolation contracts                 |
+| Workspace ProjectDefined relationships, validation, isolation, and JOIN use          | Implemented                      | `project-relationships.test.ts`, `feature-contracts.test.ts`, and activated Extension Host contracts       |
 | Same-named objects across schemas/databases                                          | Implemented                      | `schema-intelligence.test.ts` database-index contract                                                      |
 | FK-aware JOIN predicates, multiple FKs, and composite FKs                            | Implemented                      | `join-intelligence.test.ts` FK predicate contracts                                                         |
 | Relationship ranking after Contains                                                  | Implemented                      | `join-intelligence.test.ts` — relationship ranking contract                                                |
@@ -606,6 +607,23 @@ Protect:
 Never treat same-name/type heuristic matches as proof of an FK relationship. A future
 provenance-tagged logical relationship is still not a physical FK and must never be
 tested or presented as one.
+
+## Project relationship tests
+
+Protect the workspace relationship boundary with tests for:
+
+- strict format version and JSON shape
+- project-key isolation, cached reads, and explicit invalidation
+- database/schema/object/column resolution
+- non-empty ordered composite mappings
+- missing endpoints/columns, duplicate mappings, and incompatible known types
+- exact project deduplication and authoritative FK precedence
+- incoming/outgoing/reverse traversal through the one canonical graph
+- single and composite predicates in both query orders
+- explicit provenance presentation without FK constraint/action claims
+- physical snapshot exclusion and reapplication after hydrate/refresh
+- no relationship suggestion without an explicit definition
+- activated Extension Host behavior for project JOINs and declared-FK priority
 
 ## DML target tests
 

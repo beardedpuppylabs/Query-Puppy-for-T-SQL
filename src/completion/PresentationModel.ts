@@ -2,6 +2,10 @@ import { friendlyKind } from "../metadata/MetadataModels.js";
 import { formatSqlType } from "../metadata/SqlTypeFormatter.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
 import { callableParameterLabel } from "../parser/CallableAnalyzer.js";
+import {
+  isDeclaredForeignKeyRelationship,
+  RelationshipProvenance,
+} from "../relationships/RelationshipModels.js";
 
 export interface PresentationModel {
   readonly detail: string;
@@ -80,9 +84,26 @@ export function presentationModel(
     detail = `(${params}) → table`;
   else if (candidate.kind === "procedure")
     detail = `(${params})${candidate.sourceObject?.columns.length ? ` → ${String(candidate.sourceObject.columns.length)} columns` : ""}`;
-  else if (candidate.kind === "joinPredicate") detail = " FK JOIN";
-  else if (candidate.relatedRelationshipCount)
-    detail = ` related via ${String(candidate.relatedRelationshipCount)} FK${candidate.relatedRelationshipCount === 1 ? "" : "s"}`;
+  else if (candidate.kind === "joinPredicate")
+    detail = candidate.relationship
+      ? isDeclaredForeignKeyRelationship(candidate.relationship)
+        ? " FK JOIN"
+        : " Project relationship JOIN"
+      : " JOIN";
+  else if (candidate.relatedRelationshipCount) {
+    const declared = candidate.relationships?.filter(
+      isDeclaredForeignKeyRelationship,
+    ).length;
+    const project = candidate.relationships?.filter(
+      (relationship) =>
+        relationship.provenance === RelationshipProvenance.ProjectDefined,
+    ).length;
+    detail = declared
+      ? project
+        ? " related via FK + project relationship"
+        : ` related via ${String(declared)} FK${declared === 1 ? "" : "s"}`
+      : ` related via ${String(project ?? candidate.relatedRelationshipCount)} project relationship${(project ?? candidate.relatedRelationshipCount) === 1 ? "" : "s"}`;
+  }
   return {
     detail,
     ...(candidate.sourceQualifier

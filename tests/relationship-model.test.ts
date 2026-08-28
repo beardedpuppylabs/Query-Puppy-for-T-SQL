@@ -230,7 +230,7 @@ test("future relationship provenances remain explicit and cannot fabricate FK de
   assert.equal(invalidHeuristicAuthority, heuristic);
 });
 
-test("future relationships can enter the canonical graph without becoming production JOIN suggestions", () => {
+test("contract: ProjectDefined enters production while unimplemented future sources stay excluded", () => {
   const projectDefined: ProjectDefinedRelationship = {
     ...relationshipCore,
     provenance: RelationshipProvenance.ProjectDefined,
@@ -246,6 +246,33 @@ test("future relationships can enter the canonical graph without becoming produc
   const candidates = createCandidates(resolveSqlContext(sql), index);
   assert.equal(
     candidates.some((candidate) => candidate.kind === "joinPredicate"),
-    false,
+    true,
   );
+  for (const relationship of [
+    {
+      ...relationshipCore,
+      provenance: RelationshipProvenance.UserConfirmed,
+      confidence: RelationshipConfidence.Confirmed,
+    } as const,
+    {
+      ...relationshipCore,
+      provenance: RelationshipProvenance.LearnedFromQuery,
+      confidence: RelationshipConfidence.StrongEvidence,
+    } as const,
+    {
+      ...relationshipCore,
+      provenance: RelationshipProvenance.HeuristicCandidate,
+      confidence: RelationshipConfidence.Candidate,
+    } as const,
+  ]) {
+    const futureIndex = new DatabaseIndex({ ...metadata, foreignKeys: [] }, [
+      relationship,
+    ]);
+    assert.equal(
+      createCandidates(resolveSqlContext(sql), futureIndex).some(
+        (candidate) => candidate.kind === "joinPredicate",
+      ),
+      false,
+    );
+  }
 });

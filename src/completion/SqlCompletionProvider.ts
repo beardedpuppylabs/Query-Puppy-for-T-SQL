@@ -22,6 +22,7 @@ import {
   classifyCompletionContext,
   completionDomainPolicy,
 } from "../parser/CompletionContextClassifier.js";
+import type { WorkspaceProjectRelationships } from "../relationships/WorkspaceProjectRelationships.js";
 
 export class SqlCompletionProvider implements vscode.CompletionItemProvider {
   private readonly loggedFailures = new Set<string>();
@@ -47,6 +48,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     private readonly cache: MetadataCache,
     private readonly output: vscode.OutputChannel,
     private readonly observeAutomaticCompletions = false,
+    private readonly projectRelationships?: WorkspaceProjectRelationships,
   ) {
     this.scopes = new CompletionScopeResolver(
       metadataBackend,
@@ -156,6 +158,8 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
       const active = scope ? undefined : await this.connectionContext.active();
       if (!scope && active && !token.isCancellationRequested)
         scope = await this.scopes.resolve(active, context);
+      if (scope && !this.testScope && this.projectRelationships)
+        scope = await this.projectRelationships.apply(document, scope);
     } catch (error) {
       this.logFailureOnce("completion", error);
     }

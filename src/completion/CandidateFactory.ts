@@ -5,7 +5,8 @@ import {
 } from "../metadata/MetadataModels.js";
 import {
   isDeclaredForeignKeyRelationship,
-  isEnabledDeclaredForeignKeyRelationship,
+  isProductionRelationship,
+  productionRelationshipRank,
   type Relationship,
 } from "../relationships/RelationshipModels.js";
 import { quoteIdentifier } from "../metadata/SqlTypeFormatter.js";
@@ -512,10 +513,10 @@ function rankComparisonRelationshipCandidates(
   const member = physicalSource(memberSource, scope);
   if (!comparison || !member || comparison.index !== member.index)
     return [...candidates];
-  const relatedColumns = new Set<string>();
+  const relatedColumns = new Map<string, number>();
   for (const relationship of comparison.index
     .relationshipsBetween(comparison.object, member.object)
-    .filter(isEnabledDeclaredForeignKeyRelationship)) {
+    .filter(isProductionRelationship)) {
     for (const mapping of relationship.mappings) {
       if (
         comparison.object.id === relationship.source.objectId &&
@@ -523,22 +524,45 @@ function rankComparisonRelationshipCandidates(
         normalizeName(mapping.sourceColumnName) ===
           expected.comparisonColumn.column.normalizedName
       )
-        relatedColumns.add(normalizeName(mapping.targetColumnName));
+        addRelationshipColumn(
+          relatedColumns,
+          mapping.targetColumnName,
+          relationship,
+        );
       if (
         comparison.object.id === relationship.target.objectId &&
         member.object.id === relationship.source.objectId &&
         normalizeName(mapping.targetColumnName) ===
           expected.comparisonColumn.column.normalizedName
       )
-        relatedColumns.add(normalizeName(mapping.sourceColumnName));
+        addRelationshipColumn(
+          relatedColumns,
+          mapping.sourceColumnName,
+          relationship,
+        );
     }
   }
   if (!relatedColumns.size) return [...candidates];
   return candidates.map((candidate) =>
     relatedColumns.has(candidate.normalizedName)
-      ? { ...candidate, priority: (candidate.priority ?? 0) - 1 }
+      ? {
+          ...candidate,
+          priority:
+            (candidate.priority ?? 0) -
+            (2 - (relatedColumns.get(candidate.normalizedName) ?? 1)),
+        }
       : candidate,
   );
+}
+
+function addRelationshipColumn(
+  columns: Map<string, number>,
+  columnName: string,
+  relationship: Relationship,
+): void {
+  const name = normalizeName(columnName);
+  const rank = productionRelationshipRank(relationship) ?? 1;
+  columns.set(name, Math.min(columns.get(name) ?? rank, rank));
 }
 
 function hasExplicitJoinComparison(sql: string, cursor: number): boolean {
@@ -659,7 +683,7 @@ function joinPredicateCandidates(
     if (!resolvedLeft || resolvedLeft.index !== resolvedRight.index) return [];
     return resolvedRight.index
       .relationshipsBetween(resolvedRight.object, resolvedLeft.object)
-      .filter(isEnabledDeclaredForeignKeyRelationship)
+      .filter(isProductionRelationship)
       .map((relationship) => {
         const predicate = renderJoinPredicate(
           relationship,
@@ -671,13 +695,13 @@ function joinPredicateCandidates(
           name: predicate,
           normalizedName: normalizeName(predicate),
           searchText: normalizeName(
-            `${predicate} ${relationship.declaredForeignKey.constraintName} ${relationship.mappings.flatMap((mapping) => [mapping.sourceColumnName, mapping.targetColumnName]).join(" ")}`,
+            `${predicate} ${isDeclaredForeignKeyRelationship(relationship) ? relationship.declaredForeignKey.constraintName : "project relationship"} ${relationship.mappings.flatMap((mapping) => [mapping.sourceColumnName, mapping.targetColumnName]).join(" ")}`,
           ),
           kind: "joinPredicate" as const,
           database: relationship.source.database,
           insertText: predicate,
           relationship,
-          priority: -100,
+          priority: -100 + (productionRelationshipRank(relationship) ?? 10),
         };
       });
   });
@@ -716,14 +740,20 @@ function rankRelatedRowSources(
       source.index === index
         ? index
             .relationshipsBetween(source.object, object)
-            .filter(isEnabledDeclaredForeignKeyRelationship)
+            .filter(isProductionRelationship)
         : [],
+    );
+    const bestRank = relationships.reduce(
+      (best, relationship) =>
+        Math.min(best, productionRelationshipRank(relationship) ?? 10),
+      10,
     );
     return relationships.length
       ? {
           ...candidate,
-          priority: -10,
+          priority: -20 + bestRank,
           relatedRelationshipCount: relationships.length,
+          relationships,
         }
       : candidate;
   });

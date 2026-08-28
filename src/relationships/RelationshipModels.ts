@@ -41,9 +41,9 @@ export interface DeclaredForeignKeyDetails {
 }
 
 interface RelationshipCore {
-  /** Dependent/parent endpoint for a declared SQL Server foreign key. */
+  /** Logical source/dependent endpoint; the parent endpoint for a declared FK. */
   readonly source: RelationshipObjectReference;
-  /** Principal/referenced endpoint for a declared SQL Server foreign key. */
+  /** Logical target/principal endpoint; the referenced endpoint for a declared FK. */
   readonly target: RelationshipObjectReference;
   readonly mappings: readonly RelationshipColumnMapping[];
 }
@@ -143,12 +143,119 @@ export function isEnabledDeclaredForeignKeyRelationship(
   );
 }
 
+export type ProductionRelationship =
+  DeclaredForeignKeyRelationship | ProjectDefinedRelationship;
+
+/**
+ * Returns the explicit trust tier used by production relationship consumers.
+ * Future provenances remain excluded until their own production workflow exists.
+ */
+export function productionRelationshipRank(
+  relationship: Relationship,
+): number | undefined {
+  if (isEnabledDeclaredForeignKeyRelationship(relationship)) return 0;
+  if (relationship.provenance === RelationshipProvenance.ProjectDefined)
+    return 1;
+  return undefined;
+}
+
+export function isProductionRelationship(
+  relationship: Relationship,
+): relationship is ProductionRelationship {
+  return productionRelationshipRank(relationship) !== undefined;
+}
+
+/** Semantic identity ignores traversal direction and mapping display order. */
+export function relationshipSemanticIdentity(
+  relationship: Relationship,
+): string {
+  const source = objectIdentity(relationship.source);
+  const target = objectIdentity(relationship.target);
+  const forwardMappings = relationship.mappings
+    .map(
+      (mapping) =>
+        `${normalize(mapping.sourceColumnName)}>${normalize(mapping.targetColumnName)}`,
+    )
+    .sort()
+    .join("|");
+  const reverseMappings = relationship.mappings
+    .map(
+      (mapping) =>
+        `${normalize(mapping.targetColumnName)}>${normalize(mapping.sourceColumnName)}`,
+    )
+    .sort()
+    .join("|");
+  const forward = `${source}>${target}\u0000${forwardMappings}`;
+  const reverse = `${target}>${source}\u0000${reverseMappings}`;
+  return forward.localeCompare(reverse) <= 0 ? forward : reverse;
+}
+
+/**
+ * Removes logical duplicates while retaining distinct physical constraints.
+ * An authoritative declared FK always wins over an equivalent logical edge.
+ */
+export function deduplicateRelationships(
+  relationships: readonly Relationship[],
+): Relationship[] {
+  const result: Relationship[] = [];
+  const logicalByIdentity = new Map<string, number>();
+  for (const relationship of relationships) {
+    const identity = relationshipSemanticIdentity(relationship);
+    const existingIndex = logicalByIdentity.get(identity);
+    if (existingIndex === undefined) {
+      logicalByIdentity.set(identity, result.length);
+      result.push(relationship);
+      continue;
+    }
+    const existing = result[existingIndex];
+    if (!existing) continue;
+    if (
+      isDeclaredForeignKeyRelationship(existing) &&
+      isDeclaredForeignKeyRelationship(relationship)
+    ) {
+      result.push(relationship);
+      continue;
+    }
+    if (isDeclaredForeignKeyRelationship(existing)) continue;
+    if (isDeclaredForeignKeyRelationship(relationship)) {
+      result[existingIndex] = relationship;
+      continue;
+    }
+    const existingRank = productionRelationshipRank(existing);
+    const replacementRank = productionRelationshipRank(relationship);
+    if (
+      replacementRank !== undefined &&
+      (existingRank === undefined || replacementRank < existingRank)
+    )
+      result[existingIndex] = relationship;
+  }
+  return result.sort(compareRelationships);
+}
+
 export function compareRelationships(
   left: Relationship,
   right: Relationship,
 ): number {
-  return relationshipSortKey(left).localeCompare(relationshipSortKey(right));
+  const trust =
+    relationshipTrustSortRank(left) - relationshipTrustSortRank(right);
+  return (
+    trust || relationshipSortKey(left).localeCompare(relationshipSortKey(right))
+  );
 }
+
+const relationshipTrustSortRank = (relationship: Relationship): number => {
+  if (isDeclaredForeignKeyRelationship(relationship)) return 0;
+  if (relationship.confidence === RelationshipConfidence.Confirmed) return 1;
+  if (relationship.confidence === RelationshipConfidence.StrongEvidence)
+    return 2;
+  return 3;
+};
+
+const normalize = (value: string): string => value.toLocaleLowerCase("en-US");
+const objectIdentity = (reference: RelationshipObjectReference): string =>
+  [reference.database, reference.schema, reference.objectName]
+    .map(normalize)
+    .join(".");
 
 function relationshipSortKey(relationship: Relationship): string {
   const declaredIdentity = isDeclaredForeignKeyRelationship(relationship)

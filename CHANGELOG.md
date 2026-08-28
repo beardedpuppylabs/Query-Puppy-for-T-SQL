@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Added source-controlled ProjectDefined relationships through
+  `.query-puppy/relationships.json`, including native JSON schema validation,
+  composite ordered mappings, workspace isolation, and live file invalidation.
+- Integrated validated ProjectDefined/Confirmed relationships into the existing
+  canonical graph, JOIN predicates, comparison tie-breaking, and related-table
+  ranking without fabricating SQL Server FK metadata.
+- Kept declared FKs authoritative for deduplication and ranking, kept project
+  relationships out of physical SQL metadata snapshots, and added a native command
+  to create or open the workspace relationship file.
+
 ## 0.12.2
 
 - Fixed Smart Alias phase resolution so the first legal whitespace after a

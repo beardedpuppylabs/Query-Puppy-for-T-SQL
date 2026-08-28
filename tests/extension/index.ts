@@ -3,6 +3,11 @@ import * as vscode from "vscode";
 import { DatabaseIndex } from "../../src/metadata/DatabaseIndex.js";
 import type { SqlType } from "../../src/metadata/MetadataModels.js";
 import { BUILTIN_FUNCTIONS } from "../../src/parser/BuiltinFunctionCatalog.js";
+import {
+  RelationshipConfidence,
+  RelationshipProvenance,
+  type ProjectDefinedRelationship,
+} from "../../src/relationships/RelationshipModels.js";
 
 const database = "IntelliSenseLab";
 const index = new DatabaseIndex({
@@ -444,6 +449,36 @@ const index = new DatabaseIndex({
         ordinal: ordinal + 1,
       })),
     },
+    {
+      id: 60,
+      schema: "reltest",
+      name: "ProjectParent",
+      normalizedName: "projectparent",
+      kind: "table",
+      parameters: [],
+      columns: ["CompanyId", "ParentId"].map((name, ordinal) => ({
+        name,
+        normalizedName: name.toLocaleLowerCase("en-US"),
+        type: { name: "bigint" },
+        nullable: false,
+        ordinal: ordinal + 1,
+      })),
+    },
+    {
+      id: 61,
+      schema: "reltest",
+      name: "ProjectChild",
+      normalizedName: "projectchild",
+      kind: "table",
+      parameters: [],
+      columns: ["CompanyId", "ChildId", "ParentRef"].map((name, ordinal) => ({
+        name,
+        normalizedName: name.toLocaleLowerCase("en-US"),
+        type: { name: "bigint" },
+        nullable: false,
+        ordinal: ordinal + 1,
+      })),
+    },
   ],
   keys: [
     {
@@ -714,6 +749,66 @@ const index = new DatabaseIndex({
     },
   ],
 });
+const projectRelationships: readonly ProjectDefinedRelationship[] = [
+  {
+    provenance: RelationshipProvenance.ProjectDefined,
+    confidence: RelationshipConfidence.Confirmed,
+    source: {
+      database,
+      schema: "reltest",
+      objectName: "ProjectChild",
+      objectId: 61,
+    },
+    target: {
+      database,
+      schema: "reltest",
+      objectName: "ProjectParent",
+      objectId: 60,
+    },
+    mappings: [
+      {
+        sourceColumnName: "CompanyId",
+        targetColumnName: "CompanyId",
+        sourceColumnId: 1,
+        targetColumnId: 1,
+        ordinal: 1,
+      },
+      {
+        sourceColumnName: "ParentRef",
+        targetColumnName: "ParentId",
+        sourceColumnId: 3,
+        targetColumnId: 2,
+        ordinal: 2,
+      },
+    ],
+  },
+  {
+    provenance: RelationshipProvenance.ProjectDefined,
+    confidence: RelationshipConfidence.Confirmed,
+    source: {
+      database,
+      schema: "reltest",
+      objectName: "OrderHeaders",
+      objectId: 13,
+    },
+    target: {
+      database,
+      schema: "reltest",
+      objectName: "Customers",
+      objectId: 11,
+    },
+    mappings: [
+      {
+        sourceColumnName: "CompanyId",
+        targetColumnName: "CustomerId",
+        sourceColumnId: 1,
+        targetColumnId: 1,
+        ordinal: 1,
+      },
+    ],
+  },
+];
+const projectIndex = new DatabaseIndex(index.metadata, projectRelationships);
 const reportingDatabase = "IntelliSenseLabReporting";
 const reportingIndex = new DatabaseIndex({
   database: reportingDatabase,
@@ -1011,15 +1106,32 @@ export async function run(): Promise<void> {
   );
   assert.ok(extension, "development extension was not discovered");
   await extension.activate();
+  const baseScope = {
+    activeDatabase: database,
+    indexes: new Map([
+      [database.toLowerCase(), index],
+      [reportingDatabase.toLowerCase(), reportingIndex],
+    ]),
+  };
+  const untitledDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: "SELECT 1",
+  });
+  const noWorkspaceScope = await vscode.commands.executeCommand<
+    typeof baseScope
+  >(
+    "queryPuppyForTSql.test.applyProjectRelationships",
+    untitledDocument,
+    baseScope,
+  );
+  assert.equal(
+    noWorkspaceScope.indexes.get(database.toLowerCase()),
+    index,
+    "an untitled document must not inherit project relationships",
+  );
   await vscode.commands.executeCommand(
     "queryPuppyForTSql.test.setCompletionScope",
-    {
-      activeDatabase: database,
-      indexes: new Map([
-        [database.toLowerCase(), index],
-        [reportingDatabase.toLowerCase(), reportingIndex],
-      ]),
-    },
+    baseScope,
   );
   await vscode.commands.executeCommand(
     "queryPuppyForTSql.test.setSignatureScope",
@@ -1088,6 +1200,10 @@ export async function run(): Promise<void> {
     );
   const predicateLabels = (items: readonly vscode.CompletionItem[]) =>
     labels(items);
+  const completionDetail = (item: vscode.CompletionItem | undefined) =>
+    item && typeof item.label !== "string"
+      ? (item.label.detail ?? "")
+      : (item?.detail ?? "");
   const offsetAt = (sql: string, position: vscode.Position) => {
     const lines = sql.split("\n");
     return (
@@ -1410,6 +1526,54 @@ FROM reltest.Customers AS c`,
     ).length,
     0,
   );
+  assert.equal(
+    (
+      await joinPredicates(
+        "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON",
+      )
+    ).length,
+    0,
+    "a project relationship must not be inferred without an explicit definition",
+  );
+  await vscode.commands.executeCommand(
+    "queryPuppyForTSql.test.setCompletionScope",
+    {
+      activeDatabase: database,
+      indexes: new Map([
+        [database.toLowerCase(), projectIndex],
+        [reportingDatabase.toLowerCase(), reportingIndex],
+      ]),
+    },
+  );
+  const projectJoin = await joinPredicates(
+    "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON",
+  );
+  assert.deepEqual(predicateLabels(projectJoin), [
+    "c.CompanyId = p.CompanyId AND c.ParentRef = p.ParentId",
+  ]);
+  assert.match(completionDetail(projectJoin[0]), /Project relationship JOIN/);
+  assert.ok(projectJoin[0]?.documentation instanceof vscode.MarkdownString);
+  assert.match(
+    projectJoin[0].documentation.value,
+    /Project-defined relationship/,
+  );
+  assert.match(
+    projectJoin[0].documentation.value,
+    /not a SQL Server foreign key/,
+  );
+  assert.doesNotMatch(
+    projectJoin[0].documentation.value,
+    /ON DELETE|constraint/i,
+  );
+  const mixedTrust = await joinPredicates(
+    "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON",
+  );
+  assert.deepEqual(predicateLabels(mixedTrust).slice(0, 2), [
+    "oh.CustomerId = c.CustomerId",
+    "oh.CompanyId = c.CustomerId",
+  ]);
+  assert.match(completionDetail(mixedTrust[0]), /FK JOIN/);
+  assert.match(completionDetail(mixedTrust[1]), /Project relationship JOIN/);
   const rankedTables = await semanticCompletion(
     "SELECT * FROM reltest.Customers c JOIN reltest.",
   );

@@ -5,6 +5,7 @@ import type {
 } from "./MetadataModels.js";
 import {
   compareRelationships,
+  deduplicateRelationships,
   relationshipFromForeignKey,
   type Relationship,
 } from "../relationships/RelationshipModels.js";
@@ -45,10 +46,10 @@ export class DatabaseIndex {
     additionalRelationships: readonly Relationship[] = [],
   ) {
     this.metadata = metadata;
-    this.relationships = [
+    this.relationships = deduplicateRelationships([
       ...(metadata.foreignKeys ?? []).map(relationshipFromForeignKey),
       ...additionalRelationships,
-    ].sort(compareRelationships);
+    ]).sort(compareRelationships);
     let columnCount = 0;
     for (const schema of metadata.schemas)
       this.schemas.add(schema.toLowerCase());
