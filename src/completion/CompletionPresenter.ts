@@ -7,7 +7,10 @@ import {
   friendlyKind,
   type SqlObjectKind,
 } from "../metadata/MetadataModels.js";
-import { isDeclaredForeignKeyRelationship } from "../relationships/RelationshipModels.js";
+import {
+  isDeclaredForeignKeyRelationship,
+  RelationshipProvenance,
+} from "../relationships/RelationshipModels.js";
 import type { CompletionCandidate } from "./CompletionCandidate.js";
 import { completionSortText } from "./CompletionSorter.js";
 import {
@@ -145,9 +148,13 @@ export function documentation(
   }
   if (candidate.relationship) {
     const relationship = candidate.relationship;
-    md.appendMarkdown("**Project-defined relationship**\n\n");
+    const userConfirmed =
+      relationship.provenance === RelationshipProvenance.UserConfirmed;
     md.appendMarkdown(
-      `Project relationship: \`${relationship.source.database}.${relationship.source.schema}.${relationship.source.objectName} (${relationship.mappings.map((mapping) => mapping.sourceColumnName).join(", ")})\`  \n→ \`${relationship.target.database}.${relationship.target.schema}.${relationship.target.objectName} (${relationship.mappings.map((mapping) => mapping.targetColumnName).join(", ")})\`\n\nDefined in \`.query-puppy/relationships.json\`. This is not a SQL Server foreign key.\n`,
+      `**${userConfirmed ? "User-confirmed relationship" : "Project-defined relationship"}**\n\n`,
+    );
+    md.appendMarkdown(
+      `${userConfirmed ? "Explicitly saved from a resolved JOIN" : "Project relationship"}: \`${relationship.source.database}.${relationship.source.schema}.${relationship.source.objectName} (${relationship.mappings.map((mapping) => mapping.sourceColumnName).join(", ")})\`  \n→ \`${relationship.target.database}.${relationship.target.schema}.${relationship.target.objectName} (${relationship.mappings.map((mapping) => mapping.targetColumnName).join(", ")})\`\n\nDefined in \`.query-puppy/relationships.json\`. This is not a SQL Server foreign key.\n`,
     );
     return md;
   }

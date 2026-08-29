@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Added a native **Save JOIN as Query Puppy relationship** Code Action for explicitly
+  persisting safely resolved equality-only JOINs as UserConfirmed/Confirmed project
+  knowledge. Composite mappings are saved as one relationship; ambiguous direction is
+  selected through a minimal native Quick Pick.
+- Extended relationship format version 1 with backward-compatible optional
+  `projectDefined`/`userConfirmed` provenance. Exact FK/project/user duplicates are not
+  persisted, unsafe or transient JOIN shapes are ineligible, and no SQL Server DDL is
+  executed.
+- Reused the existing workspace watcher, canonical graph, and JOIN completion path for
+  saved relationships, with distinct **User-confirmed relationship JOIN** presentation
+  and explicit FK → user-confirmed → project-defined trust ordering.
+
 - Added source-controlled ProjectDefined relationships through
   `.query-puppy/relationships.json`, including native JSON schema validation,
   composite ordered mappings, workspace isolation, and live file invalidation.

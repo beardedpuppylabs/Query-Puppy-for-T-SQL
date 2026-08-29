@@ -9,6 +9,7 @@ import {
   RelationshipConfidence,
   RelationshipProvenance,
   type ProjectDefinedRelationship,
+  type UserConfirmedRelationship,
 } from "./RelationshipModels.js";
 
 export const PROJECT_RELATIONSHIP_FORMAT_VERSION = 1;
@@ -26,10 +27,16 @@ export interface ProjectRelationshipMappingDefinition {
 }
 
 export interface ProjectRelationshipDefinition {
+  /** Omitted version-1 entries remain backward-compatible ProjectDefined relationships. */
+  readonly provenance?: PersistedRelationshipProvenance;
   readonly source: ProjectRelationshipEndpointDefinition;
   readonly target: ProjectRelationshipEndpointDefinition;
   readonly mappings: readonly ProjectRelationshipMappingDefinition[];
 }
+
+export type PersistedRelationshipProvenance =
+  | typeof RelationshipProvenance.ProjectDefined
+  | typeof RelationshipProvenance.UserConfirmed;
 
 export interface ProjectRelationshipIssue {
   readonly message: string;
@@ -37,14 +44,26 @@ export interface ProjectRelationshipIssue {
 }
 
 export interface ProjectRelationshipDocument {
+  readonly schema?: string;
   readonly definitions: readonly ProjectRelationshipDefinition[];
   readonly issues: readonly ProjectRelationshipIssue[];
 }
 
 export interface ResolvedProjectRelationships {
-  readonly relationships: readonly ProjectDefinedRelationship[];
+  readonly relationships: readonly ConfiguredRelationship[];
   readonly issues: readonly ProjectRelationshipIssue[];
 }
+
+export type ConfiguredRelationship =
+  ProjectDefinedRelationship | UserConfirmedRelationship;
+
+export type ProjectRelationshipUpdateResult =
+  | { readonly kind: "written"; readonly text: string }
+  | { readonly kind: "duplicate" }
+  | {
+      readonly kind: "invalid";
+      readonly issues: readonly ProjectRelationshipIssue[];
+    };
 
 type ReadProjectFile = (projectKey: string) => Promise<string | undefined>;
 
@@ -153,16 +172,83 @@ export function parseProjectRelationshipConfiguration(
     if (parsed.definition) definitions.push(parsed.definition);
     issues.push(...parsed.issues);
   }
-  return { definitions, issues };
+  return {
+    ...(typeof value["$schema"] === "string"
+      ? { schema: value["$schema"] }
+      : {}),
+    definitions,
+    issues,
+  };
+}
+
+export function appendProjectRelationshipDefinition(
+  text: string | undefined,
+  definition: ProjectRelationshipDefinition,
+): ProjectRelationshipUpdateResult {
+  const document =
+    text !== undefined
+      ? parseProjectRelationshipConfiguration(text)
+      : { definitions: [], issues: [] };
+  if (document.issues.length)
+    return { kind: "invalid", issues: document.issues };
+  const identity = projectRelationshipDefinitionIdentity(definition);
+  if (
+    document.definitions.some(
+      (existing) =>
+        projectRelationshipDefinitionIdentity(existing) === identity,
+    )
+  )
+    return { kind: "duplicate" };
+  return {
+    kind: "written",
+    text: `${JSON.stringify(
+      {
+        ...(document.schema ? { $schema: document.schema } : {}),
+        version: PROJECT_RELATIONSHIP_FORMAT_VERSION,
+        relationships: [...document.definitions, definition],
+      },
+      undefined,
+      2,
+    )}\n`,
+  };
+}
+
+export function projectRelationshipDefinitionIdentity(
+  definition: ProjectRelationshipDefinition,
+): string {
+  const provenance =
+    definition.provenance === RelationshipProvenance.UserConfirmed
+      ? RelationshipProvenance.UserConfirmed
+      : RelationshipProvenance.ProjectDefined;
+  const relationship: ConfiguredRelationship = {
+    provenance,
+    confidence: RelationshipConfidence.Confirmed,
+    source: {
+      database: definition.source.database,
+      schema: definition.source.schema,
+      objectName: definition.source.object,
+    },
+    target: {
+      database: definition.target.database,
+      schema: definition.target.schema,
+      objectName: definition.target.object,
+    },
+    mappings: definition.mappings.map((mapping, index) => ({
+      sourceColumnName: mapping.source,
+      targetColumnName: mapping.target,
+      ordinal: index + 1,
+    })),
+  };
+  return relationshipSemanticIdentity(relationship);
 }
 
 export function resolveProjectRelationships(
   definitions: readonly ProjectRelationshipDefinition[],
   index: DatabaseIndex,
 ): ResolvedProjectRelationships {
-  const relationships: ProjectDefinedRelationship[] = [];
+  const relationships: ConfiguredRelationship[] = [];
   const issues: ProjectRelationshipIssue[] = [];
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   for (const [definitionIndex, definition] of definitions.entries()) {
     const sourceDatabase = normalizeName(definition.source.database);
     const targetDatabase = normalizeName(definition.target.database);
@@ -214,7 +300,7 @@ export function resolveProjectRelationships(
     }
     const sourceColumns = new Set<string>();
     const targetColumns = new Set<string>();
-    const mappings: ProjectDefinedRelationship["mappings"][number][] = [];
+    const mappings: ConfiguredRelationship["mappings"][number][] = [];
     let valid = true;
     for (const [mappingIndex, mapping] of definition.mappings.entries()) {
       const sourceColumn = source.columns.find(
@@ -297,8 +383,12 @@ export function resolveProjectRelationships(
       );
       continue;
     }
-    const relationship: ProjectDefinedRelationship = {
-      provenance: RelationshipProvenance.ProjectDefined,
+    const provenance =
+      definition.provenance === RelationshipProvenance.UserConfirmed
+        ? RelationshipProvenance.UserConfirmed
+        : RelationshipProvenance.ProjectDefined;
+    const relationship = {
+      provenance,
       confidence: RelationshipConfidence.Confirmed,
       source: {
         database: index.metadata.database,
@@ -313,9 +403,16 @@ export function resolveProjectRelationships(
         ...(target.id === undefined ? {} : { objectId: target.id }),
       },
       mappings,
-    };
+    } as ConfiguredRelationship;
     const identity = relationshipSemanticIdentity(relationship);
-    if (seen.has(identity)) {
+    const duplicateIndex = seen.get(identity);
+    if (duplicateIndex !== undefined) {
+      const existing = relationships[duplicateIndex];
+      if (
+        existing?.provenance === RelationshipProvenance.ProjectDefined &&
+        relationship.provenance === RelationshipProvenance.UserConfirmed
+      )
+        relationships[duplicateIndex] = relationship;
       issues.push(
         semanticIssue(
           definitionIndex,
@@ -324,7 +421,7 @@ export function resolveProjectRelationships(
       );
       continue;
     }
-    seen.add(identity);
+    seen.set(identity, relationships.length);
     relationships.push(relationship);
   }
   return { relationships, issues };
@@ -338,22 +435,64 @@ function parseDefinition(
   readonly issues: readonly ProjectRelationshipIssue[];
 } {
   if (!record(value)) return invalid(index, "Relationship must be an object.");
-  const fields = unknownFields(value, ["source", "target", "mappings"]);
+  const fields = unknownFields(value, [
+    "provenance",
+    "source",
+    "target",
+    "mappings",
+  ]);
   if (fields.length)
     return invalid(index, `Unknown field(s): ${fields.join(", ")}.`);
+  const provenance = parseProvenance(value["provenance"], index);
   const source = parseEndpoint(value["source"], "source", index);
   const target = parseEndpoint(value["target"], "target", index);
   const mappings = parseMappings(value["mappings"], index);
-  const issues = [...source.issues, ...target.issues, ...mappings.issues];
-  if (!source.endpoint || !target.endpoint || !mappings.mappings)
+  const issues = [
+    ...provenance.issues,
+    ...source.issues,
+    ...target.issues,
+    ...mappings.issues,
+  ];
+  if (
+    provenance.invalid ||
+    !source.endpoint ||
+    !target.endpoint ||
+    !mappings.mappings
+  )
     return { issues };
   return {
     definition: {
+      ...(provenance.value ? { provenance: provenance.value } : {}),
       source: source.endpoint,
       target: target.endpoint,
       mappings: mappings.mappings,
     },
     issues,
+  };
+}
+
+function parseProvenance(
+  value: unknown,
+  relationshipIndex: number,
+): {
+  readonly value?: PersistedRelationshipProvenance;
+  readonly invalid: boolean;
+  readonly issues: readonly ProjectRelationshipIssue[];
+} {
+  if (value === undefined) return { invalid: false, issues: [] };
+  if (
+    value === RelationshipProvenance.ProjectDefined ||
+    value === RelationshipProvenance.UserConfirmed
+  )
+    return { value, invalid: false, issues: [] };
+  return {
+    invalid: true,
+    issues: [
+      semanticIssue(
+        relationshipIndex,
+        "provenance must be `projectDefined` or `userConfirmed` when present.",
+      ),
+    ],
   };
 }
 

@@ -654,10 +654,13 @@ composite mapping order in declared-FK-specific details.
 Physical foreign-key metadata and semantic relationships are distinct. Never invent a
 foreign key: non-FK relationships must never receive fabricated constraint names,
 catalog IDs, trust state, or other physical FK metadata. Production completion admits
-enabled authoritative declared FKs and explicit workspace ProjectDefined/Confirmed
-relationships loaded from `.query-puppy/relationships.json`. Project relationships
-are validated against canonical metadata and overlaid after physical cache hydration;
-they must never enter physical SQL metadata snapshots or be presented as FKs.
+enabled authoritative declared FKs plus explicit workspace UserConfirmed/Confirmed and
+ProjectDefined/Confirmed relationships loaded from
+`.query-puppy/relationships.json`. File-backed relationships are validated against
+canonical metadata and overlaid after physical cache hydration; they must never enter
+physical SQL metadata snapshots or be presented as FKs. UserConfirmed is written only
+after the user invokes the native save-JOIN Code Action for a safely resolved direct-
+equality predicate. Ordinary query editing never persists relationship knowledge.
 
 ## JOIN semantics
 
@@ -665,10 +668,11 @@ JOIN visibility is positional.
 
 A future RowSource must not be visible in an earlier ON condition.
 
-Current JOIN intelligence uses enabled authoritative declared-FK and confirmed
-ProjectDefined relationships from the canonical relationship graph. Declared FKs rank
-above project relationships, and UserConfirmed/learned/heuristic sources remain
-excluded until their own production workflows exist.
+Current JOIN intelligence uses enabled authoritative declared-FK, confirmed
+UserConfirmed, and confirmed ProjectDefined relationships from the canonical
+relationship graph. Explicit trust order is declared FK, UserConfirmed, then
+ProjectDefined. Learned and heuristic sources remain excluded until their own
+production workflows exist.
 
 Do not infer an FK merely because names or datatypes match.
 

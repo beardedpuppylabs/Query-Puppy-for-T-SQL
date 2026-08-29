@@ -308,6 +308,29 @@ test("contract: project relationships use one workspace file and native JSON val
   ]);
   const schema = JSON.parse(
     await readFile("schemas/project-relationships.schema.json", "utf8"),
-  ) as { properties?: { version?: { const?: number } } };
+  ) as {
+    properties?: {
+      version?: { const?: number };
+      relationships?: {
+        items?: {
+          properties?: { provenance?: { enum?: readonly string[] } };
+        };
+      };
+    };
+  };
   assert.equal(schema.properties?.version?.const, 1);
+  assert.deepEqual(
+    schema.properties.relationships?.items?.properties?.provenance?.enum,
+    ["projectDefined", "userConfirmed"],
+  );
+
+  const extensionSource = await readFile("src/extension.ts", "utf8");
+  assert.match(extensionSource, /registerCodeActionsProvider/);
+  assert.match(extensionSource, /SAVE_JOIN_RELATIONSHIP_COMMAND/);
+  const actionSource = await readFile(
+    "src/relationships/SqlRelationshipCodeActionProvider.ts",
+    "utf8",
+  );
+  assert.match(actionSource, /Save JOIN as Query Puppy relationship/);
+  assert.match(actionSource, /CodeActionKind\.RefactorRewrite/);
 });

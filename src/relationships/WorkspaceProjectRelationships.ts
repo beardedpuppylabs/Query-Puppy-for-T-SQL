@@ -2,10 +2,22 @@ import * as vscode from "vscode";
 import type { CompletionScope } from "../completion/CandidateFactory.js";
 import { DatabaseIndex } from "../metadata/DatabaseIndex.js";
 import {
+  appendProjectRelationshipDefinition,
   PROJECT_RELATIONSHIP_FILE,
   ProjectRelationshipConfigurationCache,
   resolveProjectRelationships,
+  type ProjectRelationshipDefinition,
+  type ProjectRelationshipIssue,
 } from "./ProjectRelationshipConfig.js";
+
+export type SaveProjectRelationshipResult =
+  | { readonly kind: "saved"; readonly uri: vscode.Uri }
+  | { readonly kind: "duplicate" }
+  | { readonly kind: "noWorkspace" }
+  | {
+      readonly kind: "invalid";
+      readonly issues: readonly ProjectRelationshipIssue[];
+    };
 
 interface WorkspaceState {
   readonly folder: vscode.WorkspaceFolder;
@@ -95,6 +107,28 @@ export class WorkspaceProjectRelationships implements vscode.Disposable {
     }
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document);
+  }
+
+  async save(
+    document: vscode.TextDocument,
+    definition: ProjectRelationshipDefinition,
+  ): Promise<SaveProjectRelationshipResult> {
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+    if (!folder) return { kind: "noWorkspace" };
+    const projectKey = folder.uri.toString();
+    if (!this.states.has(projectKey)) this.addFolder(folder);
+    const existing = await this.read(projectKey);
+    const update = appendProjectRelationshipDefinition(existing, definition);
+    if (update.kind !== "written") return update;
+    const directory = vscode.Uri.joinPath(folder.uri, ".query-puppy");
+    const uri = vscode.Uri.joinPath(folder.uri, PROJECT_RELATIONSHIP_FILE);
+    await vscode.workspace.fs.createDirectory(directory);
+    await vscode.workspace.fs.writeFile(
+      uri,
+      new TextEncoder().encode(update.text),
+    );
+    this.invalidate(projectKey);
+    return { kind: "saved", uri };
   }
 
   dispose(): void {

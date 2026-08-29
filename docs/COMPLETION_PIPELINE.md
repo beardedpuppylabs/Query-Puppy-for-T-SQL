@@ -394,10 +394,12 @@ provenance and confidence, rather than carrying the physical catalog record or
 project definition as a parallel semantic edge.
 
 At an empty relevant ON position, a declared-FK or explicit project-relationship
-predicate may outrank ordinary column expressions. DeclaredForeignKey/Authoritative
-ranks above ProjectDefined/Confirmed. Native detail/documentation distinguishes `FK
-JOIN` from `Project relationship JOIN`; project documentation lists the explicit
-mappings and states that it is not a SQL Server foreign key.
+predicate may outrank ordinary column expressions. Trust order is
+DeclaredForeignKey/Authoritative, UserConfirmed/Confirmed, then
+ProjectDefined/Confirmed. Native detail/documentation distinguishes `FK JOIN`,
+`User-confirmed relationship JOIN`, and `Project relationship JOIN`; logical
+relationship documentation lists the explicit mappings and states that it is not a
+SQL Server foreign key.
 
 Type-aware member ranking applies normally once the developer explicitly writes an
 operand such as:
@@ -412,10 +414,11 @@ heuristics, or affect ordinary member completion outside a comparison.
 
 ## JOIN source candidates
 
-At JOIN source positions, enabled authoritative declared-FK and confirmed
-ProjectDefined relationships may influence semantic ranking after Contains filtering.
-Declared FKs rank above project relationships. User-confirmed, learned, and heuristic
-sources remain excluded until their own production workflows exist.
+At JOIN source positions, enabled authoritative declared-FK, confirmed UserConfirmed,
+and confirmed ProjectDefined relationships may influence semantic ranking after
+Contains filtering. Declared FKs rank above user-confirmed relationships, which rank
+above manually authored project relationships. Learned and heuristic sources remain
+excluded until their own production workflows exist.
 
 Contains filtering remains intact.
 

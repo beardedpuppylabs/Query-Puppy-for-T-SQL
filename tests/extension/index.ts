@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import * as vscode from "vscode";
 import { DatabaseIndex } from "../../src/metadata/DatabaseIndex.js";
 import type { SqlType } from "../../src/metadata/MetadataModels.js";
@@ -570,6 +571,19 @@ const index = new DatabaseIndex({
         { columnId: 1, columnName: "BelegPositionDetailId", ordinal: 1 },
       ],
     },
+    {
+      database,
+      objectId: 60,
+      schema: "reltest",
+      objectName: "ProjectParent",
+      name: "UQ_ProjectParent_Company_Parent",
+      kind: "uniqueConstraint",
+      filtered: false,
+      columns: [
+        { columnId: 1, columnName: "CompanyId", ordinal: 1 },
+        { columnId: 2, columnName: "ParentId", ordinal: 2 },
+      ],
+    },
   ],
   foreignKeys: [
     {
@@ -967,6 +981,19 @@ async function semanticCompletion(
   );
   return items;
 }
+async function relationshipCodeActions(
+  document: vscode.TextDocument,
+  cursor: number,
+): Promise<readonly (vscode.CodeAction | vscode.Command)[]> {
+  return vscode.commands.executeCommand<
+    readonly (vscode.CodeAction | vscode.Command)[]
+  >(
+    "vscode.executeCodeActionProvider",
+    document.uri,
+    new vscode.Range(document.positionAt(cursor), document.positionAt(cursor)),
+    vscode.CodeActionKind.RefactorRewrite.value,
+  );
+}
 async function registeredSemanticCompletion(
   sql: string,
   cursor = sql.length,
@@ -1233,6 +1260,265 @@ export async function run(): Promise<void> {
       sql,
     );
   };
+
+  const temporaryWorkspacePath =
+    process.env["QUERY_PUPPY_TEST_RELATIONSHIP_WORKSPACE"];
+  assert.ok(temporaryWorkspacePath, "relationship test workspace is missing");
+  const temporaryWorkspaceUri = vscode.Uri.file(temporaryWorkspacePath);
+  assert.ok(
+    vscode.workspace.getWorkspaceFolder(temporaryWorkspaceUri),
+    "relationship test folder must be an owning workspace root",
+  );
+  try {
+    const openWorkspaceSql = async (
+      filename: string,
+      sql: string,
+    ): Promise<vscode.TextDocument> => {
+      const uri = vscode.Uri.file(join(temporaryWorkspacePath, filename));
+      await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(sql));
+      return vscode.workspace.openTextDocument(uri);
+    };
+    const joinSql = `SELECT *
+FROM reltest.ProjectParent AS p
+JOIN reltest.ProjectChild AS c
+  ON c.CompanyId = p.CompanyId
+ AND c.ParentRef = p.ParentId`;
+    const joinDocument = await openWorkspaceSql(
+      "save-relationship.sql",
+      joinSql,
+    );
+    assert.equal(joinDocument.languageId, "sql");
+    const actionPosition = joinDocument.positionAt(
+      joinSql.indexOf("c.ParentRef"),
+    );
+    const directActions = await vscode.commands.executeCommand<
+      readonly vscode.CodeAction[]
+    >(
+      "queryPuppyForTSql.test.provideRelationshipCodeActions",
+      joinDocument,
+      new vscode.Range(actionPosition, actionPosition),
+    );
+    assert.equal(
+      directActions.filter(
+        (action) => action.title === "Save JOIN as Query Puppy relationship",
+      ).length,
+      1,
+      "direct save-JOIN provider is missing",
+    );
+    const actions = await relationshipCodeActions(
+      joinDocument,
+      joinSql.indexOf("c.ParentRef"),
+    );
+    const saveActions = actions.filter(
+      (action) => action.title === "Save JOIN as Query Puppy relationship",
+    );
+    assert.equal(
+      saveActions.length,
+      1,
+      "native save-JOIN Code Action is missing",
+    );
+    const saveAction = saveActions[0];
+    assert.ok(saveAction && "command" in saveAction);
+    assert.equal(typeof saveAction.command, "object");
+    if (typeof saveAction.command !== "object")
+      throw new Error("save-JOIN Code Action has no executable command");
+    const commandArguments: readonly unknown[] =
+      saveAction.command.arguments ?? [];
+    await vscode.commands.executeCommand(
+      saveAction.command.command,
+      ...commandArguments,
+    );
+
+    const relationshipFile = vscode.Uri.joinPath(
+      temporaryWorkspaceUri,
+      ".query-puppy",
+      "relationships.json",
+    );
+    const persisted = JSON.parse(
+      new TextDecoder().decode(
+        await vscode.workspace.fs.readFile(relationshipFile),
+      ),
+    ) as {
+      readonly version: number;
+      readonly relationships: readonly {
+        readonly provenance?: string;
+        readonly source: { readonly object: string };
+        readonly target: { readonly object: string };
+        readonly mappings: readonly {
+          readonly source: string;
+          readonly target: string;
+        }[];
+        readonly declaredForeignKey?: unknown;
+      }[];
+    };
+    assert.equal(persisted.version, 1);
+    assert.deepEqual(persisted.relationships, [
+      {
+        provenance: "userConfirmed",
+        source: {
+          database,
+          schema: "reltest",
+          object: "ProjectChild",
+        },
+        target: {
+          database,
+          schema: "reltest",
+          object: "ProjectParent",
+        },
+        mappings: [
+          { source: "CompanyId", target: "CompanyId" },
+          { source: "ParentRef", target: "ParentId" },
+        ],
+      },
+    ]);
+    assert.equal(
+      "declaredForeignKey" in persisted.relationships[0]!,
+      false,
+      "saved project knowledge must not fabricate FK metadata",
+    );
+    const reversedSql = `SELECT *
+FROM reltest.ProjectParent p
+JOIN reltest.ProjectChild c
+  ON p.ParentId = c.ParentRef
+ AND p.CompanyId = c.CompanyId`;
+    const reversedDocument = await openWorkspaceSql(
+      "reversed-duplicate.sql",
+      reversedSql,
+    );
+    assert.equal(
+      (
+        await relationshipCodeActions(
+          reversedDocument,
+          reversedSql.indexOf("p.ParentId"),
+        )
+      ).some(
+        (action) => action.title === "Save JOIN as Query Puppy relationship",
+      ),
+      false,
+      "reversed operands and AND order must not create a duplicate action",
+    );
+
+    const unrelatedWorkspacePath =
+      process.env["QUERY_PUPPY_TEST_UNRELATED_WORKSPACE"];
+    assert.ok(unrelatedWorkspacePath, "unrelated test workspace is missing");
+    const unrelatedUri = vscode.Uri.file(
+      join(unrelatedWorkspacePath, "unrelated.sql"),
+    );
+    await vscode.workspace.fs.writeFile(
+      unrelatedUri,
+      new TextEncoder().encode(joinSql),
+    );
+    const unrelatedDocument =
+      await vscode.workspace.openTextDocument(unrelatedUri);
+    const unrelatedScope = await vscode.commands.executeCommand<
+      typeof baseScope
+    >(
+      "queryPuppyForTSql.test.applyProjectRelationships",
+      unrelatedDocument,
+      baseScope,
+    );
+    assert.equal(
+      unrelatedScope.indexes.get(database.toLowerCase()),
+      index,
+      "a sibling workspace root must not inherit the saved relationship",
+    );
+
+    const confirmedScope = await vscode.commands.executeCommand<
+      typeof baseScope
+    >(
+      "queryPuppyForTSql.test.applyProjectRelationships",
+      joinDocument,
+      baseScope,
+    );
+    assert.notEqual(
+      confirmedScope.indexes.get(database.toLowerCase()),
+      index,
+      "the save must invalidate and rebuild the workspace relationship overlay",
+    );
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.setCompletionScope",
+      confirmedScope,
+    );
+    const confirmedJoin = await joinPredicates(
+      "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON",
+    );
+    assert.deepEqual(predicateLabels(confirmedJoin), [
+      "c.CompanyId = p.CompanyId AND c.ParentRef = p.ParentId",
+    ]);
+    assert.match(
+      completionDetail(confirmedJoin[0]),
+      /User-confirmed relationship JOIN/,
+    );
+    assert.ok(confirmedJoin[0]?.documentation instanceof vscode.MarkdownString);
+    assert.match(
+      confirmedJoin[0].documentation.value,
+      /User-confirmed relationship/,
+    );
+    assert.doesNotMatch(
+      confirmedJoin[0].documentation.value,
+      /ON DELETE|constraint/i,
+    );
+
+    for (const [filename, unsafeSql] of [
+      [
+        "unsafe-function.sql",
+        "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON ISNULL(c.ParentRef, 0) = p.ParentId",
+      ],
+      [
+        "unsafe-or.sql",
+        "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON c.ParentRef = p.ParentId OR c.CompanyId = p.CompanyId",
+      ],
+    ] as const) {
+      const unsafeDocument = await openWorkspaceSql(filename, unsafeSql);
+      assert.equal(
+        (
+          await relationshipCodeActions(
+            unsafeDocument,
+            unsafeSql.indexOf("ON") + 3,
+          )
+        ).some(
+          (action) => action.title === "Save JOIN as Query Puppy relationship",
+        ),
+        false,
+      );
+    }
+
+    const fkSql =
+      "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON oh.CustomerId = c.CustomerId";
+    const fkDocument = await openWorkspaceSql("declared-fk.sql", fkSql);
+    assert.equal(
+      (
+        await relationshipCodeActions(
+          fkDocument,
+          fkSql.indexOf("oh.CustomerId"),
+        )
+      ).some(
+        (action) => action.title === "Save JOIN as Query Puppy relationship",
+      ),
+      false,
+      "an exact declared FK must suppress redundant persistence",
+    );
+
+    const untitledJoin = await vscode.workspace.openTextDocument({
+      language: "sql",
+      content: joinSql,
+    });
+    assert.equal(
+      (
+        await relationshipCodeActions(
+          untitledJoin,
+          joinSql.indexOf("c.ParentRef"),
+        )
+      ).length,
+      0,
+      "no-workspace SQL must not offer project persistence",
+    );
+  } finally {
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.setCompletionScope",
+      baseScope,
+    );
+  }
 
   const previousStatement = `SELECT *
 FROM reltest.Customers AS staleCustomer

@@ -463,12 +463,12 @@ confidence. Their constraint ID/name, referential actions, disabled/trust state,
 object identities, and composite ordinals remain available through explicit physical
 FK details. Logical relationships do not require or fabricate those details.
 
-Production completion admits enabled authoritative declared FKs and explicitly
-configured confirmed ProjectDefined relationships. Project relationships are never
-inferred, never receive physical FK details, and are presented as project
-relationships rather than constraints. User-confirmed, learned, and heuristic
-sources remain model-ready but are not loaded or suggested. Never infer or label a
-foreign key from matching names or datatypes.
+Production completion admits enabled authoritative declared FKs, explicitly saved
+UserConfirmed/Confirmed relationships, and explicitly authored
+ProjectDefined/Confirmed relationships. Logical relationships never receive physical
+FK details and are presented as relationships rather than constraints. Learned and
+heuristic sources remain model-ready but are not loaded or suggested. Never infer or
+label a foreign key from matching names or datatypes.
 
 Persistent snapshots continue storing canonical SQL Server catalog metadata,
 including physical FK records. Project relationships live separately in the owning
@@ -486,11 +486,23 @@ the same database name on different servers must keep separate workspace relatio
 files. Cross-database definitions are structurally representable by endpoint identity
 but rejected by version 1 until the graph can resolve them safely.
 
-Version 1 derives ProjectDefined/Confirmed semantics from the file rather than storing
-redundant provenance or confidence fields. A future version can add explicit
-UserConfirmed entries through this same workspace file, parser/cache, validation, and
-canonical-graph boundary; it does not need a second persistence architecture. No
-confirmation workflow exists today.
+In version 1, an entry with no `provenance` remains backward-compatible
+ProjectDefined/Confirmed project knowledge. The optional persisted provenance is
+limited to `projectDefined` and `userConfirmed`; confidence remains derived as
+Confirmed. The native **Save JOIN as Query Puppy relationship** Code Action writes
+`userConfirmed` through this same workspace file, parser/cache, validation, and
+canonical-graph boundary.
+
+The action consumes a reusable resolved-JOIN semantic candidate containing two
+canonical physical table endpoints and deterministic canonical column mappings. The
+initial workflow accepts only direct `alias.column = alias.column` terms joined by
+`AND`. It rejects partial expressions, literals, variables, functions, arithmetic,
+`OR`, inequalities, unresolved members, transient RowSources, cross-database edges,
+duplicate mappings, and predicates spanning more than two logical endpoints. Composite
+terms become one relationship. Textual operand order and `AND` order do not define
+identity. An unfiltered PK/UQ endpoint can determine principal direction; otherwise a
+minimal native Quick Pick asks the user to choose source/dependent and target/principal.
+Writing a JOIN alone performs no persistence, observation, or learning.
 
 Each file-backed SQL document uses only the relationship file in its owning workspace
 folder. Multi-root workspaces therefore remain deterministic. Untitled/outside-
@@ -515,9 +527,10 @@ Relationship-aware completion must avoid full-database scans per keystroke.
 
 ## JOIN Intelligence
 
-JOIN predicate suggestions are generated from enabled authoritative declared FKs and
-confirmed ProjectDefined relationships in the canonical runtime graph. Declared FKs
-rank first. Exact logical duplicates collapse, and an equivalent physical FK wins;
+JOIN predicate suggestions are generated from enabled authoritative declared FKs,
+confirmed UserConfirmed relationships, and confirmed ProjectDefined relationships in
+the canonical runtime graph. Explicit trust order is declared FK, UserConfirmed, then
+ProjectDefined. Exact logical duplicates collapse, and an equivalent physical FK wins;
 distinct mappings between the same pair remain distinct.
 
 A relationship may generate a complete expression such as:

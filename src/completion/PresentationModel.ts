@@ -88,7 +88,10 @@ export function presentationModel(
     detail = candidate.relationship
       ? isDeclaredForeignKeyRelationship(candidate.relationship)
         ? " FK JOIN"
-        : " Project relationship JOIN"
+        : candidate.relationship.provenance ===
+            RelationshipProvenance.UserConfirmed
+          ? " User-confirmed relationship JOIN"
+          : " Project relationship JOIN"
       : " JOIN";
   else if (candidate.relatedRelationshipCount) {
     const declared = candidate.relationships?.filter(
@@ -98,11 +101,22 @@ export function presentationModel(
       (relationship) =>
         relationship.provenance === RelationshipProvenance.ProjectDefined,
     ).length;
-    detail = declared
-      ? project
-        ? " related via FK + project relationship"
-        : ` related via ${String(declared)} FK${declared === 1 ? "" : "s"}`
-      : ` related via ${String(project ?? candidate.relatedRelationshipCount)} project relationship${(project ?? candidate.relatedRelationshipCount) === 1 ? "" : "s"}`;
+    const confirmed = candidate.relationships?.filter(
+      (relationship) =>
+        relationship.provenance === RelationshipProvenance.UserConfirmed,
+    ).length;
+    const parts = [
+      declared
+        ? `${String(declared)} FK${declared === 1 ? "" : "s"}`
+        : undefined,
+      confirmed
+        ? `${String(confirmed)} user-confirmed relationship${confirmed === 1 ? "" : "s"}`
+        : undefined,
+      project
+        ? `${String(project)} project relationship${project === 1 ? "" : "s"}`
+        : undefined,
+    ].filter((part): part is string => part !== undefined);
+    detail = ` related via ${parts.join(" + ")}`;
   }
   return {
     detail,

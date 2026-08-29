@@ -32,6 +32,10 @@ import {
   type SuggestionConfigurationScope,
 } from "./config/MicrosoftSuggestions.js";
 import { WorkspaceProjectRelationships } from "./relationships/WorkspaceProjectRelationships.js";
+import {
+  SAVE_JOIN_RELATIONSHIP_COMMAND,
+  SqlRelationshipCodeActionProvider,
+} from "./relationships/SqlRelationshipCodeActionProvider.js";
 
 const EXTENSION_ID = "BeardedPuppyLabs.query-puppy-for-t-sql";
 let suggestionNoticePending = false;
@@ -52,6 +56,14 @@ export function activate(context: vscode.ExtensionContext): void {
     output.appendLine(`[metadata] ${message}`),
   );
   const projectRelationships = new WorkspaceProjectRelationships(output);
+  const relationshipCodeActions = new SqlRelationshipCodeActionProvider(
+    mssqlBackend,
+    mssqlBackend,
+    loader,
+    cache,
+    projectRelationships,
+    output,
+  );
   const provider = new SqlCompletionProvider(
     mssqlBackend,
     mssqlBackend,
@@ -202,6 +214,7 @@ export function activate(context: vscode.ExtensionContext): void {
     output,
     metadataStatus,
     projectRelationships,
+    relationshipCodeActions,
     starExpansion,
     vscode.languages.registerCompletionItemProvider(
       SQL_DOCUMENT_SELECTOR,
@@ -213,8 +226,16 @@ export function activate(context: vscode.ExtensionContext): void {
       signatureProvider,
       SIGNATURE_HELP_METADATA,
     ),
+    vscode.languages.registerCodeActionsProvider(
+      SQL_DOCUMENT_SELECTOR,
+      relationshipCodeActions,
+      {
+        providedCodeActionKinds: [vscode.CodeActionKind.RefactorRewrite],
+      },
+    ),
     vscode.workspace.onDidCloseTextDocument((document) => {
       provider.closeDocument(document.uri);
+      relationshipCodeActions.closeDocument(document.uri);
       if (automaticSignatureHelp.current()?.uri === document.uri.toString())
         clearAutomaticTrigger();
       if (automaticCompletion.current()?.uri === document.uri.toString())
@@ -302,6 +323,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "queryPuppyForTSql.openProjectRelationships",
       () => projectRelationships.openForActiveWorkspace(),
+    ),
+    vscode.commands.registerCommand(
+      SAVE_JOIN_RELATIONSHIP_COMMAND,
+      (request: unknown) => relationshipCodeActions.save(request),
     ),
     vscode.commands.registerCommand(
       "queryPuppyForTSql.showStatus",
@@ -410,6 +435,7 @@ export function activate(context: vscode.ExtensionContext): void {
         (scope: import("./completion/CandidateFactory.js").CompletionScope) => {
           provider.setTestScope(scope);
           starExpansion.setTestCatalog(scope);
+          relationshipCodeActions.setTestScope(scope);
         },
       ),
       vscode.commands.registerCommand(
@@ -427,6 +453,26 @@ export function activate(context: vscode.ExtensionContext): void {
             return await provider.provideCompletionItems(
               document,
               position,
+              cancellation.token,
+            );
+          } finally {
+            cancellation.dispose();
+          }
+        },
+      ),
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.provideRelationshipCodeActions",
+        async (document: vscode.TextDocument, range: vscode.Range) => {
+          const cancellation = new vscode.CancellationTokenSource();
+          try {
+            return await relationshipCodeActions.provideCodeActions(
+              document,
+              range,
+              {
+                diagnostics: [],
+                only: undefined,
+                triggerKind: vscode.CodeActionTriggerKind.Invoke,
+              },
               cancellation.token,
             );
           } finally {

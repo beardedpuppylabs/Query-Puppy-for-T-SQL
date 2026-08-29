@@ -10,6 +10,7 @@ import type {
 import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
 import {
   isDeclaredForeignKeyRelationship,
+  productionRelationshipRank,
   relationshipFromForeignKey,
   RelationshipConfidence,
   RelationshipProvenance,
@@ -230,7 +231,7 @@ test("future relationship provenances remain explicit and cannot fabricate FK de
   assert.equal(invalidHeuristicAuthority, heuristic);
 });
 
-test("contract: ProjectDefined enters production while unimplemented future sources stay excluded", () => {
+test("contract: confirmed relationships enter production while learned and heuristic sources stay excluded", () => {
   const projectDefined: ProjectDefinedRelationship = {
     ...relationshipCore,
     provenance: RelationshipProvenance.ProjectDefined,
@@ -248,12 +249,23 @@ test("contract: ProjectDefined enters production while unimplemented future sour
     candidates.some((candidate) => candidate.kind === "joinPredicate"),
     true,
   );
+  const userConfirmed: UserConfirmedRelationship = {
+    ...relationshipCore,
+    provenance: RelationshipProvenance.UserConfirmed,
+    confidence: RelationshipConfidence.Confirmed,
+  };
+  const confirmedIndex = new DatabaseIndex({ ...metadata, foreignKeys: [] }, [
+    userConfirmed,
+  ]);
+  assert.equal(
+    createCandidates(resolveSqlContext(sql), confirmedIndex).some(
+      (candidate) => candidate.kind === "joinPredicate",
+    ),
+    true,
+  );
+  assert.equal("declaredForeignKey" in userConfirmed, false);
+
   for (const relationship of [
-    {
-      ...relationshipCore,
-      provenance: RelationshipProvenance.UserConfirmed,
-      confidence: RelationshipConfidence.Confirmed,
-    } as const,
     {
       ...relationshipCore,
       provenance: RelationshipProvenance.LearnedFromQuery,
@@ -275,4 +287,12 @@ test("contract: ProjectDefined enters production while unimplemented future sour
       false,
     );
   }
+
+  const declaredRelationship = relationshipFromForeignKey(foreignKey);
+  assert.deepEqual(
+    [declaredRelationship, userConfirmed, projectDefined].map(
+      productionRelationshipRank,
+    ),
+    [0, 1, 2],
+  );
 });

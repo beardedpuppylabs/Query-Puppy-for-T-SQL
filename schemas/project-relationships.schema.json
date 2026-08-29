@@ -21,6 +21,11 @@
         "additionalProperties": false,
         "required": ["source", "target", "mappings"],
         "properties": {
+          "provenance": {
+            "type": "string",
+            "enum": ["projectDefined", "userConfirmed"],
+            "description": "Optional persisted provenance. Omitted entries remain manually authored projectDefined relationships. Query Puppy writes userConfirmed only after the explicit save-JOIN action."
+          },
           "source": {
             "$ref": "#/$defs/endpoint",
             "description": "The logical dependent/source table."

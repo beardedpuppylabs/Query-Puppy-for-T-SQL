@@ -144,7 +144,9 @@ export function isEnabledDeclaredForeignKeyRelationship(
 }
 
 export type ProductionRelationship =
-  DeclaredForeignKeyRelationship | ProjectDefinedRelationship;
+  | DeclaredForeignKeyRelationship
+  | UserConfirmedRelationship
+  | ProjectDefinedRelationship;
 
 /**
  * Returns the explicit trust tier used by production relationship consumers.
@@ -154,8 +156,10 @@ export function productionRelationshipRank(
   relationship: Relationship,
 ): number | undefined {
   if (isEnabledDeclaredForeignKeyRelationship(relationship)) return 0;
-  if (relationship.provenance === RelationshipProvenance.ProjectDefined)
+  if (relationship.provenance === RelationshipProvenance.UserConfirmed)
     return 1;
+  if (relationship.provenance === RelationshipProvenance.ProjectDefined)
+    return 2;
   return undefined;
 }
 
@@ -245,10 +249,13 @@ export function compareRelationships(
 
 const relationshipTrustSortRank = (relationship: Relationship): number => {
   if (isDeclaredForeignKeyRelationship(relationship)) return 0;
-  if (relationship.confidence === RelationshipConfidence.Confirmed) return 1;
-  if (relationship.confidence === RelationshipConfidence.StrongEvidence)
+  if (relationship.provenance === RelationshipProvenance.UserConfirmed)
+    return 1;
+  if (relationship.provenance === RelationshipProvenance.ProjectDefined)
     return 2;
-  return 3;
+  if (relationship.confidence === RelationshipConfidence.StrongEvidence)
+    return 3;
+  return 4;
 };
 
 const normalize = (value: string): string => value.toLocaleLowerCase("en-US");

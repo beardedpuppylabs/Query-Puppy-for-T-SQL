@@ -7,6 +7,7 @@ import {
   isDeclaredForeignKeyRelationship,
   isProductionRelationship,
   productionRelationshipRank,
+  RelationshipProvenance,
   type Relationship,
 } from "../relationships/RelationshipModels.js";
 import { quoteIdentifier } from "../metadata/SqlTypeFormatter.js";
@@ -695,7 +696,7 @@ function joinPredicateCandidates(
           name: predicate,
           normalizedName: normalizeName(predicate),
           searchText: normalizeName(
-            `${predicate} ${isDeclaredForeignKeyRelationship(relationship) ? relationship.declaredForeignKey.constraintName : "project relationship"} ${relationship.mappings.flatMap((mapping) => [mapping.sourceColumnName, mapping.targetColumnName]).join(" ")}`,
+            `${predicate} ${isDeclaredForeignKeyRelationship(relationship) ? relationship.declaredForeignKey.constraintName : relationship.provenance === RelationshipProvenance.UserConfirmed ? "user confirmed relationship" : "project relationship"} ${relationship.mappings.flatMap((mapping) => [mapping.sourceColumnName, mapping.targetColumnName]).join(" ")}`,
           ),
           kind: "joinPredicate" as const,
           database: relationship.source.database,

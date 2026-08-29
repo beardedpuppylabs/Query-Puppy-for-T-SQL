@@ -292,10 +292,11 @@ Physical SQL Server foreign-key records are converted during `DatabaseIndex`
 construction into the provenance-aware canonical relationship model and its single
 bidirectional runtime graph. A workspace's versioned
 `.query-puppy/relationships.json` is parsed once per file lifecycle, validated against
-the current physical index, and reapplied as ProjectDefined/Confirmed relationships
-after cache hydration or refresh. It is not stored in the physical metadata snapshot.
-Future user-confirmed, learned, and heuristic relationships are not production inputs;
-see
+the current physical index, and reapplied as ProjectDefined/Confirmed or explicitly
+saved UserConfirmed/Confirmed relationships after cache hydration or refresh. It is
+not stored in the physical metadata snapshot. The native save-JOIN Code Action writes
+only direct equality mappings after explicit user acceptance; learned and heuristic
+relationships are not production inputs. See
 [Architecture](ARCHITECTURE.md#relationship-intelligence).
 
 Use **Query Puppy for T-SQL: Open Project Relationships** to create or open the file
@@ -303,6 +304,11 @@ for the active workspace folder. Native JSON schema validation is contributed fr
 `schemas/project-relationships.schema.json`. Automated tests should use controlled
 metadata and temporary/injected project configuration; runtime code must never create
 database objects while resolving project relationships.
+
+`npm run test:extension` launches Electron with a fresh disposable workspace and
+user-data directory. This lets the activated save-JOIN contract create and reload a
+real `.query-puppy/relationships.json` without modifying the repository or inheriting
+stale editor windows.
 
 Document semantic analysis derives query-local state such as:
 

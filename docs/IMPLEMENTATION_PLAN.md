@@ -35,10 +35,12 @@ architecture documents describe the intended present-day design.
 - P1 statement-scope and alias-qualified insertion stabilization — complete
 - P1 semantic ownership, wildcard, and local-variable stabilization — complete
 - Relationship Intelligence Phase D ProjectDefined relationships — complete
+- Relationship Intelligence Phase D UserConfirmed save workflow — complete
 
 0.12.2 is a focused stabilization patch for existing completion workflows. Phase D
-now ships explicit project-defined relationships. UserConfirmed promotion UX remains
-deferred; Navigation & Code Understanding remains a larger forward-roadmap area.
+now ships explicit project-defined relationships and an explicit save-resolved-JOIN
+workflow for UserConfirmed relationships. Automatic learning remains deferred;
+Navigation & Code Understanding remains a larger forward-roadmap area.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 
@@ -59,8 +61,25 @@ deferred; Navigation & Code Understanding remains a larger forward-roadmap area.
 - [x] Add model/config/graph/ranking/JOIN/cache/provider/Extension Host contracts and
       user/developer documentation.
 
-No UserConfirmed workflow, learning, heuristics, query mining, multi-hop discovery,
-relationship editor, or release automation is part of this phase.
+## Relationship Intelligence Phase D — UserConfirmed JOIN save
+
+- [x] Add a reusable resolved-JOIN candidate with two canonical physical endpoints
+      and deterministic ordered mappings.
+- [x] Add the native **Save JOIN as Query Puppy relationship** Code Action for strict
+      equality-only `AND` predicates, including meaningful self-joins.
+- [x] Determine direction from an unfiltered PK/UQ only when unique; otherwise use a
+      minimal native direction Quick Pick.
+- [x] Extend version 1 with optional `projectDefined`/`userConfirmed` provenance while
+      preserving absent provenance as ProjectDefined.
+- [x] Reuse the existing workspace store, watcher, validation, overlay, canonical graph,
+      JOIN generation, deduplication, and multi-root ownership boundaries.
+- [x] Admit UserConfirmed/Confirmed with explicit trust order below declared FKs and
+      above ProjectDefined, without fabricating FK metadata.
+- [x] Add unit/provider/contract/activated Extension Host coverage for eligibility,
+      persistence, cache reload, reuse, duplicates, safety, and presentation.
+
+No automatic learning, heuristics, query/plan mining, rejection, multi-hop discovery,
+relationship editor, or release automation is part of this slice.
 
 ## P0 Connection Resilience Stage 1
 

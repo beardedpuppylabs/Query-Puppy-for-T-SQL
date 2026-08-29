@@ -12,7 +12,7 @@ In a schema with hundreds or thousands of objects, remembering part of a name sh
 - Context- and query-scope-aware completion
 - Type-aware ranking that keeps legal alternatives available
 - PK, UQ, and FK metadata on physical columns
-- JOIN predicates and comparison ranking based on actual foreign keys or explicit project relationships
+- JOIN predicates and comparison ranking based on actual foreign keys or explicit project relationships, including user-confirmed JOINs
 - Built-in and catalog function completion, typing, and Signature Help
 - Smart Alias and Tab-only wildcard productivity features
 - Query-local sources and same-server cross-database completion
@@ -195,11 +195,67 @@ either query order, but native completion identifies them as **Project relations
 JOIN**, not as an FK. A matching physical declared FK wins and is shown first. No
 relationship is inferred when the file contains no definition.
 
+You can also save a concrete JOIN you have already written. Place the cursor on its
+`JOIN`/`ON` predicate and invoke the native Code Action:
+
+```text
+Save JOIN as Query Puppy relationship
+```
+
+For example:
+
+```sql
+FROM qpacc.ProjectParent AS p
+JOIN qpacc.ProjectChild AS c
+  ON c.CompanyId = p.CompanyId
+ AND c.ParentRef = p.ParentId
+```
+
+Query Puppy resolves both aliases and columns, stores the composite mapping as one
+`UserConfirmed` relationship, and can offer the same predicate in later queries. If
+one mapped endpoint is an unfiltered PK/UQ it determines the principal direction;
+otherwise a small native Quick Pick asks which table is the source/dependent. The
+saved entry is source-control-visible project knowledge:
+
+```json
+{
+  "provenance": "userConfirmed",
+  "source": {
+    "database": "IntelliSenseLab",
+    "schema": "qpacc",
+    "object": "ProjectChild"
+  },
+  "target": {
+    "database": "IntelliSenseLab",
+    "schema": "qpacc",
+    "object": "ProjectParent"
+  },
+  "mappings": [
+    { "source": "CompanyId", "target": "CompanyId" },
+    { "source": "ParentRef", "target": "ParentId" }
+  ]
+}
+```
+
+The action is deliberately conservative: every predicate term must be a direct
+resolved column equality between exactly two persistent same-database tables, joined
+only by `AND`. Functions, arithmetic, literals, variables, `OR`, inequalities,
+unresolved members, and CTE/temp/derived/table-variable endpoints are not saved.
+Writing a JOIN never persists anything by itself—only invoking the action does.
+Completion presents saved edges as **User-confirmed relationship JOIN**, not as an FK.
+Query Puppy updates only `.query-puppy/relationships.json`; it never creates a SQL
+Server foreign key or executes database DDL.
+
 Version 1 supports same-database table relationships. Applicability is scoped by the
 owning workspace folder and database name. In a multi-root workspace, each SQL file
 uses only its folder's relationship file; untitled or outside-workspace documents use
 declared FKs only. Projects targeting different servers that reuse the same database
 name should use separate workspace relationship files.
+
+Existing version-1 entries without `provenance` remain manually authored
+`ProjectDefined` relationships. The optional persisted values are currently limited to
+`projectDefined` and `userConfirmed`; learned and heuristic relationships are not
+persisted or produced.
 
 ## Query-local intelligence
 

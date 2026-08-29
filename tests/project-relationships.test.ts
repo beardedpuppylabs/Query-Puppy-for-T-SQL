@@ -13,6 +13,7 @@ import type {
 import { FileMetadataSnapshotStore } from "../src/metadata/PersistentMetadataStore.js";
 import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
 import {
+  appendProjectRelationshipDefinition,
   parseProjectRelationshipConfiguration,
   ProjectRelationshipConfigurationCache,
   resolveProjectRelationships,
@@ -188,6 +189,37 @@ test("project relationship JSON parsing is versioned strict and fail-safe", () =
   );
   assert.equal(valid.definitions.length, 1);
   assert.deepEqual(valid.issues, []);
+  assert.equal(valid.definitions[0]?.provenance, undefined);
+  assert.equal(
+    resolve(valid.definitions).resolved.relationships[0]?.provenance,
+    RelationshipProvenance.ProjectDefined,
+    "version-1 entries without provenance remain ProjectDefined",
+  );
+
+  const confirmed = parseProjectRelationshipConfiguration(
+    JSON.stringify({
+      version: 1,
+      relationships: [
+        {
+          ...composite,
+          provenance: RelationshipProvenance.UserConfirmed,
+        },
+      ],
+    }),
+  );
+  assert.deepEqual(confirmed.issues, []);
+  const confirmedRelationship = resolve(confirmed.definitions).resolved
+    .relationships[0];
+  assert.ok(confirmedRelationship);
+  assert.equal(
+    confirmedRelationship.provenance,
+    RelationshipProvenance.UserConfirmed,
+  );
+  assert.equal(
+    confirmedRelationship.confidence,
+    RelationshipConfidence.Confirmed,
+  );
+  assert.equal("declaredForeignKey" in confirmedRelationship, false);
 
   for (const [value, message] of [
     [{ version: 2, relationships: [] }, /Unsupported relationship format/],
@@ -208,6 +240,13 @@ test("project relationship JSON parsing is versioned strict and fail-safe", () =
       { version: 1, relationships: [{ ...composite, typo: true }] },
       /Unknown field/,
     ],
+    [
+      {
+        version: 1,
+        relationships: [{ ...composite, provenance: "learnedFromQuery" }],
+      },
+      /provenance must be/,
+    ],
   ] as const) {
     const parsed = parseProjectRelationshipConfiguration(JSON.stringify(value));
     assert.equal(parsed.definitions.length, 0);
@@ -217,6 +256,56 @@ test("project relationship JSON parsing is versioned strict and fail-safe", () =
     parseProjectRelationshipConfiguration("{").issues[0]?.message ?? "",
     /Invalid JSON/,
   );
+});
+
+test("user-confirmed persistence creates appends preserves and deduplicates version 1", () => {
+  const confirmed: ProjectRelationshipDefinition = {
+    ...composite,
+    provenance: RelationshipProvenance.UserConfirmed,
+  };
+  const created = appendProjectRelationshipDefinition(undefined, confirmed);
+  assert.equal(created.kind, "written");
+  assert.equal(created.text.endsWith("\n"), true);
+  assert.deepEqual(JSON.parse(created.text), {
+    version: 1,
+    relationships: [confirmed],
+  });
+
+  const existing = JSON.stringify({
+    $schema: "../../schemas/project-relationships.schema.json",
+    version: 1,
+    relationships: [alternative],
+  });
+  const appended = appendProjectRelationshipDefinition(existing, confirmed);
+  assert.equal(appended.kind, "written");
+  assert.deepEqual(JSON.parse(appended.text), {
+    $schema: "../../schemas/project-relationships.schema.json",
+    version: 1,
+    relationships: [alternative, confirmed],
+  });
+  assert.equal(
+    appendProjectRelationshipDefinition(appended.text, confirmed).kind,
+    "duplicate",
+  );
+  assert.equal(
+    appendProjectRelationshipDefinition(
+      JSON.stringify({ version: 1, relationships: [composite] }),
+      confirmed,
+    ).kind,
+    "duplicate",
+    "an exact ProjectDefined mapping is already project knowledge",
+  );
+  assert.equal(
+    appendProjectRelationshipDefinition("", confirmed).kind,
+    "invalid",
+    "an invalid existing file must never be overwritten",
+  );
+
+  const distinct = appendProjectRelationshipDefinition(created.text, {
+    ...confirmed,
+    mappings: [{ source: "AlternateParentRef", target: "ParentId" }],
+  });
+  assert.equal(distinct.kind, "written");
 });
 
 test("semantic validation rejects missing endpoints columns duplicates and incompatible mappings", () => {
@@ -311,6 +400,20 @@ test("exact project duplicates collapse and declared FKs win equivalent mappings
   assert.ok(isDeclaredForeignKeyRelationship(withPhysical.relationships[0]!));
 });
 
+test("exact UserConfirmed and ProjectDefined duplicates collapse to explicit user trust", () => {
+  const confirmed: ProjectRelationshipDefinition = {
+    ...composite,
+    provenance: RelationshipProvenance.UserConfirmed,
+  };
+  const result = resolve([composite, confirmed]);
+  assert.equal(result.resolved.relationships.length, 1);
+  assert.equal(
+    result.resolved.relationships[0]?.provenance,
+    RelationshipProvenance.UserConfirmed,
+  );
+  assert.match(result.resolved.issues[0]?.message ?? "", /Duplicate/);
+});
+
 test("distinct declared and project relationships coexist with explicit trust ordering", () => {
   const physical = declared([
     {
@@ -399,6 +502,26 @@ test("project relationships are distinguishable and rank related RowSources", ()
     presentationModel(tables[0]!, true).detail,
     /project relationship/,
   );
+});
+
+test("user-confirmed JOIN presentation is distinct and never claims FK metadata", () => {
+  const { index } = resolve([
+    { ...composite, provenance: RelationshipProvenance.UserConfirmed },
+  ]);
+  const predicate = joins(
+    index,
+    "SELECT * FROM qpacc.ProjectParent p JOIN qpacc.ProjectChild c ON",
+  )[0]!;
+  assert.equal(
+    presentationModel(predicate, true).detail,
+    " User-confirmed relationship JOIN",
+  );
+  assert.ok(predicate.relationship);
+  assert.equal(
+    predicate.relationship.provenance,
+    RelationshipProvenance.UserConfirmed,
+  );
+  assert.equal("declaredForeignKey" in predicate.relationship, false);
 });
 
 test("configuration cache isolates projects and reloads only after invalidation", async () => {
