@@ -173,16 +173,32 @@ export function isProductionRelationship(
 export function relationshipSemanticIdentity(
   relationship: Relationship,
 ): string {
-  const source = objectIdentity(relationship.source);
-  const target = objectIdentity(relationship.target);
-  const forwardMappings = relationship.mappings
+  return relationshipMappingIdentity(
+    relationship.source,
+    relationship.target,
+    relationship.mappings,
+  );
+}
+
+/** Direction-independent identity shared by relationship truth and local evidence. */
+export function relationshipMappingIdentity(
+  sourceReference: RelationshipObjectReference,
+  targetReference: RelationshipObjectReference,
+  mappings: readonly Pick<
+    RelationshipColumnMapping,
+    "sourceColumnName" | "targetColumnName"
+  >[],
+): string {
+  const source = objectIdentity(sourceReference);
+  const target = objectIdentity(targetReference);
+  const forwardMappings = mappings
     .map(
       (mapping) =>
         `${normalize(mapping.sourceColumnName)}>${normalize(mapping.targetColumnName)}`,
     )
     .sort()
     .join("|");
-  const reverseMappings = relationship.mappings
+  const reverseMappings = mappings
     .map(
       (mapping) =>
         `${normalize(mapping.targetColumnName)}>${normalize(mapping.sourceColumnName)}`,

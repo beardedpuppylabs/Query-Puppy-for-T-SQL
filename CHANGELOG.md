@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.12.3
+
+- Added local, save-driven acquisition of safely resolved equality-only JOIN evidence.
+  Equivalent aliases, operand orientation, casing, quoting, and composite term order
+  aggregate by canonical physical endpoint and mapping identity.
+- Added a bounded format-version-1 evidence store under extension-managed workspace
+  storage. It persists only canonical endpoints, ordered mappings, and observation
+  counts; writes are atomic and serialized, workspace roots are isolated, and malformed
+  or unsupported files are not overwritten.
+- Prevented false count inflation from completion calls, repeated unchanged saves, and
+  unrelated edits. Separate genuine JOIN occurrences count independently, ambiguous
+  direction is skipped, and known FK/ProjectDefined/UserConfirmed mappings are excluded.
+- Added the default-enabled `queryPuppyForTSql.relationshipLearning.enabled` setting and
+  **Clear Learned Relationship Evidence** command. No raw SQL, literals, filenames,
+  credentials, connection strings, telemetry, or remote transmission are involved.
+- Kept learned evidence completely outside the canonical production relationship graph,
+  completion, JOIN generation, related-table ranking, diagnostics, and presentation.
+  Version 0.12.3 does not provide LearnedFromQuery suggestions or candidate thresholds.
+
 - Added a native **Save JOIN as Query Puppy relationship** Code Action for explicitly
   persisting safely resolved equality-only JOINs as UserConfirmed/Confirmed project
   knowledge. Composite mappings are saved as one relationship; ambiguous direction is

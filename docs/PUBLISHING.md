@@ -16,6 +16,10 @@ For verification responsibilities, see:
 
 - [Testing Strategy](TESTING.md)
 
+The current central `PROJECT_DEVELOPMENT_PLAN.md` is authoritative for SemVer and
+version immutability. This document owns the operational publication procedure and must
+not redefine that version policy.
+
 ## Current public identity
 
 Publisher display name:
@@ -147,14 +151,19 @@ Also confirm:
 
 Before a release:
 
+- apply the next SemVer required by `PROJECT_DEVELOPMENT_PLAN.md` in the same coherent
+  change as publishable production behavior
+- verify that the intended version has not already been officially released for
+  different code; released versions are immutable
 - confirm the intended package version in `package.json`
 - confirm the lockfile version is consistent where applicable
 - update `CHANGELOG.md` with an accurate release summary, including maintenance or
   repository-only releases
 - synchronize affected README, support, security, contribution, architecture,
   testing, development, roadmap, and publishing documentation
-- do not bump the version merely because implementation or documentation work
-  occurred unless the release process requires a new package version
+- do not consume a new version for documentation-only, test-only, internal
+  behavior-preserving refactoring, research-only, or non-publishable experimental work
+  unless another explicit release requirement applies
 
 ### 4. Start from a clean reviewable state
 

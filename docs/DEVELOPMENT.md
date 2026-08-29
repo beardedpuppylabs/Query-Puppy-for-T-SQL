@@ -330,6 +330,31 @@ document/version/cursor/catalog-identity invalidation model.
 
 See [Architecture](ARCHITECTURE.md) for the current semantic and cache boundaries.
 
+## Testing local learned JOIN evidence
+
+Phase E1 observes eligible resolved JOIN occurrences only when the active workspace SQL
+document is saved. It consumes an already-loaded `DatabaseIndex`; a learning test must
+not expect the observer to cold-load metadata. The focused editor-neutral regression is:
+
+```bash
+node --import tsx --test tests/learned-relationship-evidence.test.ts
+```
+
+`npm run test:extension` also exercises the activated save lifecycle in its disposable
+multi-root workspace. The runner's fresh user-data directory owns
+`ExtensionContext.storageUri`, so evidence never enters the repository and is deleted
+with the disposable test root.
+
+Runtime evidence lives under the editor-provided workspace storage URI in
+`learned-relationship-evidence/workspace-<sha256>.json`. Do not create or inspect a
+`.query-puppy` evidence file: `.query-puppy/relationships.json` remains explicit project
+truth only. Use **Query Puppy for T-SQL: Clear Learned Relationship Evidence** for the
+active workspace folder, or disable future acquisition with
+`queryPuppyForTSql.relationshipLearning.enabled`.
+
+Tests must continue proving that evidence acquisition performs no catalog query, does
+not retain raw SQL or credentials, and cannot enter completion or the canonical graph.
+
 ## Completion architecture
 
 Metadata, parsing, matching, ranking, and semantic candidate construction should

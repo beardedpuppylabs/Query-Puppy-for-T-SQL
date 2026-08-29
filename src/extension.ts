@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { join } from "node:path";
 import { SqlCompletionProvider } from "./completion/SqlCompletionProvider.js";
 import {
   clearMetadataCache,
@@ -36,6 +37,11 @@ import {
   SAVE_JOIN_RELATIONSHIP_COMMAND,
   SqlRelationshipCodeActionProvider,
 } from "./relationships/SqlRelationshipCodeActionProvider.js";
+import { FileLearnedRelationshipEvidenceStore } from "./relationships/LearnedRelationshipEvidenceStore.js";
+import {
+  CLEAR_LEARNED_RELATIONSHIP_EVIDENCE_COMMAND,
+  WorkspaceLearnedRelationshipEvidence,
+} from "./relationships/WorkspaceLearnedRelationshipEvidence.js";
 
 const EXTENSION_ID = "BeardedPuppyLabs.query-puppy-for-t-sql";
 let suggestionNoticePending = false;
@@ -56,6 +62,20 @@ export function activate(context: vscode.ExtensionContext): void {
     output.appendLine(`[metadata] ${message}`),
   );
   const projectRelationships = new WorkspaceProjectRelationships(output);
+  const learnedEvidenceStore = context.storageUri
+    ? new FileLearnedRelationshipEvidenceStore(
+        join(context.storageUri.fsPath, "learned-relationship-evidence"),
+        (message) =>
+          output.appendLine(`[learned-relationship-evidence] ${message}`),
+      )
+    : undefined;
+  const learnedRelationshipEvidence = new WorkspaceLearnedRelationshipEvidence(
+    learnedEvidenceStore,
+    mssqlBackend,
+    cache,
+    projectRelationships,
+    output,
+  );
   const relationshipCodeActions = new SqlRelationshipCodeActionProvider(
     mssqlBackend,
     mssqlBackend,
@@ -214,6 +234,7 @@ export function activate(context: vscode.ExtensionContext): void {
     output,
     metadataStatus,
     projectRelationships,
+    learnedRelationshipEvidence,
     relationshipCodeActions,
     starExpansion,
     vscode.languages.registerCompletionItemProvider(
@@ -323,6 +344,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "queryPuppyForTSql.openProjectRelationships",
       () => projectRelationships.openForActiveWorkspace(),
+    ),
+    vscode.commands.registerCommand(
+      CLEAR_LEARNED_RELATIONSHIP_EVIDENCE_COMMAND,
+      () => learnedRelationshipEvidence.clearForActiveWorkspace(),
     ),
     vscode.commands.registerCommand(
       SAVE_JOIN_RELATIONSHIP_COMMAND,
@@ -436,6 +461,7 @@ export function activate(context: vscode.ExtensionContext): void {
           provider.setTestScope(scope);
           starExpansion.setTestCatalog(scope);
           relationshipCodeActions.setTestScope(scope);
+          learnedRelationshipEvidence.setTestScope(scope);
         },
       ),
       vscode.commands.registerCommand(
@@ -479,6 +505,16 @@ export function activate(context: vscode.ExtensionContext): void {
             cancellation.dispose();
           }
         },
+      ),
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.observeLearnedRelationshipEvidence",
+        (document: vscode.TextDocument) =>
+          learnedRelationshipEvidence.observeSavedDocument(document),
+      ),
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.learnedRelationshipEvidence",
+        (document: vscode.TextDocument) =>
+          learnedRelationshipEvidence.evidenceForDocument(document),
       ),
       vscode.commands.registerCommand(
         "queryPuppyForTSql.test.diagnoseQueryScope",

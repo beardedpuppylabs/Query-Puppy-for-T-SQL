@@ -420,6 +420,12 @@ Contains filtering. Declared FKs rank above user-confirmed relationships, which 
 above manually authored project relationships. Learned and heuristic sources remain
 excluded until their own production workflows exist.
 
+Phase E1's save-driven local learned-evidence store is not a completion input. An
+observation count does not construct a canonical `Relationship`, a JOIN predicate, a
+related-RowSource rank, a comparison tie-breaker, a group, or CompletionItem
+documentation. Candidate thresholds and user-visible LearnedFromQuery semantics remain
+deferred to a later phase.
+
 Contains filtering remains intact.
 
 Multiple FKs must not duplicate the same table source candidate.

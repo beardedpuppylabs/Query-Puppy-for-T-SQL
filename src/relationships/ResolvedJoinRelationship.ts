@@ -36,6 +36,15 @@ export interface ResolvedJoinColumnMapping {
   readonly endpointBColumn: ColumnMetadata;
 }
 
+export interface DirectedResolvedJoinRelationship {
+  readonly source: ResolvedJoinEndpoint;
+  readonly target: ResolvedJoinEndpoint;
+  readonly mappings: readonly {
+    readonly sourceColumn: ColumnMetadata;
+    readonly targetColumn: ColumnMetadata;
+  }[];
+}
+
 export type ResolvedJoinDirection = "aToB" | "bToA" | "ambiguous";
 
 /** Semantic interpretation of one concrete equality-only JOIN predicate. */
@@ -198,41 +207,75 @@ export function resolveJoinRelationshipCandidate(
   };
 }
 
-export function userConfirmedDefinition(
+/** Resolves every conservative physical JOIN occurrence in a complete SQL document. */
+export function resolveJoinRelationshipCandidates(
+  sql: string,
+  scope: CompletionScope,
+): ResolvedJoinRelationshipCandidate[] {
+  const candidates = new Map<string, ResolvedJoinRelationshipCandidate>();
+  for (const token of tokenizeSql(sql)) {
+    if (token.normalized !== "on") continue;
+    const semantics = analyzeDocumentSemantics(sql, token.start, scope);
+    const candidate = resolveJoinRelationshipCandidate(
+      sql,
+      { start: token.start, end: token.start },
+      scope,
+      semantics,
+    );
+    if (!candidate) continue;
+    candidates.set(
+      `${String(candidate.range.start)}:${String(candidate.range.end)}`,
+      candidate,
+    );
+  }
+  return [...candidates.values()].sort(
+    (left, right) =>
+      left.range.start - right.range.start || left.range.end - right.range.end,
+  );
+}
+
+export function directResolvedJoinRelationship(
   candidate: ResolvedJoinRelationshipCandidate,
   direction: Exclude<ResolvedJoinDirection, "ambiguous">,
-): ProjectRelationshipDefinition {
+): DirectedResolvedJoinRelationship {
   const source =
     direction === "aToB" ? candidate.endpointA : candidate.endpointB;
   const target =
     direction === "aToB" ? candidate.endpointB : candidate.endpointA;
   const mappings = candidate.mappings
     .map((mapping) => ({
-      source:
+      sourceColumn:
         direction === "aToB"
           ? mapping.endpointAColumn
           : mapping.endpointBColumn,
-      target:
+      targetColumn:
         direction === "aToB"
           ? mapping.endpointBColumn
           : mapping.endpointAColumn,
     }))
     .sort(
       (left, right) =>
-        left.source.ordinal - right.source.ordinal ||
-        left.target.ordinal - right.target.ordinal ||
-        left.source.name.localeCompare(right.source.name) ||
-        left.target.name.localeCompare(right.target.name),
-    )
-    .map((mapping) => ({
-      source: mapping.source.name,
-      target: mapping.target.name,
-    }));
+        left.sourceColumn.ordinal - right.sourceColumn.ordinal ||
+        left.targetColumn.ordinal - right.targetColumn.ordinal ||
+        left.sourceColumn.name.localeCompare(right.sourceColumn.name) ||
+        left.targetColumn.name.localeCompare(right.targetColumn.name),
+    );
+  return { source, target, mappings };
+}
+
+export function userConfirmedDefinition(
+  candidate: ResolvedJoinRelationshipCandidate,
+  direction: Exclude<ResolvedJoinDirection, "ambiguous">,
+): ProjectRelationshipDefinition {
+  const directed = directResolvedJoinRelationship(candidate, direction);
   return {
     provenance: RelationshipProvenance.UserConfirmed,
-    source: persistedEndpoint(source),
-    target: persistedEndpoint(target),
-    mappings,
+    source: persistedEndpoint(directed.source),
+    target: persistedEndpoint(directed.target),
+    mappings: directed.mappings.map((mapping) => ({
+      source: mapping.sourceColumn.name,
+      target: mapping.targetColumn.name,
+    })),
   };
 }
 

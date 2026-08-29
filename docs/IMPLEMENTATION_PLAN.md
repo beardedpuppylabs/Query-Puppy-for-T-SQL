@@ -36,11 +36,15 @@ architecture documents describe the intended present-day design.
 - P1 semantic ownership, wildcard, and local-variable stabilization — complete
 - Relationship Intelligence Phase D ProjectDefined relationships — complete
 - Relationship Intelligence Phase D UserConfirmed save workflow — complete
+- Relationship Intelligence Phase E1 local learned JOIN evidence acquisition —
+  complete; no learned candidates yet
 
-0.12.2 is a focused stabilization patch for existing completion workflows. Phase D
-now ships explicit project-defined relationships and an explicit save-resolved-JOIN
-workflow for UserConfirmed relationships. Automatic learning remains deferred;
-Navigation & Code Understanding remains a larger forward-roadmap area.
+0.12.3 combines the unreleased Phase D explicit project/UserConfirmed relationship
+work with the Phase E1 local evidence-acquisition foundation. It observes only safely
+resolved JOINs on document save, persists bounded minimal local evidence, and keeps
+that evidence completely outside production relationship consumers. Learned candidate
+policy and presentation remain deferred to Phase E2; Navigation & Code Understanding
+remains a larger forward-roadmap area.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 
@@ -80,6 +84,36 @@ Navigation & Code Understanding remains a larger forward-roadmap area.
 
 No automatic learning, heuristics, query/plan mining, rejection, multi-hop discovery,
 relationship editor, or release automation is part of this slice.
+
+## Relationship Intelligence Phase E1 — local learned JOIN evidence
+
+- [x] Reuse the UserConfirmed resolved-JOIN semantic candidate for document-wide,
+      equality-only physical JOIN acquisition; do not add another JOIN parser.
+- [x] Normalize aliases, operand orientation, identifier casing/quoting, composite
+      term order, canonical endpoints, and mappings into one stable evidence identity.
+- [x] Skip passive observations with ambiguous direction instead of interrupting the
+      editor or guessing.
+- [x] Observe only active workspace SQL documents on save and only from already-loaded
+      metadata; never write per keystroke or initiate catalog access for learning.
+- [x] Count each distinct occurrence-count increase once while preventing completion,
+      repeated-save, and unrelated-edit inflation.
+- [x] Persist format-version-1 evidence under extension-managed workspace storage with
+      atomic serialized writes, multi-root isolation, corruption refusal, and a 4,096
+      unique-mapping bound.
+- [x] Store only canonical endpoints, ordered mappings, and observation counts; retain
+      no SQL text, literals, aliases, filenames, source positions, credentials,
+      connection strings, timestamps, confidence scores, or histories.
+- [x] Skip and remove exact evidence already represented by a declared FK,
+      UserConfirmed relationship, or ProjectDefined relationship.
+- [x] Add a default-enabled opt-out setting and a confirmed native clear command scoped
+      to the active workspace folder.
+- [x] Keep learned evidence outside `Relationship`, `DatabaseIndex`, completion,
+      relationship-aware ranking, diagnostics, navigation, and all UI presentation.
+- [x] Add focused model/store/privacy/count/bounds tests plus an activated disposable
+      multi-root save/reuse/exclusion workflow.
+
+Phase E1 defines no observation threshold, LearnedFromQuery candidate, confirmation
+prompt, heuristic, rejection state, Query Store/plan-cache mining, or remote service.
 
 ## P0 Connection Resilience Stage 1
 

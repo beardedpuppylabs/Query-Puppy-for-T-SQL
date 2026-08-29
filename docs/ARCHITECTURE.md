@@ -502,7 +502,9 @@ duplicate mappings, and predicates spanning more than two logical endpoints. Com
 terms become one relationship. Textual operand order and `AND` order do not define
 identity. An unfiltered PK/UQ endpoint can determine principal direction; otherwise a
 minimal native Quick Pick asks the user to choose source/dependent and target/principal.
-Writing a JOIN alone performs no persistence, observation, or learning.
+Writing a JOIN alone never changes project relationship truth. Explicit invocation is
+still required before `.query-puppy/relationships.json` or the production graph can
+change.
 
 Each file-backed SQL document uses only the relationship file in its owning workspace
 folder. Multi-root workspaces therefore remain deterministic. Untitled/outside-
@@ -510,6 +512,70 @@ workspace documents and sessions with no workspace receive declared-FK behavior 
 Native file watchers invalidate the parsed definition and runtime overlay; the next
 completion re-reads and revalidates it. Invalid relationships are ignored individually
 and reported once per load/index lifecycle in the Query Puppy output channel.
+
+## Local learned relationship evidence
+
+Phase E1 adds a separate uncertain-evidence pipeline:
+
+    saved active workspace SQL document
+        -> existing resolved-JOIN semantic candidate
+        -> deterministic directed evidence definition
+        -> per-document occurrence delta
+        -> bounded extension-managed workspace storage
+
+The evidence acquisition consumer is separate from `DocumentSemanticAnalyzer`,
+completion, and the canonical relationship graph. It reuses the same equality-only
+resolved-JOIN model as UserConfirmed persistence; it does not contain another JOIN
+parser. Only two persistent physical same-database tables, direct column equalities,
+`AND`, compatible known types, and a direction determined unambiguously by the existing
+PK/UQ rule are eligible. Passive acquisition skips ambiguous direction because it must
+never display a Quick Pick or interrupt typing.
+
+The lifecycle is save-driven. One canonical relationship identity can contribute at
+most once per occurrence-count increase in a document's in-memory saved snapshot.
+Repeated completion calls, repeated unchanged saves, and unrelated edits do not
+increment it. Two independent occurrences of the same relationship contribute two;
+removing an occurrence in one saved snapshot and re-adding it in a later saved snapshot
+contributes again. Closing a document ends its in-memory observation snapshot.
+
+Learning is enabled by default and can be disabled with
+`queryPuppyForTSql.relationshipLearning.enabled`. Production acquisition requires the
+saved document to be the active SQL editor in an owning workspace folder and the active
+database index to be already loaded. It reads `MetadataCache.get`; it never invokes
+catalog loading, database enumeration, metadata refresh, query execution, Query Store,
+plan cache, or mssql query-history APIs.
+
+Evidence is stored under `ExtensionContext.storageUri` in the
+`learned-relationship-evidence` directory. A multi-root workspace uses one file per
+owning folder, named by a SHA-256 hash of that folder URI. The folder URI itself,
+filenames, SQL text, aliases, comments, literals, parameters, source ranges, credentials,
+connection strings, provider IDs, and observation history are not serialized. Format
+version 1 stores only canonical database/schema/object endpoints, canonical ordered
+column mappings, and `observationCount`. It is extension-managed local state rather
+than project/source-controlled truth.
+
+Writes are serialized per workspace folder, coalesce all mutations from one save, and
+replace the complete file through a flushed temporary file plus atomic rename. Invalid
+JSON and unsupported versions are ignored and never overwritten automatically;
+persistence failures are non-fatal to completion and logged once per distinct failure.
+The store is capped at 4,096 unique mapping identities. It keeps higher observation
+counts first and breaks equal-count eviction ties by canonical alphabetical identity,
+then serializes retained identities alphabetically. No recency or confidence score is
+stored.
+
+Before mutation, current declared FKs, UserConfirmed relationships, and
+ProjectDefined relationships are compared by the shared direction-independent semantic
+identity. Matching observations are skipped and matching stale evidence is removed.
+Different mappings between the same table pair remain distinct.
+
+The **Clear Learned Relationship Evidence** command clears only the active workspace
+folder's local evidence after native modal confirmation. It does not modify physical
+metadata or `.query-puppy/relationships.json`.
+
+Phase E1 deliberately has no bridge from evidence storage to `DatabaseIndex`,
+`Relationship`, candidate creation, ranking, completion presentation, diagnostics, or
+navigation. `LearnedFromQuery` remains excluded from production relationship consumers;
+observation counts define no candidate/confidence threshold.
 
 ## Relationship graph and indexes
 
@@ -611,6 +677,9 @@ The following are architectural invariants:
 - reuse parsed/semantic document state where practical
 - prefer indexed lookup to catalog scans
 - avoid reparsing unrelated statements unnecessarily
+- acquire learned JOIN evidence only on document save and never write it per keystroke
+- never load or query catalog metadata solely for learned-evidence acquisition
+- bound local learned evidence to 4,096 unique mappings per workspace folder
 - preserve deterministic completion order
 
 ## Security invariants
@@ -624,6 +693,8 @@ The runtime must not:
 - mutate application data
 - require administrator credentials
 - store independent SQL credentials
+- persist raw SQL, literals, filenames, or connection strings as learned evidence
+- transmit learned evidence or SQL text to a remote service
 
 Test fixture provisioning is separate development infrastructure.
 

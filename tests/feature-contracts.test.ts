@@ -334,3 +334,49 @@ test("contract: project relationships use one workspace file and native JSON val
   assert.match(actionSource, /Save JOIN as Query Puppy relationship/);
   assert.match(actionSource, /CodeActionKind\.RefactorRewrite/);
 });
+
+test("contract: learned JOIN evidence is save-driven local infrastructure, not completion truth", async () => {
+  const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
+    readonly version?: string;
+    readonly contributes?: {
+      readonly commands?: readonly { readonly command?: string }[];
+      readonly configuration?: {
+        readonly properties?: Record<string, { readonly default?: unknown }>;
+      };
+    };
+  };
+  assert.equal(manifest.version, "0.12.3");
+  assert.equal(
+    manifest.contributes?.commands?.some(
+      (command) =>
+        command.command ===
+        "queryPuppyForTSql.clearLearnedRelationshipEvidence",
+    ),
+    true,
+  );
+  assert.equal(
+    manifest.contributes.configuration?.properties?.[
+      "queryPuppyForTSql.relationshipLearning.enabled"
+    ]?.default,
+    true,
+  );
+  const extensionSource = await readFile("src/extension.ts", "utf8");
+  assert.match(extensionSource, /WorkspaceLearnedRelationshipEvidence/);
+  const observerSource = await readFile(
+    "src/relationships/WorkspaceLearnedRelationshipEvidence.ts",
+    "utf8",
+  );
+  assert.match(observerSource, /observeSavedDocument/);
+  assert.doesNotMatch(
+    observerSource,
+    /ensureLoaded|MetadataLoader|listDatabases/,
+  );
+  for (const productionConsumer of [
+    "src/completion/CandidateFactory.ts",
+    "src/metadata/DatabaseIndex.ts",
+  ])
+    assert.doesNotMatch(
+      await readFile(productionConsumer, "utf8"),
+      /LearnedRelationshipEvidenceStore|WorkspaceLearnedRelationshipEvidence/,
+    );
+});

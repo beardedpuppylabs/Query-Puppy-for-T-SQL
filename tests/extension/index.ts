@@ -1273,16 +1273,162 @@ export async function run(): Promise<void> {
     const openWorkspaceSql = async (
       filename: string,
       sql: string,
+      workspacePath = temporaryWorkspacePath,
     ): Promise<vscode.TextDocument> => {
-      const uri = vscode.Uri.file(join(temporaryWorkspacePath, filename));
+      const uri = vscode.Uri.file(join(workspacePath, filename));
       await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(sql));
       return vscode.workspace.openTextDocument(uri);
+    };
+    type LearnedEvidence = {
+      readonly source: { readonly object: string };
+      readonly target: { readonly object: string };
+      readonly mappings: readonly {
+        readonly source: string;
+        readonly target: string;
+      }[];
+      readonly observationCount: number;
+    };
+    const learnedEvidence = (document: vscode.TextDocument) =>
+      vscode.commands.executeCommand<readonly LearnedEvidence[]>(
+        "queryPuppyForTSql.test.learnedRelationshipEvidence",
+        document,
+      );
+    const waitForLearnedCount = async (
+      document: vscode.TextDocument,
+      count: number,
+    ): Promise<readonly LearnedEvidence[]> => {
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const current = await learnedEvidence(document);
+        if (
+          current.length === (count === 0 ? 0 : 1) &&
+          (count === 0 || current[0]?.observationCount === count)
+        )
+          return current;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return learnedEvidence(document);
+    };
+    const observeWorkspaceSql = async (
+      filename: string,
+      sql: string,
+      workspacePath = temporaryWorkspacePath,
+    ): Promise<vscode.TextDocument> => {
+      const document = await openWorkspaceSql(filename, "", workspacePath);
+      const editor = await vscode.window.showTextDocument(document, {
+        preview: false,
+      });
+      assert.equal(
+        await editor.edit((builder) =>
+          builder.insert(new vscode.Position(0, 0), sql),
+        ),
+        true,
+      );
+      assert.equal(await document.save(), true);
+      return document;
     };
     const joinSql = `SELECT *
 FROM reltest.ProjectParent AS p
 JOIN reltest.ProjectChild AS c
   ON c.CompanyId = p.CompanyId
  AND c.ParentRef = p.ParentId`;
+
+    const learnedDocument = await observeWorkspaceSql(
+      "learned-relationship.sql",
+      joinSql,
+    );
+    const firstEvidence = await waitForLearnedCount(learnedDocument, 1);
+    assert.deepEqual(firstEvidence, [
+      {
+        source: {
+          database,
+          schema: "reltest",
+          object: "ProjectChild",
+        },
+        target: {
+          database,
+          schema: "reltest",
+          object: "ProjectParent",
+        },
+        mappings: [
+          { source: "CompanyId", target: "CompanyId" },
+          { source: "ParentRef", target: "ParentId" },
+        ],
+        observationCount: 1,
+      },
+    ]);
+    for (let invocation = 0; invocation < 3; invocation++)
+      await vscode.commands.executeCommand(
+        "queryPuppyForTSql.test.provideCompletions",
+        learnedDocument,
+        learnedDocument.positionAt(joinSql.length),
+      );
+    assert.equal(
+      (await learnedEvidence(learnedDocument))[0]?.observationCount,
+      1,
+      "completion invocations must not count as observations",
+    );
+    const learnedEditor = await vscode.window.showTextDocument(
+      learnedDocument,
+      {
+        preview: false,
+      },
+    );
+    assert.equal(
+      await learnedEditor.edit((builder) =>
+        builder.insert(learnedDocument.positionAt(0), "-- unrelated edit\n"),
+      ),
+      true,
+    );
+    assert.equal(await learnedDocument.save(), true);
+    assert.equal(
+      (await waitForLearnedCount(learnedDocument, 1))[0]?.observationCount,
+      1,
+      "an unrelated edit must not recount an unchanged JOIN",
+    );
+    const secondLearnedDocument = await observeWorkspaceSql(
+      "learned-relationship-second.sql",
+      joinSql,
+    );
+    assert.equal(
+      (await waitForLearnedCount(secondLearnedDocument, 2))[0]
+        ?.observationCount,
+      2,
+      "a second independent saved occurrence must increment evidence",
+    );
+    assert.equal(
+      predicateLabels(
+        await joinPredicates(
+          "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON",
+        ),
+      ).includes("c.CompanyId = p.CompanyId AND c.ParentRef = p.ParentId"),
+      false,
+      "learned evidence must not enter JOIN completion",
+    );
+
+    const unrelatedWorkspacePath =
+      process.env["QUERY_PUPPY_TEST_UNRELATED_WORKSPACE"];
+    assert.ok(unrelatedWorkspacePath, "unrelated test workspace is missing");
+    const unrelatedLearnedDocument = await observeWorkspaceSql(
+      "learned-isolated.sql",
+      joinSql,
+      unrelatedWorkspacePath,
+    );
+    assert.equal(
+      (await waitForLearnedCount(unrelatedLearnedDocument, 1))[0]
+        ?.observationCount,
+      1,
+      "the sibling workspace must own an independent evidence record",
+    );
+
+    const learnedRelationshipFile = vscode.Uri.joinPath(
+      temporaryWorkspaceUri,
+      ".query-puppy",
+      "relationships.json",
+    );
+    await assert.rejects(async () =>
+      vscode.workspace.fs.stat(learnedRelationshipFile),
+    );
+
     const joinDocument = await openWorkspaceSql(
       "save-relationship.sql",
       joinSql,
@@ -1329,11 +1475,7 @@ JOIN reltest.ProjectChild AS c
       ...commandArguments,
     );
 
-    const relationshipFile = vscode.Uri.joinPath(
-      temporaryWorkspaceUri,
-      ".query-puppy",
-      "relationships.json",
-    );
+    const relationshipFile = learnedRelationshipFile;
     const persisted = JSON.parse(
       new TextDecoder().decode(
         await vscode.workspace.fs.readFile(relationshipFile),
@@ -1398,9 +1540,6 @@ JOIN reltest.ProjectChild c
       "reversed operands and AND order must not create a duplicate action",
     );
 
-    const unrelatedWorkspacePath =
-      process.env["QUERY_PUPPY_TEST_UNRELATED_WORKSPACE"];
-    assert.ok(unrelatedWorkspacePath, "unrelated test workspace is missing");
     const unrelatedUri = vscode.Uri.file(
       join(unrelatedWorkspacePath, "unrelated.sql"),
     );
@@ -1459,6 +1598,28 @@ JOIN reltest.ProjectChild c
       /ON DELETE|constraint/i,
     );
 
+    const confirmedObservationEditor = await vscode.window.showTextDocument(
+      learnedDocument,
+      { preview: false },
+    );
+    assert.equal(
+      await confirmedObservationEditor.edit((builder) =>
+        builder.insert(learnedDocument.positionAt(0), "-- confirmed now\n"),
+      ),
+      true,
+    );
+    assert.equal(await learnedDocument.save(), true);
+    assert.deepEqual(
+      await waitForLearnedCount(learnedDocument, 0),
+      [],
+      "UserConfirmed truth must remove and stop redundant local evidence",
+    );
+    assert.equal(
+      (await learnedEvidence(unrelatedLearnedDocument))[0]?.observationCount,
+      1,
+      "confirmation in workspace A must not alter workspace B evidence",
+    );
+
     for (const [filename, unsafeSql] of [
       [
         "unsafe-function.sql",
@@ -1498,6 +1659,15 @@ JOIN reltest.ProjectChild c
       false,
       "an exact declared FK must suppress redundant persistence",
     );
+    const observedFkDocument = await observeWorkspaceSql(
+      "learned-declared-fk.sql",
+      fkSql,
+    );
+    assert.deepEqual(
+      await learnedEvidence(observedFkDocument),
+      [],
+      "an authoritative declared FK must not create learned evidence",
+    );
 
     const untitledJoin = await vscode.workspace.openTextDocument({
       language: "sql",
@@ -1513,6 +1683,14 @@ JOIN reltest.ProjectChild c
       0,
       "no-workspace SQL must not offer project persistence",
     );
+    assert.deepEqual(
+      await vscode.commands.executeCommand(
+        "queryPuppyForTSql.test.observeLearnedRelationshipEvidence",
+        untitledJoin,
+      ),
+      { kind: "skipped", reason: "no owning workspace" },
+    );
+    assert.deepEqual(await learnedEvidence(untitledJoin), []);
   } finally {
     await vscode.commands.executeCommand(
       "queryPuppyForTSql.test.setCompletionScope",

@@ -13,6 +13,7 @@ In a schema with hundreds or thousands of objects, remembering part of a name sh
 - Type-aware ranking that keeps legal alternatives available
 - PK, UQ, and FK metadata on physical columns
 - JOIN predicates and comparison ranking based on actual foreign keys or explicit project relationships, including user-confirmed JOINs
+- Local, privacy-conscious acquisition of resolved JOIN evidence on document save
 - Built-in and catalog function completion, typing, and Signature Help
 - Smart Alias and Tab-only wildcard productivity features
 - Query-local sources and same-server cross-database completion
@@ -241,7 +242,9 @@ The action is deliberately conservative: every predicate term must be a direct
 resolved column equality between exactly two persistent same-database tables, joined
 only by `AND`. Functions, arithmetic, literals, variables, `OR`, inequalities,
 unresolved members, and CTE/temp/derived/table-variable endpoints are not saved.
-Writing a JOIN never persists anything by itself—only invoking the action does.
+Writing or saving a JOIN never creates project relationship truth by itself—only
+invoking the action updates `relationships.json` and the production relationship
+graph.
 Completion presents saved edges as **User-confirmed relationship JOIN**, not as an FK.
 Query Puppy updates only `.query-puppy/relationships.json`; it never creates a SQL
 Server foreign key or executes database DDL.
@@ -254,8 +257,43 @@ name should use separate workspace relationship files.
 
 Existing version-1 entries without `provenance` remain manually authored
 `ProjectDefined` relationships. The optional persisted values are currently limited to
-`projectDefined` and `userConfirmed`; learned and heuristic relationships are not
-persisted or produced.
+`projectDefined` and `userConfirmed`.
+
+## Local learned JOIN evidence
+
+Query Puppy can observe the same conservative, safely resolved equality-only JOIN
+shape when an active SQL document is saved. This is local evidence acquisition—not a
+learned relationship suggestion. It does not change completion, JOIN ranking, or the
+canonical production relationship graph in version 0.12.3.
+
+Learning is enabled by default through
+`queryPuppyForTSql.relationshipLearning.enabled`. It runs only for saved SQL files in
+an owning workspace, only when the required database metadata is already loaded, and
+never initiates a catalog load. Repeated saves, completion requests, and unrelated
+edits do not recount an unchanged JOIN. Separate resolved JOIN occurrences count once
+each; observations with ambiguous direction are skipped without interrupting typing.
+
+The extension persists only canonical database/schema/object endpoints, canonical
+ordered column mappings, and an aggregate observation count. It stores no SQL text,
+comments, literals, aliases, source locations, filenames, credentials, connection
+strings, confidence score, or observation history. The versioned evidence file is in
+VS Code/VSCodium's extension-managed workspace storage, not in the project directory
+or `.query-puppy/relationships.json`, so it is local and normally not committed to
+source control. Multi-root folders receive separate hashed evidence files.
+
+Storage is limited to 4,096 unique relationship mappings per workspace folder. When
+the limit is exceeded, higher observation counts are retained first and ties use
+canonical alphabetical identity. Writes are serialized and atomic. Malformed or
+unsupported evidence files are ignored rather than overwritten. Run **Query Puppy for
+T-SQL: Clear Learned Relationship Evidence** to clear only the active workspace
+folder's local observations; explicit ProjectDefined and UserConfirmed relationships
+are unaffected.
+
+An observation identical to a declared FK, ProjectDefined relationship, or
+UserConfirmed relationship is excluded and any matching local evidence is removed.
+No heuristic, Query Store, plan-cache, query-history, telemetry, remote service, or
+query-execution hook participates. A later phase will define whether evidence can ever
+become a visible candidate and how explicit confirmation should work.
 
 ## Query-local intelligence
 
@@ -362,6 +400,7 @@ Query Puppy for T-SQL does not consume, scrape, or filter Microsoft's completion
 - The active `mssql` connection is reused; no independent SQL connection is opened.
 - Schema metadata discovery is read-only and does not require DDL or DML privileges.
 - Allow-listed schema metadata is cached persistently in extension-owned local storage and hydrated into memory for IntelliSense. The snapshots contain schema metadata, not passwords, tokens, secret-bearing connection strings, query text, or document-local SQL state.
+- On SQL document save, optional local relationship learning stores only canonical physical endpoints, ordered column mappings, and aggregate counts in extension-managed workspace storage. It never stores raw SQL, literals, aliases, filenames, credentials, or connection strings, and it is not transmitted remotely.
 - The extension contains no telemetry. Query text, application data, and database contents are not uploaded to an external Query Puppy service.
 
 The connected login still needs permission to read the relevant SQL Server catalog metadata.
@@ -381,6 +420,7 @@ Requires VS Code 1.105 or a compatible VSCodium release.
 - **Query Puppy for T-SQL: Refresh Schema Metadata**
 - **Query Puppy for T-SQL: Clear Schema Cache for Active Database**
 - **Query Puppy for T-SQL: Open Project Relationships**
+- **Query Puppy for T-SQL: Clear Learned Relationship Evidence**
 - **Query Puppy for T-SQL: Show Status**
 - **Query Puppy for T-SQL: Disable Microsoft SQL Suggestions**
 - **Query Puppy for T-SQL: Diagnose Signature Help**
@@ -393,6 +433,7 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 - `queryPuppyForTSql.enabled`: enable or disable Query Puppy for T-SQL completion.
 - `queryPuppyForTSql.debugLogging`: write detailed diagnostics to the **Query Puppy for T-SQL** output channel.
 - `queryPuppyForTSql.smartAliases.enabled`: enable or disable smart alias suggestions.
+- `queryPuppyForTSql.relationshipLearning.enabled`: enable or disable local resolved-JOIN evidence acquisition on SQL document save. Enabled by default; learned evidence is not yet used for suggestions.
 
 ## Known limitations
 
@@ -404,6 +445,7 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 - Type-aware ranking does not implement SQL Server's complete conversion and datatype-precedence engine. Built-in intelligence is intentionally limited to the documented supported set rather than a complete SQL Server function catalog.
 - Stored-procedure result-set discovery is not performed, so the extension does not fabricate procedure result columns.
 - JOIN predicates require either real enabled FK metadata or an explicit valid project relationship. The extension does not infer relationships from naming conventions or similar datatypes.
+- Local learned evidence is acquisition-only in 0.12.3. It does not create LearnedFromQuery completion candidates, JOIN predicates, related-table ranking, diagnostics, or navigation.
 - Project relationship format version 1 supports same-database tables only and binds by workspace folder plus database name; cross-database project edges and stable cross-server identities are not yet supported.
 - Background refresh replaces a complete snapshot rather than applying incremental schema changes. A recent DDL change may remain absent until refresh completes; run **Query Puppy for T-SQL: Refresh Schema Metadata** when immediate discovery is needed.
 - Completion detail width is controlled by the native Suggest Widget and may be truncated in narrow layouts.

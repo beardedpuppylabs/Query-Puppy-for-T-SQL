@@ -26,6 +26,15 @@ the project's existing connection-sharing integration.
 
 The repository documentation has distinct responsibilities.
 
+Project strategy, product boundaries, roadmap direction, versioning policy, and
+cross-cutting engineering principles are defined by:
+
+- `PROJECT_DEVELOPMENT_PLAN.md`
+
+`PROJECT_DEVELOPMENT_PLAN.md` is the authoritative source for release-version
+policy. Repository instructions and operational documentation must apply that
+policy and must not redefine or contradict it.
+
 Current architecture is defined by:
 
 - `docs/ARCHITECTURE.md`
@@ -82,9 +91,15 @@ commands:
 
     read docs/DEVELOPMENT.md
 
-Before modifying versioning, VSIX release procedures, Marketplace publication,
-publisher identity, publishing authentication, or release security checks:
+Before modifying versioning or deciding whether a publishable code change requires
+a package-version bump:
 
+    read PROJECT_DEVELOPMENT_PLAN.md
+
+Before modifying VSIX release procedures, Marketplace publication, publisher
+identity, publishing authentication, or release security checks:
+
+    read PROJECT_DEVELOPMENT_PLAN.md
     read docs/PUBLISHING.md
 
 Before planning a new milestone, changing milestone scope, or updating completed
@@ -116,6 +131,7 @@ When a task changes or introduces:
 - development prerequisites or workflows
 - build or packaging commands
 - release or publishing procedures
+- versioning policy or release metadata
 - publisher identity
 - milestone scope or completion state
 - known limitations
@@ -660,7 +676,27 @@ ProjectDefined/Confirmed relationships loaded from
 canonical metadata and overlaid after physical cache hydration; they must never enter
 physical SQL metadata snapshots or be presented as FKs. UserConfirmed is written only
 after the user invokes the native save-JOIN Code Action for a safely resolved direct-
-equality predicate. Ordinary query editing never persists relationship knowledge.
+equality predicate. Ordinary query editing never persists confirmed or authoritative
+relationship knowledge.
+
+Phase E1 local learned evidence remains uncertain infrastructure, not canonical
+relationship truth. When enabled, the active workspace SQL document may be observed
+only on save, using the same conservative resolved-JOIN semantic model and already-
+loaded metadata. Passive acquisition skips ambiguous direction and must never trigger
+catalog loading, query execution, Query Store/plan-cache access, UI prompts, or writes
+per keystroke.
+
+Learned evidence lives only in bounded extension-managed workspace storage. It stores
+canonical physical endpoints, ordered mappings, and aggregate observation counts—never
+raw SQL, literals, aliases, filenames, source locations, credentials, connection
+strings, confidence thresholds, or complete occurrence history. Multi-root folders
+remain isolated; untitled/outside-workspace documents do not persist evidence.
+
+Phase E1 evidence must not enter `Relationship`, `DatabaseIndex`, completion, JOIN
+generation, relationship-aware ranking, diagnostics, navigation, or presentation.
+LearnedFromQuery remains excluded from production until a later phase defines candidate
+policy and confirmation UX. Exact declared-FK, UserConfirmed, or ProjectDefined edges
+are not accumulated as redundant evidence.
 
 ## JOIN semantics
 
@@ -958,12 +994,54 @@ Do not rewrite Git history.
 
 ## Release safety
 
+`PROJECT_DEVELOPMENT_PLAN.md` is the authoritative source for release-version
+policy.
+
+Versioning is part of publishable product work, not merely a release-time
+administrative step.
+
+For every task that changes publishable production behavior:
+
+1. inspect `PROJECT_DEVELOPMENT_PLAN.md`;
+2. determine the appropriate next SemVer version;
+3. update `package.json`;
+4. update `package-lock.json`;
+5. update `CHANGELOG.md`;
+6. keep those changes in the same coherent task as the behavior change.
+
+Never reuse a version that has already been officially released for different code
+or behavior.
+
+Released version numbers identify immutable product states.
+
+Use the project SemVer policy from `PROJECT_DEVELOPMENT_PLAN.md` rather than
+inventing a local rule.
+
+In particular:
+
+- bug fixes, patch-level behavior corrections, and small non-breaking refinements
+  increment PATCH;
+- meaningful new user-facing capabilities or feature milestones increment MINOR;
+- incompatible configuration, public API, or migration changes increment MAJOR
+  where appropriate.
+
+A version bump is normally not required for:
+
+- documentation-only changes
+- test-only changes
+- internal behavior-preserving refactoring
+- research-only work
+- non-publishable experimental work
+
+Local development builds and temporary test VSIX files do not reserve or consume a
+version number.
+
 Do not publish automatically.
 
 For normal Codex development work, do not run production builds, bundle commands,
-VSIX packaging, or publication. The user owns those steps unless they explicitly
-delegate them for the current task. Codex should still run relevant tests, ESLint,
-strict TypeScript checking, Prettier checking, and `git diff --check`.
+VSIX packaging, or publication unless they are explicitly required by the task or
+the established release/test workflow. Codex should still run relevant tests,
+ESLint, strict TypeScript checking, Prettier checking, and `git diff --check`.
 
 Keep human build and packaging instructions available in the maintained developer
 and publishing documentation.
@@ -971,16 +1049,24 @@ and publishing documentation.
 VSIX packaging for verification is allowed when requested or part of the
 established test flow.
 
-Marketplace/Open VSX publication requires explicit user instruction.
-
-Do not bump the version merely because code changed unless the release task or
-established release process requires it.
+Marketplace/Open VSX publication requires explicit user instruction unless the
+repository later adopts an explicitly documented automated release workflow in
+accordance with `PROJECT_DEVELOPMENT_PLAN.md`.
 
 Before packaging or publishing, ensure no credentials, tokens, private SQL
 connection strings, fixture secrets, or other sensitive local data are included.
 
+Before packaging or publishing, verify that required third-party attribution and
+license notices are present in the final artifact according to
+`PROJECT_DEVELOPMENT_PLAN.md` and the repository's maintained notice files.
+
 For release-process changes, keep `docs/PUBLISHING.md` synchronized with the
 actual package scripts and current supported publication workflow.
+
+If `docs/PUBLISHING.md` or another repository instruction conflicts with
+`PROJECT_DEVELOPMENT_PLAN.md` on versioning policy, treat the development plan as
+authoritative and update the conflicting repository documentation in the same
+coherent task where appropriate.
 
 ## Documentation growth
 
@@ -1058,22 +1144,37 @@ Before considering a development task complete:
 3. confirm canonical project responsibilities were reused
 4. confirm no unnecessary duplicate implementation was introduced
 5. confirm semantic metadata remains lossless through affected pipelines
-6. run relevant provider/unit tests
-7. run Extension Host/integration tests when applicable
-8. run formatting, lint, and strict TypeScript; run a production build only when
-   the user explicitly delegates it
-9. perform installed VSCodium acceptance when native UI behavior requires it
-10. inspect the final diff
-11. remove temporary diagnostics/debugging
-12. confirm no credentials or private data were introduced
-13. review whether `AGENTS.md` or any `docs/` file needs updating
-14. update documentation when its architectural, operational, release, or milestone
-    contract genuinely changed
-15. verify maintained publisher identity references when public/release metadata was
+6. determine whether the task changes publishable production behavior
+7. if publishable behavior changed, apply the required SemVer bump from
+   `PROJECT_DEVELOPMENT_PLAN.md` and update `package.json`, `package-lock.json`,
+   and `CHANGELOG.md`
+8. if no version bump was applied, ensure the task is genuinely documentation-only,
+   test-only, internal behavior-preserving refactoring, research-only, or
+   non-publishable experimental work, or that another explicit project rule explains
+   the decision
+9. confirm no officially released version was reused for different code or behavior
+10. run relevant provider/unit tests
+11. run Extension Host/integration tests when applicable
+12. run formatting, lint, and strict TypeScript; run a production build only when
+    the user explicitly delegates it or the established task/release workflow
+    requires it
+13. perform installed VSCodium acceptance when native UI behavior requires it
+14. inspect the final diff
+15. remove temporary diagnostics/debugging
+16. confirm no credentials or private data were introduced
+17. confirm third-party dependency changes received the required license/notice
+    review and `THIRD_PARTY_NOTICES.md` update where applicable
+18. review whether `AGENTS.md` or any `docs/` file needs updating
+19. update documentation when its architectural, operational, release, versioning,
+    or milestone contract genuinely changed
+20. verify maintained publisher identity references when public/release metadata was
     affected
-16. verify operational documentation still references commands that actually exist
+21. verify operational documentation still references commands that actually exist
     in `package.json`
-17. verify internal documentation remains tracked and package inclusion/exclusion is
+22. verify internal documentation remains tracked and package inclusion/exclusion is
     controlled through the appropriate mechanism
-18. report exactly what was verified and what was not
-19. do not publish unless explicitly instructed
+23. report the versioning decision, including old/new version for publishable changes
+    or the reason no version bump was required
+24. report exactly what was verified and what was not
+25. do not publish unless explicitly instructed or an established documented release
+    workflow explicitly owns publication

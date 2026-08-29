@@ -218,6 +218,7 @@ promises.
 | Provenance-aware canonical relationship model and single graph                       | Implemented, internal foundation | `relationship-model.test.ts` model, direction, determinism, and non-FK isolation contracts                    |
 | Workspace ProjectDefined relationships, validation, isolation, and JOIN use          | Implemented                      | `project-relationships.test.ts`, `feature-contracts.test.ts`, and activated Extension Host contracts          |
 | Explicit resolved-JOIN save as UserConfirmed, persistence, and reuse                 | Implemented                      | `resolved-join-relationship.test.ts`, `project-relationships.test.ts`, and activated Extension Host contracts |
+| Save-driven local learned JOIN evidence acquisition and graph isolation              | Implemented, evidence only       | `learned-relationship-evidence.test.ts`, `feature-contracts.test.ts`, and activated Extension Host contracts  |
 | Same-named objects across schemas/databases                                          | Implemented                      | `schema-intelligence.test.ts` database-index contract                                                         |
 | FK-aware JOIN predicates, multiple FKs, and composite FKs                            | Implemented                      | `join-intelligence.test.ts` FK predicate contracts                                                            |
 | Relationship ranking after Contains                                                  | Implemented                      | `join-intelligence.test.ts` — relationship ranking contract                                                   |
@@ -644,6 +645,46 @@ Protect the explicit UserConfirmed workflow with:
 The Extension Host runner uses a fresh temporary workspace and user-data directory for
 each run. It must remove that directory after both success and failure; tests must not
 write acceptance relationships into the repository.
+
+## Learned relationship evidence tests
+
+Phase E1 evidence tests must protect the boundary between uncertain local observation
+and production relationship truth.
+
+Editor-neutral tests cover:
+
+- reuse of the existing resolved-JOIN candidate for aliases, operand reversal,
+  reordered composite terms, casing, quoting, and meaningful self joins
+- one deterministic composite evidence definition rather than separate column edges
+- absence for arithmetic, functions, `OR`, inequalities, literals, variables,
+  unresolved members, three-source predicates, transient sources, cross-database
+  edges, meaningless self identity, and passive direction ambiguity
+- one count per distinct occurrence-count increase in a saved document snapshot
+- no count increase for completion/provider calls, repeated unchanged saves, or
+  unrelated edits
+- independent occurrences and remove/save/re-add behavior
+- exact declared-FK, ProjectDefined, and UserConfirmed exclusion/removal by canonical
+  semantic identity
+- format-version validation, corruption refusal, deterministic serialization,
+  concurrent update preservation, workspace-key isolation, and atomic persistence
+- the 4,096-unique-record bound with count-first/canonical-identity eviction
+- absence of SQL text, literals, credentials, connection strings, source locations,
+  and filenames from the serialized format
+- continued exclusion of LearnedFromQuery from `productionRelationshipRank` and the
+  canonical `DatabaseIndex` graph
+
+Activated Extension Host coverage must use the disposable multi-root/user-data
+infrastructure and prove that a real document save writes one local record, a second
+independent save increments it, completion calls and unrelated edits do not, workspace
+roots remain isolated, `.query-puppy/relationships.json` remains untouched, and no JOIN
+predicate appears. It must then save the same mapping through the existing
+UserConfirmed workflow and prove the stale learned evidence is removed while the
+confirmed relationship enters ordinary completion. A declared-FK observation and an
+untitled/no-workspace document must create no evidence.
+
+The learning setting/clear command and source-boundary sentinel live in
+`feature-contracts.test.ts`. Tests must not add a candidate threshold, learned
+presentation, or completion expectation before Phase E2 defines that policy.
 
 ## DML target tests
 

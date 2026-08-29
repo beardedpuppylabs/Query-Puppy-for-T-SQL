@@ -2,7 +2,7 @@
   "name": "query-puppy-for-t-sql",
   "displayName": "Query Puppy for T-SQL",
   "description": "Context-aware T-SQL IntelliSense for SQL Server with Contains discovery, type-aware completion, relationship-aware JOINs, and persistent schema caching.",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "publisher": "BeardedPuppyLabs",
   "author": "Bearded Puppy Labs",
   "license": "MIT",
@@ -73,6 +73,10 @@
         "title": "Query Puppy for T-SQL: Open Project Relationships"
       },
       {
+        "command": "queryPuppyForTSql.clearLearnedRelationshipEvidence",
+        "title": "Query Puppy for T-SQL: Clear Learned Relationship Evidence"
+      },
+      {
         "command": "queryPuppyForTSql.showStatus",
         "title": "Query Puppy for T-SQL: Show Status"
       },
@@ -106,6 +110,11 @@
           "type": "boolean",
           "default": true,
           "description": "Suggest short aliases after completing row sources in FROM, JOIN and APPLY clauses."
+        },
+        "queryPuppyForTSql.relationshipLearning.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Observe safely resolved JOIN mappings on SQL document save and aggregate minimal local workspace evidence. Raw SQL is not stored, and learned evidence is not yet used for suggestions."
         }
       }
     },
@@ -136,7 +145,7 @@
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
     "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run test:extension && npm run build",
-    "package": "npm run verify && vsce package --no-dependencies --allow-missing-repository --out query-puppy-for-t-sql-0.12.2.vsix",
+    "package": "npm run verify && vsce package --no-dependencies --allow-missing-repository --out query-puppy-for-t-sql-0.12.3.vsix",
     "publish:marketplace": "vsce publish"
   },
   "devDependencies": {
