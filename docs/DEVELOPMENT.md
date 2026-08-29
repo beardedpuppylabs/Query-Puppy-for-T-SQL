@@ -352,6 +352,19 @@ truth only. Use **Query Puppy for T-SQL: Clear Learned Relationship Evidence** f
 active workspace folder, or disable future acquisition with
 `queryPuppyForTSql.relationshipLearning.enabled`.
 
+Format version 2 persists a bounded current occurrence set alongside the evidence. A
+workspace-relative document identity and canonical relationship identity are SHA-256
+hashed; the same-relationship ordinal distinguishes independent duplicate JOINs. This
+state must deduplicate unchanged saves across document/extension/editor lifetimes.
+Tests that recreate `FileLearnedRelationshipEvidenceStore` against the same directory
+are the restart boundary. Format-version-1 fixtures must preserve their counts and
+upgrade on the next mutation.
+
+The store caps evidence at 4,096 relationships and occurrences at 16,384 identities.
+The clear command resets both collections. Disabling learning must perform no store
+mutation. An occurrence removed in one saved snapshot loses only its dedupe marker; a
+later reintroduction may count once without decrementing historical evidence.
+
 Tests must continue proving that evidence acquisition performs no catalog query, does
 not retain raw SQL or credentials, and cannot enter completion or the canonical graph.
 

@@ -38,13 +38,15 @@ architecture documents describe the intended present-day design.
 - Relationship Intelligence Phase D UserConfirmed save workflow — complete
 - Relationship Intelligence Phase E1 local learned JOIN evidence acquisition —
   complete; no learned candidates yet
+- Relationship Intelligence Phase E1 persisted occurrence-dedupe hardening —
+  complete; counts survive editor/extension lifecycle noise
 
-0.12.3 combines the unreleased Phase D explicit project/UserConfirmed relationship
-work with the Phase E1 local evidence-acquisition foundation. It observes only safely
-resolved JOINs on document save, persists bounded minimal local evidence, and keeps
-that evidence completely outside production relationship consumers. Learned candidate
-policy and presentation remain deferred to Phase E2; Navigation & Code Understanding
-remains a larger forward-roadmap area.
+0.12.4 hardens the Phase E1 local evidence-acquisition foundation with persisted
+privacy-preserving occurrence identity. It observes only safely resolved JOINs on
+document save, preserves bounded minimal local evidence without count inflation across
+close/reopen or restart, and keeps that evidence completely outside production
+relationship consumers. Learned candidate policy and presentation remain deferred to
+Phase E2; Navigation & Code Understanding remains a larger forward-roadmap area.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 
@@ -114,6 +116,32 @@ relationship editor, or release automation is part of this slice.
 
 Phase E1 defines no observation threshold, LearnedFromQuery candidate, confirmation
 prompt, heuristic, rejection state, Query Store/plan-cache mining, or remote service.
+
+### 0.12.4 Phase E1 occurrence-dedupe hardening
+
+- [x] Move unchanged-occurrence deduplication from an editor-lifetime snapshot into the
+      serialized workspace-store transaction.
+- [x] Identify a document by SHA-256 of its normalized workspace-relative identity and
+      a relationship by SHA-256 of its canonical semantic identity.
+- [x] Distinguish multiple equivalent JOINs by zero-based source-order ordinal while
+      ignoring formatting, aliases, quoting, term order, and absolute offsets.
+- [x] Preserve dedupe across close/reopen and recreated store/extension state; keep
+      saved-absence/reintroduction behavior historical and deterministic.
+- [x] Upgrade valid format-version-1 stores to version 2 without losing observation
+      counts; fail safely for malformed or future formats.
+- [x] Bound seen occurrences at 16,384 using oldest-insertion eviction with canonical
+      tie-breaking, independently of the 4,096 relationship-evidence bound.
+- [x] Serialize concurrent saves so the same racing occurrence counts once and distinct
+      document occurrences remain independent.
+- [x] Make clear reset both evidence and dedupe state; disabling learning mutates
+      neither collection.
+- [x] Preserve local-only privacy and the complete separation from production
+      relationships, completion, ranking, diagnostics, and navigation.
+
+Eviction can allow a very old occurrence to count again if later encountered. A
+version-1 store can also count the first eligible saved occurrence once because that
+format had no persisted occurrence identity. These are explicit bounded/backward-
+compatibility tradeoffs, not candidate confidence policy.
 
 ## P0 Connection Resilience Stage 1
 

@@ -687,10 +687,21 @@ catalog loading, query execution, Query Store/plan-cache access, UI prompts, or 
 per keystroke.
 
 Learned evidence lives only in bounded extension-managed workspace storage. It stores
-canonical physical endpoints, ordered mappings, and aggregate observation counts—never
-raw SQL, literals, aliases, filenames, source locations, credentials, connection
-strings, confidence thresholds, or complete occurrence history. Multi-root folders
-remain isolated; untitled/outside-workspace documents do not persist evidence.
+canonical physical endpoints, ordered mappings, aggregate observation counts, and
+bounded seen-occurrence state. Occurrences use SHA-256 fingerprints of workspace-
+relative document identity and canonical relationship identity plus a same-relationship
+ordinal and stable eviction order—never raw SQL, literals, aliases, plaintext filenames
+or paths, source locations, credentials, connection strings, confidence thresholds, or
+complete occurrence history. Multi-root folders remain isolated; untitled/outside-
+workspace documents do not persist evidence.
+
+Persisted occurrence identity, rather than editor lifetime, owns count deduplication.
+Unchanged semantic occurrences must remain deduplicated across close/reopen and
+extension/editor restart. Formatting, alias changes, reordered equality terms, and
+offset movement do not create evidence. Independent duplicate occurrences do. A saved
+absence removes only its occurrence marker, never historical evidence; reintroduction
+may count once. Both evidence and occurrence state remain deterministically bounded,
+and the clear command resets both.
 
 Phase E1 evidence must not enter `Relationship`, `DatabaseIndex`, completion, JOIN
 generation, relationship-aware ranking, diagnostics, navigation, or presentation.

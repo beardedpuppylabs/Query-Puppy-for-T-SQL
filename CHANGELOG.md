@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 0.12.4
+
+- Fixed learned-evidence count inflation across document close/reopen, extension-host
+  restart, editor restart, repeated unchanged saves, formatting-only edits, alias
+  renames, and unrelated edits above a JOIN.
+- Upgraded the local learned-evidence store to format version 2 with
+  privacy-preserving SHA-256 document and relationship fingerprints plus a stable
+  ordinal for each equivalent JOIN occurrence. Existing version-1 observation counts
+  are preserved during deterministic upgrade.
+- Added a 16,384-entry bound for persisted seen-occurrence identities. Oldest recorded
+  identities are evicted first with deterministic tie-breaking; eviction never
+  decrements relationship evidence.
+- Preserved independent evidence semantics: another real JOIN occurrence increments
+  once, a saved removal does not decrement history, and later reintroduction may
+  increment once. Concurrent duplicate observations are serialized and counted once.
+- Extended **Clear Learned Relationship Evidence** to clear both accumulated evidence
+  and persisted occurrence-deduplication state. Disabling learning mutates neither.
+- Kept format-v2 state local and minimal: no raw SQL, aliases, source text, plaintext
+  paths, credentials, connection strings, telemetry, or remote transmission are
+  stored. Learned evidence remains outside completion and the production relationship
+  graph.
+
 ## 0.12.3
 
 - Added local, save-driven acquisition of safely resolved equality-only JOIN evidence.

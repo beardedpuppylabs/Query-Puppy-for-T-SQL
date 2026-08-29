@@ -14,15 +14,22 @@ import type {
 } from "../src/metadata/MetadataModels.js";
 import {
   applyLearnedEvidenceMutation,
+  applyLearnedRelationshipEvidenceSave,
+  boundSeenOccurrences,
+  createLearnedRelationshipEvidenceSave,
   knownRelationshipEvidenceIdentities,
+  learnedDocumentIdentity,
   learnedEvidenceFromResolvedJoin,
   learnedEvidenceIdentity,
+  LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION,
   MAX_LEARNED_RELATIONSHIP_EVIDENCE,
-  LearnedRelationshipObservationTracker,
+  MAX_LEARNED_RELATIONSHIP_SEEN_OCCURRENCES,
   parseLearnedRelationshipEvidence,
   serializeLearnedRelationshipEvidence,
   type LearnedRelationshipEvidenceDefinition,
+  type LearnedRelationshipEvidenceDocument,
   type LearnedRelationshipEvidenceRecord,
+  type LearnedRelationshipSeenOccurrence,
 } from "../src/relationships/LearnedRelationshipEvidence.js";
 import { FileLearnedRelationshipEvidenceStore } from "../src/relationships/LearnedRelationshipEvidenceStore.js";
 import {
@@ -225,42 +232,79 @@ JOIN IntelliSenseLabReporting.qpacc.ProjectChild c
   );
 });
 
-test("observation tracking counts genuine occurrences without provider or edit inflation", () => {
-  const item = evidence(compositeSql)[0]!;
-  const tracker = new LearnedRelationshipObservationTracker();
-  const none = new Set<string>();
-  assert.deepEqual(tracker.observe("document-a", [item], none).observations, [
-    { evidence: item, count: 1 },
-  ]);
-  assert.deepEqual(
-    tracker.observe("document-a", [item], none).observations,
-    [],
-    "unchanged save or unrelated edits must not recount the JOIN",
+test("persisted occurrence identity rejects lifecycle formatting alias and offset inflation", () => {
+  const document = learnedDocumentIdentity("sql/customer-report.sql");
+  const first = evidence(compositeSql)[0]!;
+  let state = emptyEvidenceDocument();
+  state = observe(state, document, [first]);
+  assert.equal(state.evidence[0]?.observationCount, 1);
+  assert.equal(state.seenOccurrences.length, 1);
+
+  state = observe(state, document, [first]);
+  assert.equal(
+    state.evidence[0]?.observationCount,
+    1,
+    "unchanged saves and recreated observers must not recount",
+  );
+
+  const reformatted = evidence(`SELECT 1;
+SELECT *
+FROM [QPACC].[PROJECTPARENT] AS [parent]
+JOIN [qpacc].[projectchild] AS [customer]
+  ON [parent].[PARENTID] = [customer].[parentref]
+ AND [parent].[companyid] = [customer].[COMPANYID]`)[0]!;
+  state = observe(state, document, [reformatted]);
+  assert.equal(
+    state.evidence[0]?.observationCount,
+    1,
+    "offset movement, formatting, quoting, alias changes, operand reversal, and AND order are semantic no-ops",
+  );
+
+  state = observe(state, document, [first, reformatted]);
+  assert.equal(
+    state.evidence[0]?.observationCount,
+    2,
+    "a second real occurrence has a distinct ordinal",
   );
   assert.deepEqual(
-    tracker.observe("document-a", [item, item], none).observations,
-    [{ evidence: item, count: 1 }],
-    "a second independent occurrence contributes once",
+    state.seenOccurrences.map((occurrence) => occurrence.ordinal),
+    [0, 1],
   );
-  assert.deepEqual(tracker.observe("document-a", [], none).observations, []);
-  assert.deepEqual(tracker.observe("document-a", [item], none).observations, [
-    { evidence: item, count: 1 },
-  ]);
-  assert.deepEqual(tracker.observe("document-b", [item], none).observations, [
-    { evidence: item, count: 1 },
-  ]);
+
+  state = observe(state, document, []);
+  assert.equal(state.evidence[0]?.observationCount, 2);
+  assert.deepEqual(state.seenOccurrences, []);
+  state = observe(state, document, [first]);
+  assert.equal(
+    state.evidence[0]?.observationCount,
+    3,
+    "a saved absence followed by reintroduction counts once without decrementing history",
+  );
 });
 
 test("known canonical relationships remove and suppress redundant evidence", () => {
   const item = evidence(compositeSql)[0]!;
   const identity = learnedEvidenceIdentity(item);
-  const tracker = new LearnedRelationshipObservationTracker();
-  const mutation = tracker.observe("document", [item], new Set([identity]));
-  assert.deepEqual(mutation.observations, []);
-  assert.deepEqual([...mutation.removals], [identity]);
+  const document = learnedDocumentIdentity("known.sql");
+  let observed = observe(emptyEvidenceDocument(), document, [item]);
+  observed = observe(observed, learnedDocumentIdentity("known-elsewhere.sql"), [
+    item,
+  ]);
+  assert.equal(observed.evidence[0]?.observationCount, 2);
+  assert.equal(observed.seenOccurrences.length, 2);
+  const save = createLearnedRelationshipEvidenceSave(
+    document,
+    [item],
+    new Set([identity]),
+  );
+  assert.deepEqual(save.occurrences, []);
+  assert.deepEqual([...save.removals], [identity]);
+  const promoted = applyLearnedRelationshipEvidenceSave(observed, save);
+  assert.deepEqual(promoted.evidence, []);
   assert.deepEqual(
-    applyLearnedEvidenceMutation([{ ...item, observationCount: 8 }], mutation),
+    promoted.seenOccurrences,
     [],
+    "promotion removes stale dedupe identities for this relationship across documents",
   );
 });
 
@@ -384,30 +428,118 @@ test("bounded evidence retains stronger records and serializes deterministically
   );
 });
 
+test("seen occurrence state uses a deterministic practical bound without changing evidence history", () => {
+  const item = evidence(compositeSql)[0]!;
+  let state = emptyEvidenceDocument();
+  for (let ordinal = 0; ordinal < 4; ordinal++)
+    state = applyLearnedRelationshipEvidenceSave(
+      state,
+      createLearnedRelationshipEvidenceSave(
+        learnedDocumentIdentity(`document-${String(ordinal)}.sql`),
+        [item],
+        new Set(),
+      ),
+      MAX_LEARNED_RELATIONSHIP_EVIDENCE,
+      3,
+    );
+  assert.equal(state.evidence[0]?.observationCount, 4);
+  assert.equal(state.seenOccurrences.length, 3);
+  assert.equal(
+    state.seenOccurrences.some(
+      (occurrence) =>
+        occurrence.document === learnedDocumentIdentity("document-0.sql"),
+    ),
+    false,
+    "the oldest insertion is evicted first",
+  );
+  assert.equal(
+    boundSeenOccurrences(
+      Array.from(
+        { length: MAX_LEARNED_RELATIONSHIP_SEEN_OCCURRENCES + 1 },
+        (_, ordinal): LearnedRelationshipSeenOccurrence => ({
+          document: learnedDocumentIdentity(`bound-${String(ordinal)}.sql`),
+          relationship: learnedDocumentIdentity("relationship"),
+          ordinal: 0,
+          order: ordinal + 1,
+        }),
+      ),
+    ).length,
+    MAX_LEARNED_RELATIONSHIP_SEEN_OCCURRENCES,
+  );
+  state = applyLearnedRelationshipEvidenceSave(
+    state,
+    createLearnedRelationshipEvidenceSave(
+      learnedDocumentIdentity("document-0.sql"),
+      [item],
+      new Set(),
+    ),
+    MAX_LEARNED_RELATIONSHIP_EVIDENCE,
+    3,
+  );
+  assert.equal(
+    state.evidence[0]?.observationCount,
+    5,
+    "an identity may count again only after deterministic bounded eviction",
+  );
+});
+
 test("file store reloads, serializes concurrent updates, isolates workspaces, and fails safely", async () => {
   const directory = await mkdtemp(join(tmpdir(), "query-puppy-evidence-"));
   try {
     const item = evidence(compositeSql)[0]!;
-    const observation = {
-      observations: [{ evidence: item, count: 1 }],
-      removals: new Set<string>(),
-    };
+    const sameOccurrence = evidenceSave("reports/customer.sql", [item]);
+    const secondDocument = evidenceSave("reports/second.sql", [item]);
+    const thirdDocument = evidenceSave("reports/third.sql", [item]);
     const store = new FileLearnedRelationshipEvidenceStore(directory);
     await Promise.all(
-      Array.from({ length: 6 }, () => store.update("workspace-a", observation)),
+      Array.from({ length: 6 }, () =>
+        store.update("workspace-a", sameOccurrence),
+      ),
     );
-    await store.update("workspace-b", observation);
+    await Promise.all(
+      [secondDocument, thirdDocument].map((save) =>
+        store.update("workspace-a", save),
+      ),
+    );
+    await store.update("workspace-b", sameOccurrence);
     const reloaded = new FileLearnedRelationshipEvidenceStore(directory);
+    assert.equal(
+      (await reloaded.update("workspace-a", sameOccurrence)).kind,
+      "unchanged",
+      "a recreated store must dedupe the unchanged occurrence",
+    );
     const workspaceA = await reloaded.read("workspace-a");
     const workspaceB = await reloaded.read("workspace-b");
     assert.equal(workspaceA.kind, "valid");
     assert.equal(workspaceB.kind, "valid");
-    assert.equal(workspaceA.evidence[0]?.observationCount, 6);
+    assert.equal(workspaceA.evidence[0]?.observationCount, 3);
+    assert.equal(workspaceA.seenOccurrences.length, 3);
     assert.equal(workspaceB.evidence[0]?.observationCount, 1);
+    assert.equal(workspaceB.seenOccurrences.length, 1);
 
     const persisted = await readFile(
       storePath(directory, "workspace-a"),
       "utf8",
+    );
+    const persistedDocument = JSON.parse(persisted) as {
+      readonly version: number;
+      readonly seenOccurrences: readonly {
+        readonly document: string;
+        readonly relationship: string;
+        readonly ordinal: number;
+        readonly order: number;
+      }[];
+    };
+    assert.equal(persistedDocument.version, 2);
+    assert.equal(persistedDocument.seenOccurrences.length, 3);
+    assert.ok(
+      persistedDocument.seenOccurrences.every(
+        (occurrence) =>
+          /^[a-f\d]{64}$/u.test(occurrence.document) &&
+          /^[a-f\d]{64}$/u.test(occurrence.relationship) &&
+          occurrence.ordinal === 0 &&
+          occurrence.order > 0,
+      ),
     );
     assert.deepEqual(
       (await readdir(directory)).filter((name) => name.endsWith(".tmp")),
@@ -415,9 +547,17 @@ test("file store reloads, serializes concurrent updates, isolates workspaces, an
     );
     assert.doesNotMatch(
       persisted,
-      /SELECT|JOIN|literal-value|password|connection string/i,
+      /SELECT|JOIN|customer\.sql|reports\/|ProjectParent AS|literal-value|password|connection string|\/home\//i,
     );
     assert.equal(persisted.includes("observationCount"), true);
+    const parsedPersisted = parseValid(persisted).document;
+    assert.equal(
+      serializeLearnedRelationshipEvidence(
+        parsedPersisted.evidence,
+        parsedPersisted.seenOccurrences,
+      ),
+      persisted,
+    );
 
     const malformedPath = storePath(directory, "malformed-workspace");
     await writeFile(malformedPath, "{not-json", "utf8");
@@ -428,7 +568,7 @@ test("file store reloads, serializes concurrent updates, isolates workspaces, an
     );
     assert.equal((await malformed.read("malformed-workspace")).kind, "invalid");
     assert.equal(
-      (await malformed.update("malformed-workspace", observation)).kind,
+      (await malformed.update("malformed-workspace", sameOccurrence)).kind,
       "invalid",
     );
     assert.equal((await malformed.read("malformed-workspace")).kind, "invalid");
@@ -451,9 +591,64 @@ test("file store reloads, serializes concurrent updates, isolates workspaces, an
     );
     await store.clear("workspace-b");
     const cleared = await store.read("workspace-b");
-    assert.deepEqual(
-      cleared.kind === "valid" ? cleared.evidence : undefined,
-      [],
+    assert.equal(cleared.kind, "valid");
+    assert.deepEqual(cleared.evidence, []);
+    assert.deepEqual(cleared.seenOccurrences, []);
+    await store.update("workspace-b", sameOccurrence);
+    const relearned = await store.read("workspace-b");
+    assert.equal(relearned.kind, "valid");
+    assert.equal(relearned.evidence[0]?.observationCount, 1);
+    assert.equal(relearned.seenOccurrences.length, 1);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("format version 1 preserves evidence counts and initializes occurrence state safely", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "query-puppy-evidence-v1-"));
+  try {
+    const item = evidence(compositeSql)[0]!;
+    const legacy = JSON.stringify({
+      version: 1,
+      evidence: [{ ...item, observationCount: 7 }],
+    });
+    const parsed = parseValid(legacy);
+    assert.equal(parsed.document.version, 2);
+    assert.equal(parsed.document.evidence[0]?.observationCount, 7);
+    assert.deepEqual(parsed.document.seenOccurrences, []);
+
+    await writeFile(storePath(directory, "workspace"), legacy, "utf8");
+    const store = new FileLearnedRelationshipEvidenceStore(directory);
+    const loaded = await store.read("workspace");
+    assert.equal(loaded.kind, "valid");
+    assert.equal(loaded.evidence[0]?.observationCount, 7);
+    assert.deepEqual(loaded.seenOccurrences, []);
+    await store.update("workspace", evidenceSave("unrelated.sql", []));
+    const upgraded = JSON.parse(
+      await readFile(storePath(directory, "workspace"), "utf8"),
+    ) as {
+      readonly version: number;
+      readonly evidence: readonly { readonly observationCount: number }[];
+      readonly seenOccurrences: unknown[];
+    };
+    assert.equal(upgraded.version, 2);
+    assert.equal(upgraded.evidence[0]?.observationCount, 7);
+    assert.deepEqual(upgraded.seenOccurrences, []);
+    await store.update("workspace", evidenceSave("legacy.sql", [item]));
+    const observed = await store.read("workspace");
+    assert.equal(observed.kind, "valid");
+    assert.equal(observed.evidence[0]?.observationCount, 8);
+    assert.equal(observed.seenOccurrences.length, 1);
+
+    assert.equal(
+      parseLearnedRelationshipEvidence(
+        JSON.stringify({
+          version: 2,
+          evidence: [],
+          seenOccurrences: [{ document: "plaintext-path" }],
+        }),
+      ).kind,
+      "invalid",
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -495,6 +690,32 @@ const variant = (
   ...evidence,
   mappings: [{ source, target: "ParentId" }],
 });
+
+const emptyEvidenceDocument = (): LearnedRelationshipEvidenceDocument => ({
+  version: LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION,
+  evidence: [],
+  seenOccurrences: [],
+});
+
+const evidenceSave = (
+  document: string,
+  occurrences: readonly LearnedRelationshipEvidenceDefinition[],
+) =>
+  createLearnedRelationshipEvidenceSave(
+    learnedDocumentIdentity(document),
+    occurrences,
+    new Set(),
+  );
+
+const observe = (
+  state: LearnedRelationshipEvidenceDocument,
+  document: string,
+  occurrences: readonly LearnedRelationshipEvidenceDefinition[],
+): LearnedRelationshipEvidenceDocument =>
+  applyLearnedRelationshipEvidenceSave(
+    state,
+    createLearnedRelationshipEvidenceSave(document, occurrences, new Set()),
+  );
 
 const parseValid = (text: string) => {
   const parsed = parseLearnedRelationshipEvidence(text);

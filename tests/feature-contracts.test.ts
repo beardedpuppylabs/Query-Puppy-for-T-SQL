@@ -345,7 +345,7 @@ test("contract: learned JOIN evidence is save-driven local infrastructure, not c
       };
     };
   };
-  assert.equal(manifest.version, "0.12.3");
+  assert.equal(manifest.version, "0.12.4");
   assert.equal(
     manifest.contributes?.commands?.some(
       (command) =>
@@ -370,6 +370,22 @@ test("contract: learned JOIN evidence is save-driven local infrastructure, not c
   assert.doesNotMatch(
     observerSource,
     /ensureLoaded|MetadataLoader|listDatabases/,
+  );
+  assert.doesNotMatch(
+    observerSource,
+    /LearnedRelationshipObservationTracker|onDidCloseTextDocument/,
+  );
+  const evidenceSource = await readFile(
+    "src/relationships/LearnedRelationshipEvidence.ts",
+    "utf8",
+  );
+  assert.match(
+    evidenceSource,
+    /LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION = 2/,
+  );
+  assert.match(
+    evidenceSource,
+    /MAX_LEARNED_RELATIONSHIP_SEEN_OCCURRENCES = 16384/,
   );
   for (const productionConsumer of [
     "src/completion/CandidateFactory.ts",

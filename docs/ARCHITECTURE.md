@@ -520,7 +520,7 @@ Phase E1 adds a separate uncertain-evidence pipeline:
     saved active workspace SQL document
         -> existing resolved-JOIN semantic candidate
         -> deterministic directed evidence definition
-        -> per-document occurrence delta
+        -> persisted document/relationship/ordinal occurrence identity
         -> bounded extension-managed workspace storage
 
 The evidence acquisition consumer is separate from `DocumentSemanticAnalyzer`,
@@ -531,12 +531,19 @@ parser. Only two persistent physical same-database tables, direct column equalit
 PK/UQ rule are eligible. Passive acquisition skips ambiguous direction because it must
 never display a Quick Pick or interrupt typing.
 
-The lifecycle is save-driven. One canonical relationship identity can contribute at
-most once per occurrence-count increase in a document's in-memory saved snapshot.
-Repeated completion calls, repeated unchanged saves, and unrelated edits do not
-increment it. Two independent occurrences of the same relationship contribute two;
-removing an occurrence in one saved snapshot and re-adding it in a later saved snapshot
-contributes again. Closing a document ends its in-memory observation snapshot.
+The lifecycle is save-driven. Deduplication is part of the serialized store mutation,
+not an editor-lifetime cache. A document identity is SHA-256 of its normalized
+workspace-relative path. Within that document, each occurrence is the SHA-256 of its
+canonical direction-independent relationship identity plus its zero-based source-order
+ordinal among equivalent relationships. The persisted tuple is therefore document
+hash, relationship hash, and ordinal; raw paths and SQL are not retained.
+
+This policy is stable across close/reopen, extension/editor restart, formatting,
+identifier quoting, alias renames, reordered `AND` terms, and unrelated edits that move
+source offsets. Two equivalent JOINs in one document have ordinals zero and one and
+contribute independently. A saved absence removes that document occurrence marker but
+does not decrement historical evidence. Reintroducing it after the saved absence may
+contribute once. Completion calls never enter this lifecycle.
 
 Learning is enabled by default and can be disabled with
 `queryPuppyForTSql.relationshipLearning.enabled`. Production acquisition requires the
@@ -548,11 +555,24 @@ plan cache, or mssql query-history APIs.
 Evidence is stored under `ExtensionContext.storageUri` in the
 `learned-relationship-evidence` directory. A multi-root workspace uses one file per
 owning folder, named by a SHA-256 hash of that folder URI. The folder URI itself,
-filenames, SQL text, aliases, comments, literals, parameters, source ranges, credentials,
-connection strings, provider IDs, and observation history are not serialized. Format
-version 1 stores only canonical database/schema/object endpoints, canonical ordered
-column mappings, and `observationCount`. It is extension-managed local state rather
-than project/source-controlled truth.
+plaintext filenames or paths, SQL text, aliases, comments, literals, parameters, source
+ranges, credentials, connection strings, provider IDs, and raw or unbounded
+observation history are not serialized. Format version 2 stores canonical database/schema/object endpoints,
+canonical ordered column mappings, `observationCount`, and bounded occurrence records:
+
+    {
+      "document": "<sha256(workspace-relative path)>",
+      "relationship": "<sha256(canonical relationship identity)>",
+      "ordinal": 0,
+      "order": 1
+    }
+
+`order` is stable insertion order used only for eviction; it is not recency or
+relationship confidence. Valid format-version-1 stores are accepted, their evidence
+and counts are preserved, and their absent occurrence set initializes empty. The next
+store mutation rewrites version 2. Consequently, the first eligible occurrence saved
+after a version-1 upgrade may contribute once because version 1 retained no identity
+with which to deduplicate it.
 
 Writes are serialized per workspace folder, coalesce all mutations from one save, and
 replace the complete file through a flushed temporary file plus atomic rename. Invalid
@@ -561,16 +581,21 @@ persistence failures are non-fatal to completion and logged once per distinct fa
 The store is capped at 4,096 unique mapping identities. It keeps higher observation
 counts first and breaks equal-count eviction ties by canonical alphabetical identity,
 then serializes retained identities alphabetically. No recency or confidence score is
-stored.
+stored. Seen occurrences are independently capped at 16,384. The lowest insertion
+orders are evicted first with canonical tuple tie-breaking; retained tuples serialize
+canonically. An evicted occurrence can count again if later encountered, which is the
+explicit bounded-storage tradeoff.
 
 Before mutation, current declared FKs, UserConfirmed relationships, and
 ProjectDefined relationships are compared by the shared direction-independent semantic
 identity. Matching observations are skipped and matching stale evidence is removed.
 Different mappings between the same table pair remain distinct.
 
-The **Clear Learned Relationship Evidence** command clears only the active workspace
-folder's local evidence after native modal confirmation. It does not modify physical
-metadata or `.query-puppy/relationships.json`.
+The **Clear Learned Relationship Evidence** command clears both relationship evidence
+and seen-occurrence state for the active workspace folder after native modal
+confirmation. This permits the next eligible save to learn again. It does not modify
+physical metadata or `.query-puppy/relationships.json`. Disabling learning performs no
+evidence or occurrence mutation; re-enabling resumes from the last persisted state.
 
 Phase E1 deliberately has no bridge from evidence storage to `DatabaseIndex`,
 `Relationship`, candidate creation, ranking, completion presentation, diagnostics, or
@@ -680,6 +705,7 @@ The following are architectural invariants:
 - acquire learned JOIN evidence only on document save and never write it per keystroke
 - never load or query catalog metadata solely for learned-evidence acquisition
 - bound local learned evidence to 4,096 unique mappings per workspace folder
+- bound persisted learned occurrence identities to 16,384 per workspace folder
 - preserve deterministic completion order
 
 ## Security invariants

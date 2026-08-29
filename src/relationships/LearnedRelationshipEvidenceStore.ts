@@ -2,17 +2,20 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  applyLearnedEvidenceMutation,
+  applyLearnedRelationshipEvidenceSave,
+  LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION,
   parseLearnedRelationshipEvidence,
   serializeLearnedRelationshipEvidence,
-  type LearnedRelationshipEvidenceMutation,
+  type LearnedRelationshipEvidenceSave,
   type LearnedRelationshipEvidenceRecord,
+  type LearnedRelationshipSeenOccurrence,
 } from "./LearnedRelationshipEvidence.js";
 
 export type LearnedRelationshipEvidenceStoreResult =
   | {
       readonly kind: "valid";
       readonly evidence: readonly LearnedRelationshipEvidenceRecord[];
+      readonly seenOccurrences: readonly LearnedRelationshipSeenOccurrence[];
     }
   | { readonly kind: "invalid"; readonly message: string };
 
@@ -24,6 +27,8 @@ export type LearnedRelationshipEvidenceUpdateResult =
 interface ValidState {
   readonly kind: "valid";
   readonly evidence: readonly LearnedRelationshipEvidenceRecord[];
+  readonly seenOccurrences: readonly LearnedRelationshipSeenOccurrence[];
+  readonly requiresRewrite: boolean;
 }
 
 interface InvalidState {
@@ -47,27 +52,54 @@ export class FileLearnedRelationshipEvidenceStore {
     return this.serialized(workspaceKey, async () => {
       const state = await this.load(workspaceKey);
       return state.kind === "valid"
-        ? { kind: "valid", evidence: state.evidence }
+        ? {
+            kind: "valid",
+            evidence: state.evidence,
+            seenOccurrences: state.seenOccurrences,
+          }
         : state;
     });
   }
 
   update(
     workspaceKey: string,
-    mutation: LearnedRelationshipEvidenceMutation,
+    save: LearnedRelationshipEvidenceSave,
   ): Promise<LearnedRelationshipEvidenceUpdateResult> {
     return this.serialized(workspaceKey, async () => {
       const state = await this.load(workspaceKey);
       if (state.kind === "invalid") return state;
-      const evidence = applyLearnedEvidenceMutation(state.evidence, mutation);
+      const document = applyLearnedRelationshipEvidenceSave(
+        {
+          version: LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION,
+          evidence: state.evidence,
+          seenOccurrences: state.seenOccurrences,
+        },
+        save,
+      );
       if (
-        serializeLearnedRelationshipEvidence(evidence) ===
-        serializeLearnedRelationshipEvidence(state.evidence)
+        !state.requiresRewrite &&
+        serializeLearnedRelationshipEvidence(
+          document.evidence,
+          document.seenOccurrences,
+        ) ===
+          serializeLearnedRelationshipEvidence(
+            state.evidence,
+            state.seenOccurrences,
+          )
       )
-        return { kind: "unchanged", count: evidence.length };
-      await this.write(workspaceKey, evidence);
-      this.states.set(workspaceKey, { kind: "valid", evidence });
-      return { kind: "written", count: evidence.length };
+        return { kind: "unchanged", count: document.evidence.length };
+      await this.write(
+        workspaceKey,
+        document.evidence,
+        document.seenOccurrences,
+      );
+      this.states.set(workspaceKey, {
+        kind: "valid",
+        evidence: document.evidence,
+        seenOccurrences: document.seenOccurrences,
+        requiresRewrite: false,
+      });
+      return { kind: "written", count: document.evidence.length };
     });
   }
 
@@ -78,7 +110,12 @@ export class FileLearnedRelationshipEvidenceStore {
       } catch (error) {
         if (!isNodeError(error, "ENOENT")) throw error;
       }
-      this.states.set(workspaceKey, { kind: "valid", evidence: [] });
+      this.states.set(workspaceKey, {
+        kind: "valid",
+        evidence: [],
+        seenOccurrences: [],
+        requiresRewrite: false,
+      });
     });
   }
 
@@ -90,7 +127,12 @@ export class FileLearnedRelationshipEvidenceStore {
       text = await readFile(this.path(workspaceKey), "utf8");
     } catch (error) {
       if (isNodeError(error, "ENOENT")) {
-        const empty: ValidState = { kind: "valid", evidence: [] };
+        const empty: ValidState = {
+          kind: "valid",
+          evidence: [],
+          seenOccurrences: [],
+          requiresRewrite: false,
+        };
         this.states.set(workspaceKey, empty);
         return empty;
       }
@@ -99,7 +141,12 @@ export class FileLearnedRelationshipEvidenceStore {
     const parsed = parseLearnedRelationshipEvidence(text);
     const state: State =
       parsed.kind === "valid"
-        ? { kind: "valid", evidence: parsed.document.evidence }
+        ? {
+            kind: "valid",
+            evidence: parsed.document.evidence,
+            seenOccurrences: parsed.document.seenOccurrences,
+            requiresRewrite: parsed.upgradedFromVersion1,
+          }
         : parsed;
     this.states.set(workspaceKey, state);
     if (state.kind === "invalid")
@@ -112,6 +159,7 @@ export class FileLearnedRelationshipEvidenceStore {
   private async write(
     workspaceKey: string,
     evidence: readonly LearnedRelationshipEvidenceRecord[],
+    seenOccurrences: readonly LearnedRelationshipSeenOccurrence[],
   ): Promise<void> {
     await mkdir(this.storagePath, { recursive: true });
     const path = this.path(workspaceKey);
@@ -120,7 +168,7 @@ export class FileLearnedRelationshipEvidenceStore {
       const handle = await open(temporaryPath, "wx");
       try {
         await handle.writeFile(
-          serializeLearnedRelationshipEvidence(evidence),
+          serializeLearnedRelationshipEvidence(evidence, seenOccurrences),
           "utf8",
         );
         await handle.sync();

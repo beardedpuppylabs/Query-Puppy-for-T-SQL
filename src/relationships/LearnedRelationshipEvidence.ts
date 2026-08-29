@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { normalizeName } from "../metadata/MetadataModels.js";
 import {
   directResolvedJoinRelationship,
@@ -10,8 +11,9 @@ import {
   type Relationship,
 } from "./RelationshipModels.js";
 
-export const LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION = 1;
+export const LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION = 2;
 export const MAX_LEARNED_RELATIONSHIP_EVIDENCE = 4096;
+export const MAX_LEARNED_RELATIONSHIP_SEEN_OCCURRENCES = 16384;
 
 export interface LearnedRelationshipEvidenceEndpoint {
   readonly database: string;
@@ -37,6 +39,30 @@ export interface LearnedRelationshipEvidenceRecord extends LearnedRelationshipEv
 export interface LearnedRelationshipEvidenceDocument {
   readonly version: typeof LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION;
   readonly evidence: readonly LearnedRelationshipEvidenceRecord[];
+  readonly seenOccurrences: readonly LearnedRelationshipSeenOccurrence[];
+}
+
+export interface LearnedRelationshipSeenOccurrence {
+  /** SHA-256 of the workspace-relative document identity. */
+  readonly document: string;
+  /** SHA-256 of the canonical relationship identity. */
+  readonly relationship: string;
+  /** Zero-based source-order ordinal among this relationship in the document. */
+  readonly ordinal: number;
+  /** Stable insertion order used only for deterministic bounded eviction. */
+  readonly order: number;
+}
+
+export interface LearnedRelationshipOccurrenceObservation {
+  readonly evidence: LearnedRelationshipEvidenceDefinition;
+  readonly relationshipIdentity: string;
+  readonly ordinal: number;
+}
+
+export interface LearnedRelationshipEvidenceSave {
+  readonly document: string;
+  readonly occurrences: readonly LearnedRelationshipOccurrenceObservation[];
+  readonly removals: ReadonlySet<string>;
 }
 
 export interface LearnedRelationshipEvidenceObservation {
@@ -53,6 +79,7 @@ export type ParsedLearnedRelationshipEvidence =
   | {
       readonly kind: "valid";
       readonly document: LearnedRelationshipEvidenceDocument;
+      readonly upgradedFromVersion1: boolean;
     }
   | { readonly kind: "invalid"; readonly message: string };
 
@@ -96,6 +123,19 @@ export function learnedEvidenceIdentity(
   );
 }
 
+export function learnedEvidenceHash(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+/** Hashes a normalized workspace-relative identity; no source path is persisted. */
+export function learnedDocumentIdentity(
+  workspaceRelativeDocumentIdentity: string,
+): string {
+  return learnedEvidenceHash(
+    workspaceRelativeDocumentIdentity.replaceAll("\\", "/"),
+  );
+}
+
 /** Identities already represented by production relationship truth. */
 export function knownRelationshipEvidenceIdentities(
   relationships: readonly Relationship[],
@@ -113,56 +153,92 @@ export function knownRelationshipEvidenceIdentities(
   );
 }
 
-/**
- * Tracks document-save occurrence counts in memory. An unchanged occurrence can
- * contribute only once until it is removed in one save cycle and later re-added.
- */
-export class LearnedRelationshipObservationTracker {
-  private readonly documents = new Map<string, ReadonlyMap<string, number>>();
-
-  observe(
-    documentKey: string,
-    occurrences: readonly LearnedRelationshipEvidenceDefinition[],
-    knownRelationshipIdentities: ReadonlySet<string>,
-  ): LearnedRelationshipEvidenceMutation {
-    const current = occurrenceCounts(occurrences);
-    const previous = this.documents.get(documentKey) ?? new Map();
-    const observations: LearnedRelationshipEvidenceObservation[] = [];
-    const removals = new Set<string>();
-    for (const [identity, occurrence] of current) {
-      if (knownRelationshipIdentities.has(identity)) {
-        removals.add(identity);
-        continue;
-      }
-      const count = occurrence.count - (previous.get(identity) ?? 0);
-      if (count > 0)
-        observations.push({ evidence: occurrence.evidence, count });
+/** Creates one complete saved-document occurrence snapshot in source order. */
+export function createLearnedRelationshipEvidenceSave(
+  document: string,
+  evidence: readonly LearnedRelationshipEvidenceDefinition[],
+  knownRelationshipIdentities: ReadonlySet<string>,
+): LearnedRelationshipEvidenceSave {
+  const ordinals = new Map<string, number>();
+  const occurrences: LearnedRelationshipOccurrenceObservation[] = [];
+  const removals = new Set<string>();
+  for (const item of evidence) {
+    const identity = learnedEvidenceIdentity(item);
+    if (knownRelationshipIdentities.has(identity)) {
+      removals.add(identity);
+      continue;
     }
-    this.documents.set(
-      documentKey,
-      new Map(
-        [...current]
-          .filter(([identity]) => !knownRelationshipIdentities.has(identity))
-          .map(([identity, value]) => [identity, value.count]),
-      ),
-    );
-    return {
-      observations: observations.sort((left, right) =>
-        learnedEvidenceIdentity(left.evidence).localeCompare(
-          learnedEvidenceIdentity(right.evidence),
-        ),
-      ),
-      removals,
+    const ordinal = ordinals.get(identity) ?? 0;
+    ordinals.set(identity, ordinal + 1);
+    occurrences.push({
+      evidence: item,
+      relationshipIdentity: identity,
+      ordinal,
+    });
+  }
+  return { document, occurrences, removals };
+}
+
+/** Applies one saved-document snapshot atomically to evidence and occurrence state. */
+export function applyLearnedRelationshipEvidenceSave(
+  existing: LearnedRelationshipEvidenceDocument,
+  save: LearnedRelationshipEvidenceSave,
+  evidenceLimit = MAX_LEARNED_RELATIONSHIP_EVIDENCE,
+  occurrenceLimit = MAX_LEARNED_RELATIONSHIP_SEEN_OCCURRENCES,
+): LearnedRelationshipEvidenceDocument {
+  const previousOccurrences = new Map(
+    existing.seenOccurrences.map((occurrence) => [
+      seenOccurrenceIdentity(occurrence),
+      occurrence,
+    ]),
+  );
+  const nextOccurrences = new Map(previousOccurrences);
+  for (const [identity, occurrence] of nextOccurrences)
+    if (occurrence.document === save.document) nextOccurrences.delete(identity);
+  const removedRelationshipHashes = new Set(
+    [...save.removals].map(learnedEvidenceHash),
+  );
+  for (const [identity, occurrence] of nextOccurrences)
+    if (removedRelationshipHashes.has(occurrence.relationship))
+      nextOccurrences.delete(identity);
+
+  let nextOrder = existing.seenOccurrences.reduce(
+    (maximum, occurrence) => Math.max(maximum, occurrence.order),
+    0,
+  );
+  const observations: LearnedRelationshipEvidenceObservation[] = [];
+  for (const occurrence of save.occurrences) {
+    const relationship = learnedEvidenceHash(occurrence.relationshipIdentity);
+    const identity = seenOccurrenceIdentity({
+      document: save.document,
+      relationship,
+      ordinal: occurrence.ordinal,
+    });
+    const previous = previousOccurrences.get(identity);
+    if (!previous) {
+      nextOrder++;
+      observations.push({ evidence: occurrence.evidence, count: 1 });
+    }
+    const seen: LearnedRelationshipSeenOccurrence = {
+      document: save.document,
+      relationship,
+      ordinal: occurrence.ordinal,
+      order: previous?.order ?? nextOrder,
     };
+    nextOccurrences.set(identity, seen);
   }
-
-  close(documentKey: string): void {
-    this.documents.delete(documentKey);
-  }
-
-  clear(): void {
-    this.documents.clear();
-  }
+  return {
+    version: LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION,
+    evidence: applyLearnedEvidenceMutation(
+      existing.evidence,
+      { observations, removals: save.removals },
+      evidenceLimit,
+    ),
+    seenOccurrences: boundSeenOccurrences(
+      [...nextOccurrences.values()],
+      occurrenceLimit,
+    ),
+  };
 }
 
 export function applyLearnedEvidenceMutation(
@@ -214,15 +290,25 @@ export function parseLearnedRelationshipEvidence(
       message: `Invalid JSON: ${errorMessage(error)}.`,
     };
   }
-  if (!record(value) || unknownFields(value, ["version", "evidence"]).length)
+  if (!record(value))
     return {
       kind: "invalid",
       message: "Invalid learned-evidence document shape.",
     };
-  if (value["version"] !== LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION)
+  const version = value["version"];
+  if (version !== 1 && version !== LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION)
     return {
       kind: "invalid",
-      message: `Unsupported learned-evidence format version ${String(value["version"])}.`,
+      message: `Unsupported learned-evidence format version ${String(version)}.`,
+    };
+  const allowedFields =
+    version === 1
+      ? ["version", "evidence"]
+      : ["version", "evidence", "seenOccurrences"];
+  if (unknownFields(value, allowedFields).length)
+    return {
+      kind: "invalid",
+      message: "Invalid learned-evidence document shape.",
     };
   if (!Array.isArray(value["evidence"]))
     return { kind: "invalid", message: "`evidence` must be an array." };
@@ -236,20 +322,48 @@ export function parseLearnedRelationshipEvidence(
       };
     records.push(parsed);
   }
+  const seenOccurrences: LearnedRelationshipSeenOccurrence[] = [];
+  if (version === LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION) {
+    if (!Array.isArray(value["seenOccurrences"]))
+      return {
+        kind: "invalid",
+        message: "`seenOccurrences` must be an array.",
+      };
+    const identities = new Set<string>();
+    for (const [index, candidate] of value["seenOccurrences"].entries()) {
+      const parsed = parseSeenOccurrence(candidate);
+      if (!parsed)
+        return {
+          kind: "invalid",
+          message: `Invalid seen occurrence at index ${String(index)}.`,
+        };
+      const identity = seenOccurrenceIdentity(parsed);
+      if (identities.has(identity))
+        return {
+          kind: "invalid",
+          message: `Duplicate seen occurrence at index ${String(index)}.`,
+        };
+      identities.add(identity);
+      seenOccurrences.push(parsed);
+    }
+  }
   return {
     kind: "valid",
+    upgradedFromVersion1: version === 1,
     document: {
       version: LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION,
       evidence: applyLearnedEvidenceMutation(records, {
         observations: [],
         removals: new Set(),
       }),
+      seenOccurrences: boundSeenOccurrences(seenOccurrences),
     },
   };
 }
 
 export function serializeLearnedRelationshipEvidence(
   evidence: readonly LearnedRelationshipEvidenceRecord[],
+  seenOccurrences: readonly LearnedRelationshipSeenOccurrence[] = [],
 ): string {
   const document: LearnedRelationshipEvidenceDocument = {
     version: LEARNED_RELATIONSHIP_EVIDENCE_FORMAT_VERSION,
@@ -257,8 +371,27 @@ export function serializeLearnedRelationshipEvidence(
       observations: [],
       removals: new Set(),
     }),
+    seenOccurrences: boundSeenOccurrences(seenOccurrences),
   };
   return `${JSON.stringify(document, undefined, 2)}\n`;
+}
+
+export function boundSeenOccurrences(
+  occurrences: readonly LearnedRelationshipSeenOccurrence[],
+  limit = MAX_LEARNED_RELATIONSHIP_SEEN_OCCURRENCES,
+): LearnedRelationshipSeenOccurrence[] {
+  const newest = [...occurrences]
+    .sort(
+      (left, right) =>
+        right.order - left.order ||
+        seenOccurrenceIdentity(left).localeCompare(
+          seenOccurrenceIdentity(right),
+        ),
+    )
+    .slice(0, Math.max(0, limit));
+  return newest.sort((left, right) =>
+    seenOccurrenceIdentity(left).localeCompare(seenOccurrenceIdentity(right)),
+  );
 }
 
 const endpoint = (value: {
@@ -270,25 +403,6 @@ const endpoint = (value: {
   schema: value.schema,
   object: value.object.name,
 });
-
-const occurrenceCounts = (
-  occurrences: readonly LearnedRelationshipEvidenceDefinition[],
-): Map<
-  string,
-  { readonly evidence: LearnedRelationshipEvidenceDefinition; count: number }
-> => {
-  const result = new Map<
-    string,
-    { readonly evidence: LearnedRelationshipEvidenceDefinition; count: number }
-  >();
-  for (const evidence of occurrences) {
-    const identity = learnedEvidenceIdentity(evidence);
-    const existing = result.get(identity);
-    if (existing) existing.count++;
-    else result.set(identity, { evidence, count: 1 });
-  }
-  return result;
-};
 
 const parseRecord = (
   value: unknown,
@@ -349,6 +463,37 @@ const parseRecord = (
   };
 };
 
+const parseSeenOccurrence = (
+  value: unknown,
+): LearnedRelationshipSeenOccurrence | undefined => {
+  if (
+    !record(value) ||
+    unknownFields(value, ["document", "relationship", "ordinal", "order"])
+      .length ||
+    !sha256(value["document"]) ||
+    !sha256(value["relationship"]) ||
+    !Number.isSafeInteger(value["ordinal"]) ||
+    Number(value["ordinal"]) < 0 ||
+    !Number.isSafeInteger(value["order"]) ||
+    Number(value["order"]) <= 0
+  )
+    return undefined;
+  return {
+    document: value["document"],
+    relationship: value["relationship"],
+    ordinal: Number(value["ordinal"]),
+    order: Number(value["order"]),
+  };
+};
+
+const seenOccurrenceIdentity = (
+  occurrence: Pick<
+    LearnedRelationshipSeenOccurrence,
+    "document" | "relationship" | "ordinal"
+  >,
+): string =>
+  `${occurrence.document}\u0000${occurrence.relationship}\u0000${String(occurrence.ordinal).padStart(10, "0")}`;
+
 const parseEndpoint = (
   value: unknown,
 ): LearnedRelationshipEvidenceEndpoint | undefined => {
@@ -376,6 +521,8 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const name = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
+const sha256 = (value: unknown): value is string =>
+  typeof value === "string" && /^[a-f\d]{64}$/u.test(value);
 const unknownFields = (
   value: Record<string, unknown>,
   allowed: readonly string[],

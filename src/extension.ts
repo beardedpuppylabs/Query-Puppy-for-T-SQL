@@ -517,6 +517,16 @@ export function activate(context: vscode.ExtensionContext): void {
           learnedRelationshipEvidence.evidenceForDocument(document),
       ),
       vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.learnedRelationshipEvidenceState",
+        (document: vscode.TextDocument) =>
+          learnedRelationshipEvidence.stateForDocument(document),
+      ),
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.clearLearnedRelationshipEvidence",
+        (document: vscode.TextDocument) =>
+          learnedRelationshipEvidence.clearForDocument(document),
+      ),
+      vscode.commands.registerCommand(
         "queryPuppyForTSql.test.diagnoseQueryScope",
         (document: vscode.TextDocument, position: vscode.Position) =>
           provider.diagnoseQueryScope(document, position),

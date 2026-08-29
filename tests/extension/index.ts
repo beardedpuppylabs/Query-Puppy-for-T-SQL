@@ -1288,9 +1288,24 @@ export async function run(): Promise<void> {
       }[];
       readonly observationCount: number;
     };
+    type LearnedEvidenceState = {
+      readonly kind: "valid" | "invalid";
+      readonly evidence?: readonly LearnedEvidence[];
+      readonly seenOccurrences?: readonly {
+        readonly document: string;
+        readonly relationship: string;
+        readonly ordinal: number;
+        readonly order: number;
+      }[];
+    };
     const learnedEvidence = (document: vscode.TextDocument) =>
       vscode.commands.executeCommand<readonly LearnedEvidence[]>(
         "queryPuppyForTSql.test.learnedRelationshipEvidence",
+        document,
+      );
+    const learnedEvidenceState = (document: vscode.TextDocument) =>
+      vscode.commands.executeCommand<LearnedEvidenceState>(
+        "queryPuppyForTSql.test.learnedRelationshipEvidenceState",
         document,
       );
     const waitForLearnedCount = async (
@@ -1332,7 +1347,7 @@ JOIN reltest.ProjectChild AS c
   ON c.CompanyId = p.CompanyId
  AND c.ParentRef = p.ParentId`;
 
-    const learnedDocument = await observeWorkspaceSql(
+    let learnedDocument = await observeWorkspaceSql(
       "learned-relationship.sql",
       joinSql,
     );
@@ -1385,15 +1400,96 @@ JOIN reltest.ProjectChild AS c
       1,
       "an unrelated edit must not recount an unchanged JOIN",
     );
-    const secondLearnedDocument = await observeWorkspaceSql(
-      "learned-relationship-second.sql",
-      joinSql,
+    const learnedDocumentUri = learnedDocument.uri;
+    await vscode.window.showTextDocument(learnedDocument, { preview: false });
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    learnedDocument =
+      await vscode.workspace.openTextDocument(learnedDocumentUri);
+    await vscode.window.showTextDocument(learnedDocument, { preview: false });
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.observeLearnedRelationshipEvidence",
+      learnedDocument,
     );
     assert.equal(
-      (await waitForLearnedCount(secondLearnedDocument, 2))[0]
-        ?.observationCount,
+      (await learnedEvidence(learnedDocument))[0]?.observationCount,
+      1,
+      "closing and reopening an unchanged file must retain persisted dedupe",
+    );
+
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.clearLearnedRelationshipEvidence",
+      learnedDocument,
+    );
+    const clearedState = await learnedEvidenceState(learnedDocument);
+    assert.equal(clearedState.kind, "valid");
+    assert.deepEqual(clearedState.evidence, []);
+    assert.deepEqual(clearedState.seenOccurrences, []);
+    const learningConfiguration = vscode.workspace.getConfiguration(
+      "queryPuppyForTSql.relationshipLearning",
+      learnedDocument.uri,
+    );
+    const previousWorkspaceLearning =
+      learningConfiguration.inspect<boolean>("enabled")?.workspaceValue;
+    await learningConfiguration.update(
+      "enabled",
+      false,
+      vscode.ConfigurationTarget.Workspace,
+    );
+    assert.deepEqual(
+      await vscode.commands.executeCommand(
+        "queryPuppyForTSql.test.observeLearnedRelationshipEvidence",
+        learnedDocument,
+      ),
+      { kind: "skipped", reason: "relationship learning disabled" },
+    );
+    const disabledState = await learnedEvidenceState(learnedDocument);
+    assert.deepEqual(disabledState.evidence, []);
+    assert.deepEqual(disabledState.seenOccurrences, []);
+    await learningConfiguration.update(
+      "enabled",
+      true,
+      vscode.ConfigurationTarget.Workspace,
+    );
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.observeLearnedRelationshipEvidence",
+      learnedDocument,
+    );
+    assert.equal(
+      (await waitForLearnedCount(learnedDocument, 1))[0]?.observationCount,
+      1,
+      "clear must reset counts and dedupe so the unchanged JOIN can be learned again",
+    );
+    await learningConfiguration.update(
+      "enabled",
+      previousWorkspaceLearning,
+      vscode.ConfigurationTarget.Workspace,
+    );
+
+    const secondOccurrence = `;
+
+SELECT *
+FROM reltest.ProjectParent AS parent
+JOIN reltest.ProjectChild AS child
+  ON parent.ParentId = child.ParentRef
+ AND parent.CompanyId = child.CompanyId`;
+    const secondOccurrenceEditor = await vscode.window.showTextDocument(
+      learnedDocument,
+      { preview: false },
+    );
+    assert.equal(
+      await secondOccurrenceEditor.edit((builder) =>
+        builder.insert(
+          learnedDocument.positionAt(learnedDocument.getText().length),
+          secondOccurrence,
+        ),
+      ),
+      true,
+    );
+    assert.equal(await learnedDocument.save(), true);
+    assert.equal(
+      (await waitForLearnedCount(learnedDocument, 2))[0]?.observationCount,
       2,
-      "a second independent saved occurrence must increment evidence",
+      "a second actual occurrence in one document must increment exactly once",
     );
     assert.equal(
       predicateLabels(

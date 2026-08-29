@@ -264,30 +264,44 @@ Existing version-1 entries without `provenance` remain manually authored
 Query Puppy can observe the same conservative, safely resolved equality-only JOIN
 shape when an active SQL document is saved. This is local evidence acquisition—not a
 learned relationship suggestion. It does not change completion, JOIN ranking, or the
-canonical production relationship graph in version 0.12.3.
+canonical production relationship graph in version 0.12.4.
 
 Learning is enabled by default through
 `queryPuppyForTSql.relationshipLearning.enabled`. It runs only for saved SQL files in
 an owning workspace, only when the required database metadata is already loaded, and
 never initiates a catalog load. Repeated saves, completion requests, and unrelated
-edits do not recount an unchanged JOIN. Separate resolved JOIN occurrences count once
-each; observations with ambiguous direction are skipped without interrupting typing.
+edits do not recount an unchanged JOIN. Persisted occurrence fingerprints preserve
+that protection when a file or editor is closed and reopened or the extension host is
+restarted. Separate resolved JOIN occurrences count once each; observations with
+ambiguous direction are skipped without interrupting typing.
 
 The extension persists only canonical database/schema/object endpoints, canonical
-ordered column mappings, and an aggregate observation count. It stores no SQL text,
-comments, literals, aliases, source locations, filenames, credentials, connection
-strings, confidence score, or observation history. The versioned evidence file is in
-VS Code/VSCodium's extension-managed workspace storage, not in the project directory
-or `.query-puppy/relationships.json`, so it is local and normally not committed to
-source control. Multi-root folders receive separate hashed evidence files.
+ordered column mappings, an aggregate observation count, and bounded occurrence
+fingerprints. Each fingerprint contains SHA-256 hashes of the workspace-relative
+document identity and canonical relationship identity, the occurrence ordinal, and a
+stable eviction order. It stores no SQL text, comments, literals, aliases, plaintext
+paths or filenames, source locations, credentials, connection strings, confidence
+score, or raw/unbounded observation history. The versioned evidence file is in VS Code/VSCodium's
+extension-managed workspace storage, not in the project directory or
+`.query-puppy/relationships.json`, so it is local and normally not committed to source
+control. Multi-root folders receive separate hashed evidence files.
 
 Storage is limited to 4,096 unique relationship mappings per workspace folder. When
 the limit is exceeded, higher observation counts are retained first and ties use
-canonical alphabetical identity. Writes are serialized and atomic. Malformed or
-unsupported evidence files are ignored rather than overwritten. Run **Query Puppy for
-T-SQL: Clear Learned Relationship Evidence** to clear only the active workspace
-folder's local observations; explicit ProjectDefined and UserConfirmed relationships
-are unaffected.
+canonical alphabetical identity. Seen occurrences are separately limited to 16,384;
+the oldest recorded fingerprints are evicted first. An evicted occurrence can count
+again if encountered later, which is the deliberate bounded-storage tradeoff. Writes
+are serialized and atomic. Malformed or unsupported evidence files are ignored rather
+than overwritten. Run **Query Puppy for T-SQL: Clear Learned Relationship Evidence**
+to clear both counts and occurrence fingerprints for the active workspace folder;
+explicit ProjectDefined and UserConfirmed relationships are unaffected.
+
+A saved disappearance removes that occurrence's dedupe marker without decrementing
+historical evidence. Reintroducing it after the saved absence may therefore contribute
+one new observation. Formatting, alias changes, reordered `AND` terms, and unrelated
+offset movement do not create a new occurrence. Existing format-version-1 counts are
+preserved when the local store upgrades to version 2; because version 1 had no
+occurrence fingerprints, the first eligible save after upgrade may contribute once.
 
 An observation identical to a declared FK, ProjectDefined relationship, or
 UserConfirmed relationship is excluded and any matching local evidence is removed.
@@ -400,7 +414,7 @@ Query Puppy for T-SQL does not consume, scrape, or filter Microsoft's completion
 - The active `mssql` connection is reused; no independent SQL connection is opened.
 - Schema metadata discovery is read-only and does not require DDL or DML privileges.
 - Allow-listed schema metadata is cached persistently in extension-owned local storage and hydrated into memory for IntelliSense. The snapshots contain schema metadata, not passwords, tokens, secret-bearing connection strings, query text, or document-local SQL state.
-- On SQL document save, optional local relationship learning stores only canonical physical endpoints, ordered column mappings, and aggregate counts in extension-managed workspace storage. It never stores raw SQL, literals, aliases, filenames, credentials, or connection strings, and it is not transmitted remotely.
+- On SQL document save, optional local relationship learning stores canonical physical endpoints, ordered column mappings, aggregate counts, and bounded SHA-256 occurrence fingerprints in extension-managed workspace storage. It never stores raw SQL, literals, aliases, plaintext paths or filenames, credentials, or connection strings, and it is not transmitted remotely.
 - The extension contains no telemetry. Query text, application data, and database contents are not uploaded to an external Query Puppy service.
 
 The connected login still needs permission to read the relevant SQL Server catalog metadata.
@@ -445,7 +459,7 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 - Type-aware ranking does not implement SQL Server's complete conversion and datatype-precedence engine. Built-in intelligence is intentionally limited to the documented supported set rather than a complete SQL Server function catalog.
 - Stored-procedure result-set discovery is not performed, so the extension does not fabricate procedure result columns.
 - JOIN predicates require either real enabled FK metadata or an explicit valid project relationship. The extension does not infer relationships from naming conventions or similar datatypes.
-- Local learned evidence is acquisition-only in 0.12.3. It does not create LearnedFromQuery completion candidates, JOIN predicates, related-table ranking, diagnostics, or navigation.
+- Local learned evidence is acquisition-only in 0.12.4. It does not create LearnedFromQuery completion candidates, JOIN predicates, related-table ranking, diagnostics, or navigation.
 - Project relationship format version 1 supports same-database tables only and binds by workspace folder plus database name; cross-database project edges and stable cross-server identities are not yet supported.
 - Background refresh replaces a complete snapshot rather than applying incremental schema changes. A recent DDL change may remain absent until refresh completes; run **Query Puppy for T-SQL: Refresh Schema Metadata** when immediate discovery is needed.
 - Completion detail width is controlled by the native Suggest Widget and may be truncated in narrow layouts.

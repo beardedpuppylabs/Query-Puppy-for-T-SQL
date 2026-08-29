@@ -1,15 +1,20 @@
 import * as vscode from "vscode";
+import { posix } from "node:path";
 import type { ConnectionContextResolver } from "../backend/MetadataBackend.js";
 import type { CompletionScope } from "../completion/CandidateFactory.js";
 import type { MetadataCache } from "../metadata/MetadataCache.js";
 import { normalizeName } from "../metadata/MetadataModels.js";
 import {
+  createLearnedRelationshipEvidenceSave,
+  learnedDocumentIdentity,
   learnedEvidenceFromResolvedJoin,
   knownRelationshipEvidenceIdentities,
-  LearnedRelationshipObservationTracker,
   type LearnedRelationshipEvidenceRecord,
 } from "./LearnedRelationshipEvidence.js";
-import type { FileLearnedRelationshipEvidenceStore } from "./LearnedRelationshipEvidenceStore.js";
+import type {
+  FileLearnedRelationshipEvidenceStore,
+  LearnedRelationshipEvidenceStoreResult,
+} from "./LearnedRelationshipEvidenceStore.js";
 import { resolveJoinRelationshipCandidates } from "./ResolvedJoinRelationship.js";
 import type { WorkspaceProjectRelationships } from "./WorkspaceProjectRelationships.js";
 
@@ -24,7 +29,6 @@ export type LearnedRelationshipObservationResult =
 
 /** Save-driven VS Code adapter around editor-neutral JOIN evidence components. */
 export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
-  private readonly tracker = new LearnedRelationshipObservationTracker();
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly reportedFailures = new Set<string>();
   private testScope: CompletionScope | undefined;
@@ -42,9 +46,6 @@ export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
           this.report("save", error),
         );
       }),
-      vscode.workspace.onDidCloseTextDocument((document) =>
-        this.tracker.close(document.uri.toString()),
-      ),
     );
   }
 
@@ -95,12 +96,14 @@ export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
     const known = knownRelationshipEvidenceIdentities(
       [...scope.indexes.values()].flatMap((index) => index.relationships),
     );
-    const mutation = this.tracker.observe(
-      document.uri.toString(),
+    const save = createLearnedRelationshipEvidenceSave(
+      learnedDocumentIdentity(
+        posix.relative(folder.uri.path, document.uri.path),
+      ),
       occurrences,
       known,
     );
-    const update = await this.store.update(folder.uri.toString(), mutation);
+    const update = await this.store.update(folder.uri.toString(), save);
     if (update.kind === "invalid") return update;
     return {
       kind: update.kind === "written" ? "observed" : "unchanged",
@@ -115,6 +118,19 @@ export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
     if (!this.store || !folder) return [];
     const result = await this.store.read(folder.uri.toString());
     return result.kind === "valid" ? result.evidence : [];
+  }
+
+  async stateForDocument(
+    document: vscode.TextDocument,
+  ): Promise<LearnedRelationshipEvidenceStoreResult | undefined> {
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+    if (!this.store || !folder) return undefined;
+    return this.store.read(folder.uri.toString());
+  }
+
+  async clearForDocument(document: vscode.TextDocument): Promise<void> {
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+    if (this.store && folder) await this.store.clear(folder.uri.toString());
   }
 
   async clearForActiveWorkspace(): Promise<void> {
@@ -132,7 +148,6 @@ export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
     );
     if (confirmation !== "Clear") return;
     await this.store.clear(folder.uri.toString());
-    this.tracker.clear();
     await vscode.window.showInformationMessage(
       `Cleared local learned relationship evidence for ${folder.name}.`,
     );
@@ -141,7 +156,6 @@ export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
   dispose(): void {
     for (const subscription of this.subscriptions) subscription.dispose();
     this.subscriptions.length = 0;
-    this.tracker.clear();
   }
 
   private enabled(uri: vscode.Uri): boolean {

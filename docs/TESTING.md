@@ -659,15 +659,18 @@ Editor-neutral tests cover:
 - absence for arithmetic, functions, `OR`, inequalities, literals, variables,
   unresolved members, three-source predicates, transient sources, cross-database
   edges, meaningless self identity, and passive direction ambiguity
-- one count per distinct occurrence-count increase in a saved document snapshot
-- no count increase for completion/provider calls, repeated unchanged saves, or
-  unrelated edits
-- independent occurrences and remove/save/re-add behavior
+- persisted occurrence identity across repeated saves, document close/reopen, and
+  recreated store/extension lifetime
+- no count increase for completion/provider calls, formatting, alias changes, reordered
+  terms, quoting, unrelated offset movement, or repeated unchanged saves
+- independent same-relationship ordinals and remove/save/re-add behavior
 - exact declared-FK, ProjectDefined, and UserConfirmed exclusion/removal by canonical
   semantic identity
-- format-version validation, corruption refusal, deterministic serialization,
-  concurrent update preservation, workspace-key isolation, and atomic persistence
+- format-version-1 count-preserving upgrade, format-version-2 validation, corruption
+  refusal, deterministic serialization, workspace-key isolation, and atomic persistence
+- concurrent duplicate suppression and preservation of distinct document occurrences
 - the 4,096-unique-record bound with count-first/canonical-identity eviction
+- the 16,384 seen-occurrence bound with oldest-insertion/canonical-tuple eviction
 - absence of SQL text, literals, credentials, connection strings, source locations,
   and filenames from the serialized format
 - continued exclusion of LearnedFromQuery from `productionRelationshipRank` and the
@@ -675,9 +678,11 @@ Editor-neutral tests cover:
 
 Activated Extension Host coverage must use the disposable multi-root/user-data
 infrastructure and prove that a real document save writes one local record, a second
-independent save increments it, completion calls and unrelated edits do not, workspace
-roots remain isolated, `.query-puppy/relationships.json` remains untouched, and no JOIN
-predicate appears. It must then save the same mapping through the existing
+actual occurrence increments it, completion calls and unrelated edits do not, and an
+unchanged close/reopen remains deduplicated. It must prove that clear resets both
+evidence and occurrences, disabled learning mutates neither, re-enable can relearn,
+workspace roots remain isolated, `.query-puppy/relationships.json` remains untouched,
+and no JOIN predicate appears. It must then save the same mapping through the existing
 UserConfirmed workflow and prove the stale learned evidence is removed while the
 confirmed relationship enters ordinary completion. A declared-FK observation and an
 untitled/no-workspace document must create no evidence.
