@@ -37,16 +37,19 @@ architecture documents describe the intended present-day design.
 - Relationship Intelligence Phase D ProjectDefined relationships — complete
 - Relationship Intelligence Phase D UserConfirmed save workflow — complete
 - Relationship Intelligence Phase E1 local learned JOIN evidence acquisition —
-  complete; no learned candidates yet
+  complete
 - Relationship Intelligence Phase E1 persisted occurrence-dedupe hardening —
   complete; counts survive editor/extension lifecycle noise
+- Relationship Intelligence Phase E2 learned relationship candidate policy —
+  complete; qualifying local evidence enters the canonical runtime graph
 
-0.12.4 hardens the Phase E1 local evidence-acquisition foundation with persisted
-privacy-preserving occurrence identity. It observes only safely resolved JOINs on
-document save, preserves bounded minimal local evidence without count inflation across
-close/reopen or restart, and keeps that evidence completely outside production
-relationship consumers. Learned candidate policy and presentation remain deferred to
-Phase E2; Navigation & Code Understanding remains a larger forward-roadmap area.
+0.12.5 completes Phase E2 by resolving three or more independently deduplicated JOIN
+observations as local LearnedFromQuery/StrongEvidence candidates against current
+canonical metadata. The candidates reuse the one runtime graph and existing JOIN
+consumers below declared FK, UserConfirmed, and ProjectDefined trust. Completion
+acceptance remains non-confirming; the existing explicit save-JOIN action is the only
+promotion path to UserConfirmed project truth. Navigation & Code Understanding remains
+a larger forward-roadmap area.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 
@@ -142,6 +145,40 @@ Eviction can allow a very old occurrence to count again if later encountered. A
 version-1 store can also count the first eligible saved occurrence once because that
 format had no persisted occurrence identity. These are explicit bounded/backward-
 compatibility tradeoffs, not candidate confidence policy.
+
+## Relationship Intelligence Phase E2 — learned candidate policy
+
+- [x] Add one pure product-owned candidate threshold at `observationCount >= 3` with no
+      user setting, score model, decay, recency, or rejection state.
+- [x] Re-resolve qualifying endpoint objects, ordered columns, same-database scope, and
+      known type compatibility against current canonical metadata; fail closed for
+      stale or invalid evidence.
+- [x] Materialize valid evidence as LearnedFromQuery/StrongEvidence canonical
+      relationships carrying the aggregate observation count and no FK details.
+- [x] Overlay learned candidates into the existing `DatabaseIndex` graph after physical
+      and project relationships; do not create a parallel graph or persist candidates
+      in physical snapshots/project files.
+- [x] Apply deterministic trust order: declared FK, UserConfirmed, ProjectDefined,
+      LearnedFromQuery. Suppress exact learned duplicates represented by a stronger
+      source while retaining distinct mappings between the same objects.
+- [x] Reuse existing JOIN predicate, comparison tie-break, and related-RowSource ranking
+      consumers for single, composite, reverse, and meaningful self relationships.
+- [x] Present **Learned relationship JOIN** with endpoint/mapping documentation,
+      repeated-JOIN provenance, observation count, StrongEvidence confidence, and an
+      explicit non-FK statement.
+- [x] Keep completion acceptance non-confirming and reuse the explicit save-JOIN Code
+      Action to promote a resolved edge to UserConfirmed project knowledge.
+- [x] Cache overlays by workspace, evidence identity, and base-index identity; invalidate
+      on evidence/clear, project relationship, or metadata changes with no catalog or
+      disk parse in CandidateFactory.
+- [x] Define disabling learning as acquisition-only: existing qualifying candidates
+      remain visible; clear removes learned candidates on the next completion.
+- [x] Add policy, graph, provider-contract, presentation, cache, multi-root, clear,
+      promotion, and activated Extension Host regressions at counts 2, 3, and 8.
+
+Phase E2 does not add heuristics, guessed name/type relationships, remote services,
+Query Store/plan-cache/query-history mining, confidence scoring, rejection learning,
+automatic confirmation, a relationship editor, or navigation.
 
 ## P0 Connection Resilience Stage 1
 

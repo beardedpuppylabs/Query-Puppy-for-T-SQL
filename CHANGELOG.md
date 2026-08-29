@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+## 0.12.5
+
+- Added the Phase E2 learned-relationship candidate policy. Local evidence becomes a
+  `LearnedFromQuery`/`StrongEvidence` canonical relationship after three independently
+  deduplicated resolved JOIN observations.
+- Reused the canonical relationship graph and existing JOIN predicate, comparison,
+  and related-RowSource consumers with deterministic trust order: declared FK,
+  UserConfirmed, ProjectDefined, then LearnedFromQuery.
+- Revalidated learned endpoints, columns, ordered mappings, type compatibility, and
+  database scope against current catalog metadata. Stale or invalid evidence fails
+  closed, and exact stronger relationships suppress learned duplicates without
+  suppressing distinct mappings.
+- Added **Learned relationship JOIN** completion presentation with endpoints, mappings,
+  observation count, StrongEvidence confidence, and an explicit statement that the
+  candidate is not a SQL Server foreign key.
+- Kept learning local and explicit: completion acceptance never confirms or writes a
+  relationship, while the existing **Save JOIN as Query Puppy relationship** action
+  promotes the resolved edge to UserConfirmed project knowledge.
+- Added cached workspace overlays with evidence, project-file, metadata, clear, and
+  multi-root invalidation. Disabling learning stops acquisition but retains existing
+  qualifying candidates; clearing evidence removes learned candidates immediately.
+- Added unit, provider-contract, graph, policy, presentation, and activated Extension
+  Host coverage for threshold boundaries, false positives, composite/reverse/self
+  relationships, trust, promotion, cache invalidation, and workspace isolation.
+
 ## 0.12.4
 
 - Fixed learned-evidence count inflation across document close/reopen, extension-host

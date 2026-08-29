@@ -218,7 +218,7 @@ promises.
 | Provenance-aware canonical relationship model and single graph                       | Implemented, internal foundation | `relationship-model.test.ts` model, direction, determinism, and non-FK isolation contracts                    |
 | Workspace ProjectDefined relationships, validation, isolation, and JOIN use          | Implemented                      | `project-relationships.test.ts`, `feature-contracts.test.ts`, and activated Extension Host contracts          |
 | Explicit resolved-JOIN save as UserConfirmed, persistence, and reuse                 | Implemented                      | `resolved-join-relationship.test.ts`, `project-relationships.test.ts`, and activated Extension Host contracts |
-| Save-driven local learned JOIN evidence acquisition and graph isolation              | Implemented, evidence only       | `learned-relationship-evidence.test.ts`, `feature-contracts.test.ts`, and activated Extension Host contracts  |
+| Learned JOIN evidence acquisition and candidate policy                               | Implemented                      | `learned-relationship-candidates.test.ts` and activated Extension Host contracts                              |
 | Same-named objects across schemas/databases                                          | Implemented                      | `schema-intelligence.test.ts` database-index contract                                                         |
 | FK-aware JOIN predicates, multiple FKs, and composite FKs                            | Implemented                      | `join-intelligence.test.ts` FK predicate contracts                                                            |
 | Relationship ranking after Contains                                                  | Implemented                      | `join-intelligence.test.ts` — relationship ranking contract                                                   |
@@ -636,8 +636,8 @@ Protect the explicit UserConfirmed workflow with:
   RowSources, unrelated ranges, cross-database endpoints, and exact existing edges
 - version-1 creation/appending, absent-provenance backward compatibility, invalid-file
   refusal, deterministic mapping persistence, and no fabricated FK details
-- explicit production order: declared FK, UserConfirmed, ProjectDefined; learned and
-  heuristic provenances remain excluded
+- explicit production order: declared FK, UserConfirmed, ProjectDefined,
+  LearnedFromQuery; heuristic provenance remains excluded
 - activated native Code Action registration, file creation in a disposable workspace,
   cache invalidation/reload, subsequent JOIN reuse, unsafe-predicate absence,
   declared-FK duplicate suppression, and untitled-document refusal
@@ -646,10 +646,11 @@ The Extension Host runner uses a fresh temporary workspace and user-data directo
 each run. It must remove that directory after both success and failure; tests must not
 write acceptance relationships into the repository.
 
-## Learned relationship evidence tests
+## Learned relationship evidence and candidate tests
 
-Phase E1 evidence tests must protect the boundary between uncertain local observation
-and production relationship truth.
+Phase E1 evidence tests protect local acquisition and privacy. Phase E2 candidate tests
+protect the explicit boundary from repeated evidence into lower-trust canonical runtime
+relationships without turning those relationships into project or physical truth.
 
 Editor-neutral tests cover:
 
@@ -673,23 +674,36 @@ Editor-neutral tests cover:
 - the 16,384 seen-occurrence bound with oldest-insertion/canonical-tuple eviction
 - absence of SQL text, literals, credentials, connection strings, source locations,
   and filenames from the serialized format
-- continued exclusion of LearnedFromQuery from `productionRelationshipRank` and the
-  canonical `DatabaseIndex` graph
+- exact threshold behavior at observation counts 0, 1, 2, 3, and 8
+- LearnedFromQuery/StrongEvidence construction only after current metadata validation
+- stale objects/columns, incompatible types, cross-database edges, meaningless self
+  identity, and malformed counts failing closed without UI pollution
+- exact stronger-edge suppression while distinct mappings between the same objects
+  remain independent
+- one canonical graph for single, composite, reverse, and meaningful self traversal
+- explicit trust order: declared FK, UserConfirmed, ProjectDefined, LearnedFromQuery
+- learned JOIN predicate, comparison, and related-RowSource consumers plus deterministic
+  presentation at observation counts 3 and 8
+- cached candidate-overlay reuse and invalidation after evidence, project, metadata, or
+  clear changes
 
 Activated Extension Host coverage must use the disposable multi-root/user-data
 infrastructure and prove that a real document save writes one local record, a second
 actual occurrence increments it, completion calls and unrelated edits do not, and an
 unchanged close/reopen remains deduplicated. It must prove that clear resets both
-evidence and occurrences, disabled learning mutates neither, re-enable can relearn,
-workspace roots remain isolated, `.query-puppy/relationships.json` remains untouched,
-and no JOIN predicate appears. It must then save the same mapping through the existing
-UserConfirmed workflow and prove the stale learned evidence is removed while the
-confirmed relationship enters ordinary completion. A declared-FK observation and an
-untitled/no-workspace document must create no evidence.
+evidence and occurrences, counts below three yield no JOIN candidate, counts 3 and 8
+show the learned detail/documentation, and disabled acquisition keeps qualifying
+existing candidates visible. Workspace roots and no-workspace documents remain
+isolated. Accepting the CompletionItem must leave `.query-puppy/relationships.json`
+untouched. Explicitly saving the same resolved mapping through the existing
+UserConfirmed workflow must suppress the learned duplicate while the confirmed
+relationship enters ordinary completion. A declared-FK observation must create no
+evidence.
 
 The learning setting/clear command and source-boundary sentinel live in
-`feature-contracts.test.ts`. Tests must not add a candidate threshold, learned
-presentation, or completion expectation before Phase E2 defines that policy.
+`feature-contracts.test.ts`. The threshold is product-owned and must not become a
+setting. Candidate resolution must not add a per-keystroke disk parse, catalog load, or
+parallel relationship graph.
 
 ## DML target tests
 

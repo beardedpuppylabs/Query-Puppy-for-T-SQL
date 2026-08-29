@@ -550,10 +550,17 @@ function rankComparisonRelationshipCandidates(
           ...candidate,
           priority:
             (candidate.priority ?? 0) -
-            (2 - (relatedColumns.get(candidate.normalizedName) ?? 1)),
+            relationshipComparisonBoost(
+              relatedColumns.get(candidate.normalizedName),
+            ),
         }
       : candidate,
   );
+}
+
+function relationshipComparisonBoost(rank: number | undefined): number {
+  if (rank === undefined || rank < 0 || rank > 3) return 0;
+  return 4 - rank;
 }
 
 function addRelationshipColumn(
@@ -696,7 +703,7 @@ function joinPredicateCandidates(
           name: predicate,
           normalizedName: normalizeName(predicate),
           searchText: normalizeName(
-            `${predicate} ${isDeclaredForeignKeyRelationship(relationship) ? relationship.declaredForeignKey.constraintName : relationship.provenance === RelationshipProvenance.UserConfirmed ? "user confirmed relationship" : "project relationship"} ${relationship.mappings.flatMap((mapping) => [mapping.sourceColumnName, mapping.targetColumnName]).join(" ")}`,
+            `${predicate} ${relationshipSearchDescription(relationship)} ${relationship.mappings.flatMap((mapping) => [mapping.sourceColumnName, mapping.targetColumnName]).join(" ")}`,
           ),
           kind: "joinPredicate" as const,
           database: relationship.source.database,
@@ -706,6 +713,18 @@ function joinPredicateCandidates(
         };
       });
   });
+}
+
+function relationshipSearchDescription(relationship: Relationship): string {
+  if (isDeclaredForeignKeyRelationship(relationship))
+    return relationship.declaredForeignKey.constraintName;
+  if (relationship.provenance === RelationshipProvenance.UserConfirmed)
+    return "user confirmed relationship";
+  if (relationship.provenance === RelationshipProvenance.ProjectDefined)
+    return "project relationship";
+  if (relationship.provenance === RelationshipProvenance.LearnedFromQuery)
+    return "learned relationship repeated join usage strong evidence";
+  return "relationship";
 }
 
 function isJoinSourcePosition(sql: string, cursor: number): boolean {

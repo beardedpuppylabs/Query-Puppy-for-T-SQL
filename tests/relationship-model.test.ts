@@ -201,6 +201,7 @@ test("future relationship provenances remain explicit and cannot fabricate FK de
     ...relationshipCore,
     provenance: RelationshipProvenance.LearnedFromQuery,
     confidence: RelationshipConfidence.StrongEvidence,
+    observationCount: 3,
   };
   const heuristic: HeuristicCandidateRelationship = {
     ...relationshipCore,
@@ -231,7 +232,7 @@ test("future relationship provenances remain explicit and cannot fabricate FK de
   assert.equal(invalidHeuristicAuthority, heuristic);
 });
 
-test("contract: confirmed relationships enter production while learned and heuristic sources stay excluded", () => {
+test("contract: explicit and qualifying learned relationships enter production while heuristic sources stay excluded", () => {
   const projectDefined: ProjectDefinedRelationship = {
     ...relationshipCore,
     provenance: RelationshipProvenance.ProjectDefined,
@@ -265,34 +266,41 @@ test("contract: confirmed relationships enter production while learned and heuri
   );
   assert.equal("declaredForeignKey" in userConfirmed, false);
 
-  for (const relationship of [
-    {
-      ...relationshipCore,
-      provenance: RelationshipProvenance.LearnedFromQuery,
-      confidence: RelationshipConfidence.StrongEvidence,
-    } as const,
-    {
-      ...relationshipCore,
-      provenance: RelationshipProvenance.HeuristicCandidate,
-      confidence: RelationshipConfidence.Candidate,
-    } as const,
-  ]) {
-    const futureIndex = new DatabaseIndex({ ...metadata, foreignKeys: [] }, [
-      relationship,
-    ]);
-    assert.equal(
-      createCandidates(resolveSqlContext(sql), futureIndex).some(
-        (candidate) => candidate.kind === "joinPredicate",
-      ),
-      false,
-    );
-  }
+  const learned: LearnedFromQueryRelationship = {
+    ...relationshipCore,
+    provenance: RelationshipProvenance.LearnedFromQuery,
+    confidence: RelationshipConfidence.StrongEvidence,
+    observationCount: 3,
+  };
+  const learnedIndex = new DatabaseIndex({ ...metadata, foreignKeys: [] }, [
+    learned,
+  ]);
+  assert.equal(
+    createCandidates(resolveSqlContext(sql), learnedIndex).some(
+      (candidate) => candidate.kind === "joinPredicate",
+    ),
+    true,
+  );
+  const heuristic: HeuristicCandidateRelationship = {
+    ...relationshipCore,
+    provenance: RelationshipProvenance.HeuristicCandidate,
+    confidence: RelationshipConfidence.Candidate,
+  };
+  const heuristicIndex = new DatabaseIndex({ ...metadata, foreignKeys: [] }, [
+    heuristic,
+  ]);
+  assert.equal(
+    createCandidates(resolveSqlContext(sql), heuristicIndex).some(
+      (candidate) => candidate.kind === "joinPredicate",
+    ),
+    false,
+  );
 
   const declaredRelationship = relationshipFromForeignKey(foreignKey);
   assert.deepEqual(
-    [declaredRelationship, userConfirmed, projectDefined].map(
+    [declaredRelationship, userConfirmed, projectDefined, learned].map(
       productionRelationshipRank,
     ),
-    [0, 1, 2],
+    [0, 1, 2, 3],
   );
 });

@@ -12,7 +12,7 @@ In a schema with hundreds or thousands of objects, remembering part of a name sh
 - Context- and query-scope-aware completion
 - Type-aware ranking that keeps legal alternatives available
 - PK, UQ, and FK metadata on physical columns
-- JOIN predicates and comparison ranking based on actual foreign keys or explicit project relationships, including user-confirmed JOINs
+- JOIN predicates and comparison ranking based on actual foreign keys, explicit project relationships, user-confirmed JOINs, and qualifying learned evidence
 - Local, privacy-conscious acquisition of resolved JOIN evidence on document save
 - Built-in and catalog function completion, typing, and Signature Help
 - Smart Alias and Tab-only wildcard productivity features
@@ -262,9 +262,12 @@ Existing version-1 entries without `provenance` remain manually authored
 ## Local learned JOIN evidence
 
 Query Puppy can observe the same conservative, safely resolved equality-only JOIN
-shape when an active SQL document is saved. This is local evidence acquisition—not a
-learned relationship suggestion. It does not change completion, JOIN ranking, or the
-canonical production relationship graph in version 0.12.4.
+shape when an active SQL document is saved. After three independently deduplicated
+resolved JOIN occurrences, valid evidence becomes a local
+`LearnedFromQuery`/`StrongEvidence` candidate in the same canonical runtime graph used
+by other relationships. It can produce **Learned relationship JOIN** predicates,
+comparison tie-breaking, and related-RowSource ranking below declared FKs,
+UserConfirmed relationships, and ProjectDefined relationships.
 
 Learning is enabled by default through
 `queryPuppyForTSql.relationshipLearning.enabled`. It runs only for saved SQL files in
@@ -293,8 +296,10 @@ the oldest recorded fingerprints are evicted first. An evicted occurrence can co
 again if encountered later, which is the deliberate bounded-storage tradeoff. Writes
 are serialized and atomic. Malformed or unsupported evidence files are ignored rather
 than overwritten. Run **Query Puppy for T-SQL: Clear Learned Relationship Evidence**
-to clear both counts and occurrence fingerprints for the active workspace folder;
-explicit ProjectDefined and UserConfirmed relationships are unaffected.
+to clear both counts and occurrence fingerprints for the active workspace folder; the
+corresponding learned candidates disappear on the next completion. Explicit
+ProjectDefined and UserConfirmed relationships are unaffected. Disabling learning
+stops new acquisition without hiding qualifying evidence already stored.
 
 A saved disappearance removes that occurrence's dedupe marker without decrementing
 historical evidence. Reintroducing it after the saved absence may therefore contribute
@@ -306,8 +311,11 @@ occurrence fingerprints, the first eligible save after upgrade may contribute on
 An observation identical to a declared FK, ProjectDefined relationship, or
 UserConfirmed relationship is excluded and any matching local evidence is removed.
 No heuristic, Query Store, plan-cache, query-history, telemetry, remote service, or
-query-execution hook participates. A later phase will define whether evidence can ever
-become a visible candidate and how explicit confirmation should work.
+query-execution hook participates. Stale objects, missing columns, incompatible types,
+and cross-database mappings fail closed when evidence is resolved against current
+metadata. Accepting a learned completion is not confirmation and writes no project
+file. Use **Save JOIN as Query Puppy relationship** to explicitly promote a resolved
+JOIN to UserConfirmed project knowledge.
 
 ## Query-local intelligence
 
@@ -447,7 +455,7 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 - `queryPuppyForTSql.enabled`: enable or disable Query Puppy for T-SQL completion.
 - `queryPuppyForTSql.debugLogging`: write detailed diagnostics to the **Query Puppy for T-SQL** output channel.
 - `queryPuppyForTSql.smartAliases.enabled`: enable or disable smart alias suggestions.
-- `queryPuppyForTSql.relationshipLearning.enabled`: enable or disable local resolved-JOIN evidence acquisition on SQL document save. Enabled by default; learned evidence is not yet used for suggestions.
+- `queryPuppyForTSql.relationshipLearning.enabled`: enable or disable local resolved-JOIN evidence acquisition on SQL document save. Enabled by default; disabling acquisition keeps existing qualifying learned candidates visible.
 
 ## Known limitations
 
@@ -458,8 +466,8 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 - Type inference is conservative. Unnamed computed projections may be omitted, and recursive CTE/set-branch type reconciliation is best-effort.
 - Type-aware ranking does not implement SQL Server's complete conversion and datatype-precedence engine. Built-in intelligence is intentionally limited to the documented supported set rather than a complete SQL Server function catalog.
 - Stored-procedure result-set discovery is not performed, so the extension does not fabricate procedure result columns.
-- JOIN predicates require either real enabled FK metadata or an explicit valid project relationship. The extension does not infer relationships from naming conventions or similar datatypes.
-- Local learned evidence is acquisition-only in 0.12.4. It does not create LearnedFromQuery completion candidates, JOIN predicates, related-table ranking, diagnostics, or navigation.
+- JOIN predicates require a real enabled FK, an explicit valid project relationship, or qualifying repeated resolved-JOIN evidence. The extension does not infer relationships from naming conventions or similar datatypes.
+- Learned candidates require three independently deduplicated eligible occurrences. They remain local StrongEvidence rather than SQL Server FKs or explicit project truth; there is no rejection model, heuristic discovery, relationship editor, or navigation feature yet.
 - Project relationship format version 1 supports same-database tables only and binds by workspace folder plus database name; cross-database project edges and stable cross-server identities are not yet supported.
 - Background refresh replaces a complete snapshot rather than applying incremental schema changes. A recent DDL change may remain absent until refresh completes; run **Query Puppy for T-SQL: Refresh Schema Metadata** when immediate discovery is needed.
 - Completion detail width is controlled by the native Suggest Widget and may be truncated in narrow layouts.

@@ -91,7 +91,13 @@ export function presentationModel(
         : candidate.relationship.provenance ===
             RelationshipProvenance.UserConfirmed
           ? " User-confirmed relationship JOIN"
-          : " Project relationship JOIN"
+          : candidate.relationship.provenance ===
+              RelationshipProvenance.ProjectDefined
+            ? " Project relationship JOIN"
+            : candidate.relationship.provenance ===
+                RelationshipProvenance.LearnedFromQuery
+              ? " Learned relationship JOIN"
+              : " JOIN"
       : " JOIN";
   else if (candidate.relatedRelationshipCount) {
     const declared = candidate.relationships?.filter(
@@ -105,6 +111,10 @@ export function presentationModel(
       (relationship) =>
         relationship.provenance === RelationshipProvenance.UserConfirmed,
     ).length;
+    const learned = candidate.relationships?.filter(
+      (relationship) =>
+        relationship.provenance === RelationshipProvenance.LearnedFromQuery,
+    ).length;
     const parts = [
       declared
         ? `${String(declared)} FK${declared === 1 ? "" : "s"}`
@@ -114,6 +124,9 @@ export function presentationModel(
         : undefined,
       project
         ? `${String(project)} project relationship${project === 1 ? "" : "s"}`
+        : undefined,
+      learned
+        ? `${String(learned)} learned relationship${learned === 1 ? "" : "s"}`
         : undefined,
     ].filter((part): part is string => part !== undefined);
     detail = ` related via ${parts.join(" + ")}`;

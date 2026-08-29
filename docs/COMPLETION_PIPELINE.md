@@ -393,38 +393,45 @@ physical column members. They retain their canonical relationship, including
 provenance and confidence, rather than carrying the physical catalog record or
 project definition as a parallel semantic edge.
 
-At an empty relevant ON position, a declared-FK or explicit project-relationship
-predicate may outrank ordinary column expressions. Trust order is
-DeclaredForeignKey/Authoritative, UserConfirmed/Confirmed, then
-ProjectDefined/Confirmed. Native detail/documentation distinguishes `FK JOIN`,
-`User-confirmed relationship JOIN`, and `Project relationship JOIN`; logical
-relationship documentation lists the explicit mappings and states that it is not a
-SQL Server foreign key.
+At an empty relevant ON position, a declared-FK, explicit project relationship, or
+qualifying learned relationship predicate may outrank ordinary column expressions.
+Trust order is DeclaredForeignKey/Authoritative, UserConfirmed/Confirmed,
+ProjectDefined/Confirmed, then LearnedFromQuery/StrongEvidence. Native
+detail/documentation distinguishes `FK JOIN`, `User-confirmed relationship JOIN`,
+`Project relationship JOIN`, and `Learned relationship JOIN`; logical relationship
+documentation lists the explicit mappings and states that it is not a SQL Server
+foreign key. Learned documentation also explains repeated JOIN usage and shows the
+aggregate observation count and StrongEvidence confidence, never internal occurrence
+fingerprints.
 
 Type-aware member ranking applies normally once the developer explicitly writes an
 operand such as:
 
     ON o.CustomerId = c.
 
-When both operands resolve to physical columns, enabled authoritative declared-FK
-mappings may break a tie among otherwise equivalent type-compatible member
-candidates. Only the column paired with the resolved opposite operand receives the
-contextual advantage. This does not create a separate visible group, use name/type
-heuristics, or affect ordinary member completion outside a comparison.
+When both operands resolve to physical columns, production relationship mappings may
+break a tie among otherwise equivalent type-compatible member candidates according to
+the same trust order. Only the column paired with the resolved opposite operand
+receives the contextual advantage. This does not create a separate visible group, use
+name/type heuristics, or affect ordinary member completion outside a comparison.
 
 ## JOIN source candidates
 
 At JOIN source positions, enabled authoritative declared-FK, confirmed UserConfirmed,
-and confirmed ProjectDefined relationships may influence semantic ranking after
-Contains filtering. Declared FKs rank above user-confirmed relationships, which rank
-above manually authored project relationships. Learned and heuristic sources remain
-excluded until their own production workflows exist.
+confirmed ProjectDefined relationships, and qualifying LearnedFromQuery relationships
+may influence semantic ranking after Contains filtering. Declared FKs rank above
+user-confirmed relationships, which rank above manually authored project relationships,
+which rank above learned StrongEvidence.
 
-Phase E1's save-driven local learned-evidence store is not a completion input. An
-observation count does not construct a canonical `Relationship`, a JOIN predicate, a
-related-RowSource rank, a comparison tie-breaker, a group, or CompletionItem
-documentation. Candidate thresholds and user-visible LearnedFromQuery semantics remain
-deferred to a later phase.
+The Phase E2 pure policy admits a learned relationship only at the fixed threshold of
+three independently deduplicated observations and only after current canonical
+metadata validation. The workspace overlay is cached by evidence and base-index
+identity; it is invalidated by evidence changes/clear, project relationship changes,
+or catalog replacement. The CandidateFactory consumes the resulting canonical
+`Relationship` exactly like other relationship sources and never reads evidence files.
+Accepting a CompletionItem does not persist or confirm the edge.
+
+Heuristic candidates remain excluded.
 
 Contains filtering remains intact.
 

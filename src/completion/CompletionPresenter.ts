@@ -148,6 +148,13 @@ export function documentation(
   }
   if (candidate.relationship) {
     const relationship = candidate.relationship;
+    if (relationship.provenance === RelationshipProvenance.LearnedFromQuery) {
+      md.appendMarkdown("**Learned relationship**\n\n");
+      md.appendMarkdown(
+        `Relationship: \`${relationship.source.database}.${relationship.source.schema}.${relationship.source.objectName}\`  \n→ \`${relationship.target.database}.${relationship.target.schema}.${relationship.target.objectName}\`\n\nMappings:\n${relationship.mappings.map((mapping) => `- \`${mapping.sourceColumnName}\` → \`${mapping.targetColumnName}\``).join("\n")}\n\nProvenance: learned from repeated JOIN usage.  \nObserved in **${String(relationship.observationCount)}** resolved JOIN occurrences.  \nConfidence: **StrongEvidence**.\n\nThis is learned Query Puppy relationship evidence, not a SQL Server foreign key.\n`,
+      );
+      return md;
+    }
     const userConfirmed =
       relationship.provenance === RelationshipProvenance.UserConfirmed;
     md.appendMarkdown(

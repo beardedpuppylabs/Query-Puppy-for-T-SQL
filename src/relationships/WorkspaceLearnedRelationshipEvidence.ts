@@ -3,6 +3,7 @@ import { posix } from "node:path";
 import type { ConnectionContextResolver } from "../backend/MetadataBackend.js";
 import type { CompletionScope } from "../completion/CandidateFactory.js";
 import type { MetadataCache } from "../metadata/MetadataCache.js";
+import { DatabaseIndex } from "../metadata/DatabaseIndex.js";
 import { normalizeName } from "../metadata/MetadataModels.js";
 import {
   createLearnedRelationshipEvidenceSave,
@@ -17,6 +18,8 @@ import type {
 } from "./LearnedRelationshipEvidenceStore.js";
 import { resolveJoinRelationshipCandidates } from "./ResolvedJoinRelationship.js";
 import type { WorkspaceProjectRelationships } from "./WorkspaceProjectRelationships.js";
+import { resolveLearnedRelationshipCandidates } from "./LearnedRelationshipCandidatePolicy.js";
+import { isDeclaredForeignKeyRelationship } from "./RelationshipModels.js";
 
 export const CLEAR_LEARNED_RELATIONSHIP_EVIDENCE_COMMAND =
   "queryPuppyForTSql.clearLearnedRelationshipEvidence";
@@ -31,6 +34,16 @@ export type LearnedRelationshipObservationResult =
 export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly reportedFailures = new Set<string>();
+  private readonly candidateOverlays = new Map<
+    string,
+    WeakMap<
+      DatabaseIndex,
+      {
+        readonly evidence: readonly LearnedRelationshipEvidenceRecord[];
+        readonly index: DatabaseIndex;
+      }
+    >
+  >();
   private testScope: CompletionScope | undefined;
 
   constructor(
@@ -45,6 +58,10 @@ export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
         void this.observeSavedDocument(document).catch((error: unknown) =>
           this.report("save", error),
         );
+      }),
+      vscode.workspace.onDidChangeWorkspaceFolders((event) => {
+        for (const folder of event.removed)
+          this.candidateOverlays.delete(folder.uri.toString());
       }),
     );
   }
@@ -120,6 +137,45 @@ export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
     return result.kind === "valid" ? result.evidence : [];
   }
 
+  /** Applies qualifying learned candidates without re-reading cached evidence per keystroke. */
+  async applyCandidates(
+    document: vscode.TextDocument,
+    scope: CompletionScope,
+  ): Promise<CompletionScope> {
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+    if (!this.store || !folder) return scope;
+    const state = await this.store.read(folder.uri.toString());
+    if (state.kind !== "valid") return scope;
+    let workspaceCache = this.candidateOverlays.get(folder.uri.toString());
+    if (!workspaceCache) {
+      workspaceCache = new WeakMap();
+      this.candidateOverlays.set(folder.uri.toString(), workspaceCache);
+    }
+    const indexes = new Map<string, DatabaseIndex>();
+    for (const [database, base] of scope.indexes) {
+      const cached = workspaceCache.get(base);
+      if (cached?.evidence === state.evidence) {
+        indexes.set(database, cached.index);
+        continue;
+      }
+      const candidates = resolveLearnedRelationshipCandidates(
+        state.evidence,
+        base,
+      );
+      const index = candidates.length
+        ? new DatabaseIndex(base.metadata, [
+            ...base.relationships.filter(
+              (relationship) => !isDeclaredForeignKeyRelationship(relationship),
+            ),
+            ...candidates,
+          ])
+        : base;
+      workspaceCache.set(base, { evidence: state.evidence, index });
+      indexes.set(database, index);
+    }
+    return { ...scope, indexes };
+  }
+
   async stateForDocument(
     document: vscode.TextDocument,
   ): Promise<LearnedRelationshipEvidenceStoreResult | undefined> {
@@ -156,6 +212,7 @@ export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
   dispose(): void {
     for (const subscription of this.subscriptions) subscription.dispose();
     this.subscriptions.length = 0;
+    this.candidateOverlays.clear();
   }
 
   private enabled(uri: vscode.Uri): boolean {

@@ -295,8 +295,9 @@ bidirectional runtime graph. A workspace's versioned
 the current physical index, and reapplied as ProjectDefined/Confirmed or explicitly
 saved UserConfirmed/Confirmed relationships after cache hydration or refresh. It is
 not stored in the physical metadata snapshot. The native save-JOIN Code Action writes
-only direct equality mappings after explicit user acceptance; learned and heuristic
-relationships are not production inputs. See
+only direct equality mappings after explicit user acceptance. Qualifying local
+LearnedFromQuery relationships are runtime-only production inputs below project trust;
+heuristic relationships remain excluded. See
 [Architecture](ARCHITECTURE.md#relationship-intelligence).
 
 Use **Query Puppy for T-SQL: Open Project Relationships** to create or open the file
@@ -330,14 +331,17 @@ document/version/cursor/catalog-identity invalidation model.
 
 See [Architecture](ARCHITECTURE.md) for the current semantic and cache boundaries.
 
-## Testing local learned JOIN evidence
+## Testing local learned JOIN evidence and candidates
 
 Phase E1 observes eligible resolved JOIN occurrences only when the active workspace SQL
 document is saved. It consumes an already-loaded `DatabaseIndex`; a learning test must
-not expect the observer to cold-load metadata. The focused editor-neutral regression is:
+not expect the observer to cold-load metadata. Phase E2 resolves records with at least
+three observations against the current canonical index and overlays qualifying
+LearnedFromQuery relationships into the same graph. The focused editor-neutral
+regressions are:
 
 ```bash
-node --import tsx --test tests/learned-relationship-evidence.test.ts
+node --import tsx --test tests/learned-relationship-evidence.test.ts tests/learned-relationship-candidates.test.ts
 ```
 
 `npm run test:extension` also exercises the activated save lifecycle in its disposable
@@ -361,12 +365,17 @@ are the restart boundary. Format-version-1 fixtures must preserve their counts a
 upgrade on the next mutation.
 
 The store caps evidence at 4,096 relationships and occurrences at 16,384 identities.
-The clear command resets both collections. Disabling learning must perform no store
-mutation. An occurrence removed in one saved snapshot loses only its dedupe marker; a
-later reintroduction may count once without decrementing historical evidence.
+The clear command resets both collections and removes learned candidates on the next
+completion. Disabling learning must perform no store mutation and stops acquisition,
+but qualifying existing candidates remain visible. An occurrence removed in one saved
+snapshot loses only its dedupe marker; a later reintroduction may count once without
+decrementing historical evidence.
 
 Tests must continue proving that evidence acquisition performs no catalog query, does
-not retain raw SQL or credentials, and cannot enter completion or the canonical graph.
+not retain raw SQL or credentials, and performs no per-keystroke store write. Candidate
+tests must prove the fixed 3-observation boundary, current-metadata fail-closed behavior,
+cached workspace overlay invalidation, explicit trust order, non-FK presentation, and
+promotion only through the existing save-JOIN Code Action.
 
 ## Completion architecture
 

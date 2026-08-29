@@ -157,6 +157,10 @@ export class DatabaseIndex {
     const leftId = typeof left === "number" ? left : left.id;
     const rightId = typeof right === "number" ? right : right.id;
     if (leftId === undefined || rightId === undefined) return [];
+    if (leftId === rightId)
+      return (this.outgoing.get(leftId) ?? []).filter(
+        (relationship) => relationship.target.objectId === rightId,
+      );
     return [
       ...(this.outgoing.get(leftId) ?? []).filter(
         (relationship) => relationship.target.objectId === rightId,

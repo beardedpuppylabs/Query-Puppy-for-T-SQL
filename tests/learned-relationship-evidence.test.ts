@@ -357,6 +357,7 @@ test("declared FK and confirmed relationship provenances are known evidence iden
           ...shared,
           provenance,
           confidence: RelationshipConfidence.StrongEvidence,
+          observationCount: 3,
         };
       case RelationshipProvenance.HeuristicCandidate:
         return {
@@ -655,11 +656,12 @@ test("format version 1 preserves evidence counts and initializes occurrence stat
   }
 });
 
-test("contract: persisted evidence never activates LearnedFromQuery production relationships", () => {
+test("contract: a resolved qualifying candidate has the lowest production trust tier", () => {
   assert.equal(
     productionRelationshipRank({
       provenance: RelationshipProvenance.LearnedFromQuery,
       confidence: RelationshipConfidence.StrongEvidence,
+      observationCount: 3,
       source: {
         database: "IntelliSenseLab",
         schema: "qpacc",
@@ -678,7 +680,7 @@ test("contract: persisted evidence never activates LearnedFromQuery production r
         },
       ],
     }),
-    undefined,
+    3,
   );
   assert.deepEqual(index.relationships, []);
 });

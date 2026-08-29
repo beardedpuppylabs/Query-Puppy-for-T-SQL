@@ -92,6 +92,7 @@ export function activate(context: vscode.ExtensionContext): void {
     output,
     context.extensionMode === vscode.ExtensionMode.Test,
     projectRelationships,
+    learnedRelationshipEvidence,
   );
   const signatureProvider = new SqlSignatureHelpProvider(
     mssqlBackend,
@@ -470,6 +471,13 @@ export function activate(context: vscode.ExtensionContext): void {
           document: vscode.TextDocument,
           scope: import("./completion/CandidateFactory.js").CompletionScope,
         ) => projectRelationships.apply(document, scope),
+      ),
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.applyLearnedRelationshipCandidates",
+        (
+          document: vscode.TextDocument,
+          scope: import("./completion/CandidateFactory.js").CompletionScope,
+        ) => learnedRelationshipEvidence.applyCandidates(document, scope),
       ),
       vscode.commands.registerCommand(
         "queryPuppyForTSql.test.provideCompletions",

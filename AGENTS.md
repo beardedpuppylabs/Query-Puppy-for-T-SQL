@@ -679,8 +679,16 @@ after the user invokes the native save-JOIN Code Action for a safely resolved di
 equality predicate. Ordinary query editing never persists confirmed or authoritative
 relationship knowledge.
 
-Phase E1 local learned evidence remains uncertain infrastructure, not canonical
-relationship truth. When enabled, the active workspace SQL document may be observed
+Production completion also admits local LearnedFromQuery/StrongEvidence relationships
+only when the pure candidate policy resolves at least three independently deduplicated
+observations against current canonical metadata. These learned relationships use the
+same canonical runtime graph and existing consumers, remain below ProjectDefined in
+trust, never acquire physical FK metadata, and never enter project files or physical
+metadata snapshots.
+
+Phase E1 local learned evidence remains uncertain local evidence rather than explicit
+or authoritative relationship truth. When enabled, the active workspace SQL document
+may be observed
 only on save, using the same conservative resolved-JOIN semantic model and already-
 loaded metadata. Passive acquisition skips ambiguous direction and must never trigger
 catalog loading, query execution, Query Store/plan-cache access, UI prompts, or writes
@@ -703,11 +711,20 @@ absence removes only its occurrence marker, never historical evidence; reintrodu
 may count once. Both evidence and occurrence state remain deterministically bounded,
 and the clear command resets both.
 
-Phase E1 evidence must not enter `Relationship`, `DatabaseIndex`, completion, JOIN
-generation, relationship-aware ranking, diagnostics, navigation, or presentation.
-LearnedFromQuery remains excluded from production until a later phase defines candidate
-policy and confirmation UX. Exact declared-FK, UserConfirmed, or ProjectDefined edges
-are not accumulated as redundant evidence.
+Phase E2 resolves evidence at the fixed product-owned threshold
+`observationCount >= 3`. It must revalidate endpoints, mappings, types, and same-database
+scope against the current canonical index, fail closed for stale/invalid evidence, and
+overlay valid LearnedFromQuery/StrongEvidence relationships into that same graph.
+Exact declared-FK, UserConfirmed, or ProjectDefined edges suppress learned duplicates;
+distinct mappings remain independent. Candidate overlays must be cached and invalidated
+by evidence, project relationship, or metadata changes rather than reparsed or rebuilt
+per keystroke. Clearing evidence removes learned candidates on the next completion.
+Disabling learning stops acquisition but retains qualifying stored candidates.
+
+Completion acceptance is not confirmation. Only the explicit save-JOIN Code Action may
+promote the resolved edge to UserConfirmed project knowledge. Learned relationships
+must be presented as learned StrongEvidence from repeated JOIN usage and explicitly not
+as SQL Server foreign keys. Internal occurrence fingerprints never enter presentation.
 
 ## JOIN semantics
 
@@ -716,10 +733,10 @@ JOIN visibility is positional.
 A future RowSource must not be visible in an earlier ON condition.
 
 Current JOIN intelligence uses enabled authoritative declared-FK, confirmed
-UserConfirmed, and confirmed ProjectDefined relationships from the canonical
-relationship graph. Explicit trust order is declared FK, UserConfirmed, then
-ProjectDefined. Learned and heuristic sources remain excluded until their own
-production workflows exist.
+UserConfirmed, confirmed ProjectDefined, and qualifying LearnedFromQuery relationships
+from the canonical relationship graph. Explicit trust order is declared FK,
+UserConfirmed, ProjectDefined, then LearnedFromQuery. Heuristic sources remain
+excluded.
 
 Do not infer an FK merely because names or datatypes match.
 

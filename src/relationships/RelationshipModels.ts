@@ -69,6 +69,8 @@ export interface UserConfirmedRelationship extends RelationshipCore {
 export interface LearnedFromQueryRelationship extends RelationshipCore {
   readonly provenance: typeof RelationshipProvenance.LearnedFromQuery;
   readonly confidence: typeof RelationshipConfidence.StrongEvidence;
+  /** Number of independently observed, deduplicated JOIN occurrences. */
+  readonly observationCount: number;
   readonly declaredForeignKey?: never;
 }
 
@@ -146,7 +148,8 @@ export function isEnabledDeclaredForeignKeyRelationship(
 export type ProductionRelationship =
   | DeclaredForeignKeyRelationship
   | UserConfirmedRelationship
-  | ProjectDefinedRelationship;
+  | ProjectDefinedRelationship
+  | LearnedFromQueryRelationship;
 
 /**
  * Returns the explicit trust tier used by production relationship consumers.
@@ -160,6 +163,8 @@ export function productionRelationshipRank(
     return 1;
   if (relationship.provenance === RelationshipProvenance.ProjectDefined)
     return 2;
+  if (relationship.provenance === RelationshipProvenance.LearnedFromQuery)
+    return 3;
   return undefined;
 }
 

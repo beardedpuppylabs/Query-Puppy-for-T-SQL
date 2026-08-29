@@ -23,6 +23,7 @@ import {
   completionDomainPolicy,
 } from "../parser/CompletionContextClassifier.js";
 import type { WorkspaceProjectRelationships } from "../relationships/WorkspaceProjectRelationships.js";
+import type { WorkspaceLearnedRelationshipEvidence } from "../relationships/WorkspaceLearnedRelationshipEvidence.js";
 
 export class SqlCompletionProvider implements vscode.CompletionItemProvider {
   private readonly loggedFailures = new Set<string>();
@@ -49,6 +50,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     private readonly output: vscode.OutputChannel,
     private readonly observeAutomaticCompletions = false,
     private readonly projectRelationships?: WorkspaceProjectRelationships,
+    private readonly learnedRelationshipEvidence?: WorkspaceLearnedRelationshipEvidence,
   ) {
     this.scopes = new CompletionScopeResolver(
       metadataBackend,
@@ -160,6 +162,11 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
         scope = await this.scopes.resolve(active, context);
       if (scope && !this.testScope && this.projectRelationships)
         scope = await this.projectRelationships.apply(document, scope);
+      if (scope && !this.testScope && this.learnedRelationshipEvidence)
+        scope = await this.learnedRelationshipEvidence.applyCandidates(
+          document,
+          scope,
+        );
     } catch (error) {
       this.logFailureOnce("completion", error);
     }

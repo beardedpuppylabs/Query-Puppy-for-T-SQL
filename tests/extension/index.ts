@@ -1308,6 +1308,15 @@ export async function run(): Promise<void> {
         "queryPuppyForTSql.test.learnedRelationshipEvidenceState",
         document,
       );
+    const applyLearnedCandidates = (
+      document: vscode.TextDocument,
+      scope: typeof baseScope,
+    ) =>
+      vscode.commands.executeCommand<typeof baseScope>(
+        "queryPuppyForTSql.test.applyLearnedRelationshipCandidates",
+        document,
+        scope,
+      );
     const waitForLearnedCount = async (
       document: vscode.TextDocument,
       count: number,
@@ -1491,6 +1500,14 @@ JOIN reltest.ProjectChild AS child
       2,
       "a second actual occurrence in one document must increment exactly once",
     );
+    const belowThresholdScope = await applyLearnedCandidates(
+      learnedDocument,
+      baseScope,
+    );
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.setCompletionScope",
+      belowThresholdScope,
+    );
     assert.equal(
       predicateLabels(
         await joinPredicates(
@@ -1498,7 +1515,7 @@ JOIN reltest.ProjectChild AS child
         ),
       ).includes("c.CompanyId = p.CompanyId AND c.ParentRef = p.ParentId"),
       false,
-      "learned evidence must not enter JOIN completion",
+      "two observations must remain below the production candidate threshold",
     );
 
     const unrelatedWorkspacePath =
@@ -1516,6 +1533,143 @@ JOIN reltest.ProjectChild AS child
       "the sibling workspace must own an independent evidence record",
     );
 
+    const thirdLearnedDocument = await observeWorkspaceSql(
+      "learned-third.sql",
+      joinSql,
+    );
+    assert.equal(
+      (await waitForLearnedCount(thirdLearnedDocument, 3))[0]?.observationCount,
+      3,
+    );
+    let learnedScope = await applyLearnedCandidates(
+      thirdLearnedDocument,
+      baseScope,
+    );
+    const countThreeIndex = learnedScope.indexes.get(database.toLowerCase());
+    assert.equal(
+      (
+        await applyLearnedCandidates(thirdLearnedDocument, baseScope)
+      ).indexes.get(database.toLowerCase()),
+      countThreeIndex,
+      "unchanged evidence and metadata must reuse the learned overlay",
+    );
+    const refreshedIndex = new DatabaseIndex({
+      ...index.metadata,
+      loadedAt: index.metadata.loadedAt + 1,
+    });
+    const refreshedScope = await applyLearnedCandidates(thirdLearnedDocument, {
+      ...baseScope,
+      indexes: new Map([[database.toLowerCase(), refreshedIndex]]),
+    });
+    assert.notEqual(
+      refreshedScope.indexes.get(database.toLowerCase()),
+      countThreeIndex,
+      "a replacement metadata index must invalidate the learned overlay",
+    );
+    assert.equal(
+      refreshedScope.indexes
+        .get(database.toLowerCase())
+        ?.relationships.some(
+          (relationship) => relationship.provenance === "learnedFromQuery",
+        ),
+      true,
+    );
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.setCompletionScope",
+      learnedScope,
+    );
+    let learnedJoin = await joinPredicates(
+      "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON",
+    );
+    assert.deepEqual(predicateLabels(learnedJoin), [
+      "c.CompanyId = p.CompanyId AND c.ParentRef = p.ParentId",
+    ]);
+    assert.match(completionDetail(learnedJoin[0]), /Learned relationship JOIN/);
+    assert.ok(learnedJoin[0]?.documentation instanceof vscode.MarkdownString);
+    assert.match(learnedJoin[0].documentation.value, /repeated JOIN usage/i);
+    assert.match(learnedJoin[0].documentation.value, /Observed in \*\*3\*\*/);
+    assert.match(learnedJoin[0].documentation.value, /StrongEvidence/);
+    assert.match(
+      learnedJoin[0].documentation.value,
+      /not a SQL Server foreign key/i,
+    );
+    assert.doesNotMatch(
+      learnedJoin[0].documentation.value,
+      /seenOccurrences|document hash|occurrence ordinal/i,
+    );
+
+    const siblingLearnedScope = await applyLearnedCandidates(
+      unrelatedLearnedDocument,
+      baseScope,
+    );
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.setCompletionScope",
+      siblingLearnedScope,
+    );
+    assert.deepEqual(
+      predicateLabels(
+        await joinPredicates(
+          "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON",
+        ),
+      ),
+      [],
+      "one observation in a sibling workspace must not inherit workspace A candidates",
+    );
+
+    for (let occurrence = 4; occurrence <= 8; occurrence++) {
+      const extra = await observeWorkspaceSql(
+        `learned-extra-${String(occurrence)}.sql`,
+        joinSql,
+      );
+      assert.equal(
+        (await waitForLearnedCount(extra, occurrence))[0]?.observationCount,
+        occurrence,
+      );
+    }
+    learnedScope = await applyLearnedCandidates(learnedDocument, baseScope);
+    assert.notEqual(
+      learnedScope.indexes.get(database.toLowerCase()),
+      countThreeIndex,
+      "evidence changes must invalidate the learned overlay",
+    );
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.setCompletionScope",
+      learnedScope,
+    );
+    learnedJoin = await joinPredicates(
+      "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON",
+    );
+    assert.ok(learnedJoin[0]?.documentation instanceof vscode.MarkdownString);
+    assert.match(learnedJoin[0].documentation.value, /Observed in \*\*8\*\*/);
+
+    await learningConfiguration.update(
+      "enabled",
+      false,
+      vscode.ConfigurationTarget.Workspace,
+    );
+    const disabledCandidateScope = await applyLearnedCandidates(
+      learnedDocument,
+      baseScope,
+    );
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.setCompletionScope",
+      disabledCandidateScope,
+    );
+    assert.equal(
+      (
+        await joinPredicates(
+          "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON",
+        )
+      ).length,
+      1,
+      "disabling acquisition must keep qualifying existing candidates visible",
+    );
+    await learningConfiguration.update(
+      "enabled",
+      previousWorkspaceLearning,
+      vscode.ConfigurationTarget.Workspace,
+    );
+
     const learnedRelationshipFile = vscode.Uri.joinPath(
       temporaryWorkspaceUri,
       ".query-puppy",
@@ -1525,14 +1679,74 @@ JOIN reltest.ProjectChild AS child
       vscode.workspace.fs.stat(learnedRelationshipFile),
     );
 
-    const joinDocument = await openWorkspaceSql(
-      "save-relationship.sql",
+    const acceptedLearnedSql = accept(
+      "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON",
+      learnedJoin[0]!,
+    );
+    const acceptedLearnedDocument = await openWorkspaceSql(
+      "accepted-learned-completion.sql",
+      acceptedLearnedSql,
+    );
+    assert.match(acceptedLearnedSql, /c\.ParentRef = p\.ParentId/);
+    await assert.rejects(async () =>
+      vscode.workspace.fs.stat(learnedRelationshipFile),
+    );
+    assert.equal(
+      (await learnedEvidence(learnedDocument))[0]?.observationCount,
+      8,
+      "completion acceptance must not delete or confirm learned evidence",
+    );
+
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.clearLearnedRelationshipEvidence",
+      learnedDocument,
+    );
+    const clearedCandidateScope = await applyLearnedCandidates(
+      learnedDocument,
+      baseScope,
+    );
+    assert.equal(
+      clearedCandidateScope.indexes.get(database.toLowerCase()),
+      index,
+      "clear must drop the learned overlay without rebuilding physical metadata",
+    );
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.setCompletionScope",
+      clearedCandidateScope,
+    );
+    assert.deepEqual(
+      predicateLabels(
+        await joinPredicates(
+          "SELECT * FROM reltest.ProjectParent p JOIN reltest.ProjectChild c ON",
+        ),
+      ),
+      [],
+      "clear must remove a learned candidate on the next completion",
+    );
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.observeLearnedRelationshipEvidence",
+      learnedDocument,
+    );
+    assert.equal(
+      (await waitForLearnedCount(learnedDocument, 2))[0]?.observationCount,
+      2,
+    );
+    const rebuiltThird = await observeWorkspaceSql(
+      "learned-rebuilt-third.sql",
       joinSql,
     );
-    assert.equal(joinDocument.languageId, "sql");
-    const actionPosition = joinDocument.positionAt(
-      joinSql.indexOf("c.ParentRef"),
+    assert.equal(
+      (await waitForLearnedCount(rebuiltThird, 3))[0]?.observationCount,
+      3,
     );
+
+    const joinDocument = acceptedLearnedDocument;
+    assert.equal(joinDocument.languageId, "sql");
+    const acceptedRelationshipOffset = joinDocument
+      .getText()
+      .indexOf("c.ParentRef");
+    assert.notEqual(acceptedRelationshipOffset, -1);
+    const actionPosition = joinDocument.positionAt(acceptedRelationshipOffset);
     const directActions = await vscode.commands.executeCommand<
       readonly vscode.CodeAction[]
     >(
@@ -1549,7 +1763,7 @@ JOIN reltest.ProjectChild AS child
     );
     const actions = await relationshipCodeActions(
       joinDocument,
-      joinSql.indexOf("c.ParentRef"),
+      acceptedRelationshipOffset,
     );
     const saveActions = actions.filter(
       (action) => action.title === "Save JOIN as Query Puppy relationship",
@@ -1658,7 +1872,7 @@ JOIN reltest.ProjectChild c
       "a sibling workspace root must not inherit the saved relationship",
     );
 
-    const confirmedScope = await vscode.commands.executeCommand<
+    const confirmedProjectScope = await vscode.commands.executeCommand<
       typeof baseScope
     >(
       "queryPuppyForTSql.test.applyProjectRelationships",
@@ -1666,9 +1880,27 @@ JOIN reltest.ProjectChild c
       baseScope,
     );
     assert.notEqual(
-      confirmedScope.indexes.get(database.toLowerCase()),
+      confirmedProjectScope.indexes.get(database.toLowerCase()),
       index,
       "the save must invalidate and rebuild the workspace relationship overlay",
+    );
+    const confirmedScope = await applyLearnedCandidates(
+      joinDocument,
+      confirmedProjectScope,
+    );
+    const confirmedProvenances = confirmedScope.indexes
+      .get(database.toLowerCase())
+      ?.relationships.map((relationship) => relationship.provenance);
+    assert.equal(
+      confirmedProvenances?.filter(
+        (provenance) => provenance === "userConfirmed",
+      ).length,
+      1,
+    );
+    assert.equal(
+      confirmedProvenances.includes("learnedFromQuery"),
+      false,
+      "explicit confirmation must suppress the exact learned duplicate",
     );
     await vscode.commands.executeCommand(
       "queryPuppyForTSql.test.setCompletionScope",
@@ -1787,6 +2019,11 @@ JOIN reltest.ProjectChild c
       { kind: "skipped", reason: "no owning workspace" },
     );
     assert.deepEqual(await learnedEvidence(untitledJoin), []);
+    assert.equal(
+      await applyLearnedCandidates(untitledJoin, baseScope),
+      baseScope,
+      "no-workspace SQL must not receive a learned relationship overlay",
+    );
   } finally {
     await vscode.commands.executeCommand(
       "queryPuppyForTSql.test.setCompletionScope",

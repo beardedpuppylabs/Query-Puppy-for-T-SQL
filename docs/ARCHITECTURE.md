@@ -439,7 +439,9 @@ canonical semantic relationships are separate layers:
         -> declared-FK conversion boundary
     workspace .query-puppy/relationships.json
         -> project definition validation/resolution
-    both
+    extension-managed learned evidence
+        -> fixed threshold + current-metadata candidate resolution
+    all qualifying sources
         -> canonical Relationship
         -> one DatabaseIndex relationship graph
 
@@ -465,10 +467,12 @@ FK details. Logical relationships do not require or fabricate those details.
 
 Production completion admits enabled authoritative declared FKs, explicitly saved
 UserConfirmed/Confirmed relationships, and explicitly authored
-ProjectDefined/Confirmed relationships. Logical relationships never receive physical
-FK details and are presented as relationships rather than constraints. Learned and
-heuristic sources remain model-ready but are not loaded or suggested. Never infer or
-label a foreign key from matching names or datatypes.
+ProjectDefined/Confirmed relationships. It also admits local
+LearnedFromQuery/StrongEvidence candidates only after the Phase E2 policy resolves at
+least three independently deduplicated observations against current canonical
+metadata. Logical relationships never receive physical FK details and are presented
+as relationships rather than constraints. Heuristic sources remain excluded. Never
+infer or label a foreign key from matching names or datatypes.
 
 Persistent snapshots continue storing canonical SQL Server catalog metadata,
 including physical FK records. Project relationships live separately in the owning
@@ -513,9 +517,9 @@ Native file watchers invalidate the parsed definition and runtime overlay; the n
 completion re-reads and revalidates it. Invalid relationships are ignored individually
 and reported once per load/index lifecycle in the Query Puppy output channel.
 
-## Local learned relationship evidence
+## Local learned relationship evidence and candidate overlay
 
-Phase E1 adds a separate uncertain-evidence pipeline:
+Phase E1 adds a separate uncertain-evidence acquisition pipeline:
 
     saved active workspace SQL document
         -> existing resolved-JOIN semantic candidate
@@ -593,14 +597,33 @@ Different mappings between the same table pair remain distinct.
 
 The **Clear Learned Relationship Evidence** command clears both relationship evidence
 and seen-occurrence state for the active workspace folder after native modal
-confirmation. This permits the next eligible save to learn again. It does not modify
-physical metadata or `.query-puppy/relationships.json`. Disabling learning performs no
-evidence or occurrence mutation; re-enabling resumes from the last persisted state.
+confirmation. This removes the learned runtime overlay on the next completion and
+permits the next eligible save to learn again. It does not modify physical metadata or
+`.query-puppy/relationships.json`. Disabling learning stops acquisition and performs no
+evidence or occurrence mutation; qualifying stored candidates remain visible.
 
-Phase E1 deliberately has no bridge from evidence storage to `DatabaseIndex`,
-`Relationship`, candidate creation, ranking, completion presentation, diagnostics, or
-navigation. `LearnedFromQuery` remains excluded from production relationship consumers;
-observation counts define no candidate/confidence threshold.
+Phase E2 adds one pure candidate-policy boundary. An evidence record qualifies at the
+fixed product-owned threshold `observationCount >= 3`. The policy re-resolves both
+physical table endpoints, every ordered column mapping, same-database scope, and known
+type compatibility against the current `DatabaseIndex`. Stale, missing, incompatible,
+cross-database, or otherwise invalid evidence fails closed. Valid output is one
+canonical `LearnedFromQuery`/`StrongEvidence` relationship carrying the aggregate
+observation count. Exact declared-FK, UserConfirmed, or ProjectDefined semantic
+identities suppress the learned duplicate; distinct mappings between the same objects
+remain independent.
+
+The workspace adapter overlays those candidates after the physical and project
+relationship indexes have been built. It caches by owning workspace, evidence-array
+identity, and base `DatabaseIndex` identity. Store mutations/clear replace the evidence
+identity; project-file changes and catalog refreshes replace the base index. These are
+the invalidation boundaries, so the steady completion path performs neither catalog
+access nor repeated disk parsing. No-workspace documents receive no learned overlay.
+Learned relationships use the same canonical graph and existing consumers; there is no
+parallel learned graph.
+
+Accepting a learned completion changes only SQL text. Explicit invocation of **Save
+JOIN as Query Puppy relationship** is still required to create UserConfirmed project
+truth. That stronger exact edge suppresses the learned candidate immediately.
 
 ## Relationship graph and indexes
 
@@ -619,10 +642,11 @@ Relationship-aware completion must avoid full-database scans per keystroke.
 ## JOIN Intelligence
 
 JOIN predicate suggestions are generated from enabled authoritative declared FKs,
-confirmed UserConfirmed relationships, and confirmed ProjectDefined relationships in
-the canonical runtime graph. Explicit trust order is declared FK, UserConfirmed, then
-ProjectDefined. Exact logical duplicates collapse, and an equivalent physical FK wins;
-distinct mappings between the same pair remain distinct.
+confirmed UserConfirmed relationships, confirmed ProjectDefined relationships, and
+qualifying LearnedFromQuery/StrongEvidence relationships in the canonical runtime
+graph. Explicit trust order is declared FK, UserConfirmed, ProjectDefined, then
+LearnedFromQuery. Exact logical duplicates collapse, and any stronger exact relationship
+wins; distinct mappings between the same pair remain distinct.
 
 A relationship may generate a complete expression such as:
 
@@ -704,6 +728,7 @@ The following are architectural invariants:
 - avoid reparsing unrelated statements unnecessarily
 - acquire learned JOIN evidence only on document save and never write it per keystroke
 - never load or query catalog metadata solely for learned-evidence acquisition
+- resolve and cache learned candidate overlays outside the per-keystroke catalog/disk path
 - bound local learned evidence to 4,096 unique mappings per workspace folder
 - bound persisted learned occurrence identities to 16,384 per workspace folder
 - preserve deterministic completion order

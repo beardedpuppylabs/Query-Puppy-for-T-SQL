@@ -335,7 +335,7 @@ test("contract: project relationships use one workspace file and native JSON val
   assert.match(actionSource, /CodeActionKind\.RefactorRewrite/);
 });
 
-test("contract: learned JOIN evidence is save-driven local infrastructure, not completion truth", async () => {
+test("contract: learned JOIN candidates use the local cached evidence policy boundary", async () => {
   const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
     readonly version?: string;
     readonly contributes?: {
@@ -345,7 +345,7 @@ test("contract: learned JOIN evidence is save-driven local infrastructure, not c
       };
     };
   };
-  assert.equal(manifest.version, "0.12.4");
+  assert.equal(manifest.version, "0.12.5");
   assert.equal(
     manifest.contributes?.commands?.some(
       (command) =>
@@ -367,6 +367,8 @@ test("contract: learned JOIN evidence is save-driven local infrastructure, not c
     "utf8",
   );
   assert.match(observerSource, /observeSavedDocument/);
+  assert.match(observerSource, /applyCandidates/);
+  assert.match(observerSource, /resolveLearnedRelationshipCandidates/);
   assert.doesNotMatch(
     observerSource,
     /ensureLoaded|MetadataLoader|listDatabases/,
@@ -387,6 +389,22 @@ test("contract: learned JOIN evidence is save-driven local infrastructure, not c
     evidenceSource,
     /MAX_LEARNED_RELATIONSHIP_SEEN_OCCURRENCES = 16384/,
   );
+  const policySource = await readFile(
+    "src/relationships/LearnedRelationshipCandidatePolicy.ts",
+    "utf8",
+  );
+  assert.match(policySource, /LEARNED_RELATIONSHIP_CANDIDATE_THRESHOLD = 3/);
+  assert.match(policySource, /RelationshipProvenance\.LearnedFromQuery/);
+  assert.match(policySource, /RelationshipConfidence\.StrongEvidence/);
+  assert.doesNotMatch(
+    policySource,
+    /node:fs|MetadataLoader|listDatabases|ensureLoaded/,
+  );
+  const providerSource = await readFile(
+    "src/completion/SqlCompletionProvider.ts",
+    "utf8",
+  );
+  assert.match(providerSource, /applyCandidates/);
   for (const productionConsumer of [
     "src/completion/CandidateFactory.ts",
     "src/metadata/DatabaseIndex.ts",
