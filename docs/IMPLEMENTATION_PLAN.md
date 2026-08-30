@@ -48,6 +48,8 @@ architecture documents describe the intended present-day design.
   complete; qualifying local evidence enters the canonical runtime graph
 - Relationship Intelligence Phase E3 conservative heuristic JOIN candidates —
   complete; bounded fallback applies only to already-selected physical pairs
+- 0.12.6 GPL-3.0-only relicensing and repository compliance — complete; officially
+  published releases through 0.12.5 retain their original MIT terms
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -58,6 +60,12 @@ renderer without entering the global graph, persistence, table discovery, or ran
 Completion acceptance remains non-confirming; the existing explicit save-JOIN action
 is the only promotion path to UserConfirmed project truth. Navigation & Code
 Understanding remains a larger forward-roadmap area.
+
+The same unreleased 0.12.6 repository state is the first `GPL-3.0-only` release
+target. Its compliance slice established the official GPLv3 license text, package
+metadata, third-party inventory, bundle/VSIX audit, public documentation, and the
+release requirement for immutable source/tag/artifact traceability. The historical
+MIT notes below remain accurate for their original release milestones.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 

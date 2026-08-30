@@ -4,6 +4,12 @@
 
 ## 0.12.6
 
+- Relicensed Query Puppy for T-SQL under the GNU General Public License version 3
+  only (`GPL-3.0-only`) starting with version 0.12.6. Officially published releases
+  through 0.12.5 retain their original MIT license terms.
+- Added an evidence-based third-party notices inventory and synchronized repository,
+  contributor, release, and Marketplace-facing license documentation for the first
+  GPL release.
 - Added the Phase E3 conservative heuristic JOIN fallback for an already-selected
   persistent physical table pair when no declared FK, UserConfirmed,
   ProjectDefined, or qualifying LearnedFromQuery relationship connects the pair.

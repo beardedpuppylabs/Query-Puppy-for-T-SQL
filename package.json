@@ -5,7 +5,7 @@
   "version": "0.12.6",
   "publisher": "BeardedPuppyLabs",
   "author": "Bearded Puppy Labs",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "homepage": "https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL",
   "repository": {
     "type": "git",

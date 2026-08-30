@@ -370,8 +370,9 @@ The license facts are **SOURCE-DOCUMENTED**; a final production dependency audit
 - SQL Tools Service: MIT source. Published binary assets contain .NET and NuGet
   dependencies whose notices and redistribution terms still require inspection.
 
-No core candidate introduced an identified copyleft conflict with Query Puppy's MIT
-license. That does not replace release-time dependency and binary audits.
+No core candidate introduced an identified conflict with Query Puppy's active
+`GPL-3.0-only` distribution model. That does not replace the mandatory adoption gate
+or release-time dependency and binary audits.
 
 ## Security and privacy
 

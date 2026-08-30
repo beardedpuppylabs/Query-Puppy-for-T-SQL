@@ -976,15 +976,11 @@ results.
 
 ## Licensing and third-party compliance
 
-Current public releases through 0.12.6 remain MIT-licensed. The approved license for
-the first deliberately relicensed release and subsequent releases is
-`GPL-3.0-only`.
+Query Puppy version 0.12.6 and subsequent versions are licensed under
+`GPL-3.0-only`. Officially published releases through 0.12.5 retain their original
+MIT license terms; do not rewrite historical release licensing.
 
-Do not change the current root `LICENSE`, package license field, README license claim,
-or Marketplace-facing license claim piecemeal before the deliberate relicensing
-release task is ready. Historical MIT releases remain historical MIT releases.
-
-The approved GPL direction creates a mandatory pre-adoption gate now. Before adding,
+GPL compatibility is a mandatory pre-adoption gate. Before adding,
 copying, vendoring, replacing, or materially upgrading third-party software, source,
 binaries, or redistributable assets:
 
@@ -1084,8 +1080,8 @@ In particular:
 - meaningful new user-facing capabilities or feature milestones increment MINOR;
 - incompatible configuration, public API, or migration changes increment MAJOR
   where appropriate;
-- the first MIT-to-`GPL-3.0-only` relicensing release is a deliberate MINOR
-  milestone; use `0.13.0` if no intervening release has consumed it.
+- licensing-only work follows the deliberate release/version decision recorded in
+  `PROJECT_DEVELOPMENT_PLAN.md`; do not invent another version transition.
 
 A version bump is normally not required for documentation-only, test-only, internal
 behavior-preserving refactoring, research-only, or non-publishable experimental work.
@@ -1111,12 +1107,11 @@ Before any release, verify required third-party attribution and license notices 
 the final artifact according to `PROJECT_DEVELOPMENT_PLAN.md` and the maintained
 notice files.
 
-Before the first GPL release, complete the full relicensing/compliance gate rather
-than changing license files piecemeal. The gate includes ownership/provenance review,
-bundle/VSIX inventory, exclusion of research-only material such as `spike/**`,
-creation/verification of `THIRD_PARTY_NOTICES.md`, exact `GPL-3.0-only` package and
-LICENSE metadata, public-document synchronization, and exact release-tag/source/VSIX
-Corresponding Source traceability.
+The 0.12.6 GPL transition established the required ownership/provenance review,
+bundle/VSIX inventory, research-only exclusions, `THIRD_PARTY_NOTICES.md`, exact
+`GPL-3.0-only` package and LICENSE metadata, and synchronized public documentation.
+Every GPL release must repeat artifact-level compliance verification and establish
+exact release-tag/source/VSIX Corresponding Source traceability before publication.
 
 For release-process changes, keep `docs/PUBLISHING.md` synchronized with the actual
 package scripts and current supported publication workflow.

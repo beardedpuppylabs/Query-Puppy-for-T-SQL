@@ -2,7 +2,7 @@
 
 Query Puppy for T-SQL is context-aware SQL Server IntelliSense for large and complex databases where memorizing every table, column, function, and relationship is unrealistic. It combines case-insensitive Contains discovery with query-scope analysis, expected types, and real SQL Server schema metadata.
 
-Query Puppy for T-SQL itself is free and open-source software under the [MIT License](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/LICENSE). [Source code, issues, and development](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL) are hosted publicly on GitHub.
+Query Puppy for T-SQL is free and open-source software under the [GNU General Public License version 3 only](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/LICENSE). [Source code, issues, and development](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL) are hosted publicly on GitHub.
 
 In a schema with hundreds or thousands of objects, remembering part of a name should be enough to find it. Types and trustworthy schema relationships help rank the most useful suggestions, and relationship intelligence can construct `JOIN` predicates. The extension provides its own completion provider while reusing the active Microsoft SQL Server (`mssql`) connection—there is no second login or separate connection configuration.
 
@@ -503,8 +503,18 @@ See [CONTRIBUTING.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/
 
 ## Open source
 
-Query Puppy for T-SQL itself is free and open-source software under the MIT License.
+Query Puppy for T-SQL version 0.12.6 and subsequent versions are free and open-source
+software under the GNU General Public License version 3 only (`GPL-3.0-only`). The
+GPL permits use, modification, redistribution, and commercial use subject to its
+terms. Officially published releases through 0.12.5 retain their original MIT
+license terms.
+
+All Query Puppy features remain available without paid feature gates, per-seat
+licensing, or a mandatory subscription. Voluntary sponsorship may support
+independent development but does not buy features, support obligations, roadmap
+priority, proprietary rights, governance, or technical influence.
 
 - [Source code](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL)
 - [Issue tracker](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues)
-- [MIT License](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/LICENSE)
+- [GNU GPL version 3](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/LICENSE)
+- [Third-party notices](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/THIRD_PARTY_NOTICES.md)

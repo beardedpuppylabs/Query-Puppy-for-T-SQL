@@ -64,6 +64,11 @@ developer before publication.
 `package.json` is the authoritative repository source for the current package
 version and manifest publisher field.
 
+The verified current Marketplace release is 0.12.5 under its original MIT terms.
+The repository's 0.12.6 release target is `GPL-3.0-only`; the public Marketplace
+page may continue to describe 0.12.5 as MIT until 0.12.6 is explicitly published.
+Do not rewrite historical Marketplace artifacts or terms.
+
 Release tags use semantic versions prefixed with `v`:
 
 ```text
@@ -77,8 +82,9 @@ Query Puppy for T-SQL X.Y.Z
 ```
 
 The Visual Studio Marketplace remains the primary extension-binary distribution
-channel. A GitHub Release records the source milestone and release notes; attaching
-a VSIX to every GitHub Release is not required by the current project policy.
+channel. For every GPL release, the GitHub Release records the immutable source
+milestone and release notes and must attach the same verified VSIX bytes published
+to the Marketplace. This preserves an auditable artifact-to-source mapping.
 
 ## Publication safety
 
@@ -148,8 +154,10 @@ BeardedPuppyLabs.query-puppy-for-t-sql
 
 Also confirm:
 
-- the manifest uses SPDX license `MIT`
-- the root `LICENSE` contains the canonical project MIT terms
+- the manifest uses SPDX license `GPL-3.0-only`
+- the root `LICENSE` is byte-for-byte the unmodified official GNU GPL version 3 text
+- officially published releases through 0.12.5 remain described under their original
+  MIT terms; current 0.12.6 release material does not describe itself as MIT
 - `repository`, `bugs`, and `homepage` point to the canonical public GitHub project
 - current Marketplace links use the current publisher identity
 - no obsolete publisher identity remains in maintained package or release metadata
@@ -268,6 +276,14 @@ Check specifically for accidental inclusion of:
 - development dependency trees
 - unnecessary internal engineering documentation
 
+Also verify that:
+
+- `LICENSE` and `THIRD_PARTY_NOTICES.md` are present
+- `spike/**`, `node_modules/**`, development/test source, and temporary project-source
+  exports are absent
+- the production bundle and archive contain no third-party material omitted from
+  `THIRD_PARTY_NOTICES.md`
+
 Repository documentation may remain tracked in Git while being excluded from the
 published VSIX.
 
@@ -295,8 +311,11 @@ Verify the public branch contains:
 
 - the intended package and lockfile version
 - the matching changelog entry
-- the canonical MIT `LICENSE`
+- the canonical GPLv3 `LICENSE` and current `THIRD_PARTY_NOTICES.md`
 - current source, repository, issue, support, and security links
+
+Record the release commit SHA. The later tag, GitHub Release source archives,
+attached VSIX, and Marketplace upload must all map to this exact reviewed source.
 
 ### 10. Create and push the release tag
 
@@ -319,8 +338,9 @@ Query Puppy for T-SQL X.Y.Z
 ```
 
 Use the changelog as the release-note source and keep claims consistent with actual
-verification. The Marketplace remains the primary binary channel, so a VSIX
-attachment is optional rather than required.
+verification. Attach the exact already-inspected VSIX. Record its SHA-256 before
+uploading it anywhere; do not rebuild independently for the GitHub Release and
+Marketplace.
 
 ### 12. Authenticate for Marketplace publication
 
@@ -353,7 +373,8 @@ If a token-based workflow is deliberately used and remains officially supported:
 
 ### 13. Publish explicitly
 
-Only after all preceding checks pass, perform the explicit publication action.
+Only after all preceding checks pass, perform the explicit publication action using
+the same verified VSIX bytes attached to the GitHub Release.
 
 Depending on the current supported repository workflow, this may be:
 
@@ -392,8 +413,12 @@ Also verify the public GitHub source and Release:
 
 - the default branch and tag resolve to the intended source
 - the GitHub Release title and notes match the tag and changelog
-- source, issue, support, security, and MIT License links work
+- source, issue, support, security, GNU GPL, and third-party notice links work
 - no release-only credential or generated artifact was committed
+
+Verify that the immutable tag and GitHub source archive provide the Corresponding
+Source for the exact distributed VSIX, including the build and packaging scripts
+needed to reproduce it. A moving default branch is not sufficient.
 
 Repository About metadata is maintained manually in GitHub's UI. When relevant,
 verify these values:
@@ -435,11 +460,14 @@ Before every later release:
 7. verify no credentials or private infrastructure leaked into the package
 8. review and push the public release source
 9. create and push the `vX.Y.Z` tag
-10. create `Query Puppy for T-SQL X.Y.Z` as the GitHub Release
-11. review current Marketplace authentication guidance
-12. publish only through an explicit Marketplace release action
-13. verify Marketplace, GitHub source, tag, Release, License, and links
-14. verify repository About metadata when it changed
+10. create `Query Puppy for T-SQL X.Y.Z` as the GitHub Release and attach the exact
+    verified VSIX
+11. record and compare the VSIX SHA-256 used by GitHub and Marketplace
+12. review current Marketplace authentication guidance
+13. publish only through an explicit Marketplace release action
+14. verify Marketplace, GitHub source, tag, Release, License, notices, Corresponding
+    Source, and links
+15. verify repository About metadata when it changed
 
 ## Publisher migration policy
 

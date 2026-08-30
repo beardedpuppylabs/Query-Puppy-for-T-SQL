@@ -63,12 +63,14 @@ acceptance.
 - Preserve provenance-aware Relationship Intelligence. Physical FK metadata must
   come only from actual SQL Server constraints. ProjectDefined, UserConfirmed,
   LearnedFromQuery, and conservative HeuristicCandidate relationships must remain
-  explicitly non-FK and follow the repository's confidence/trust rules.
+  explicitly non-FK and follow the repository's confidence/trust rules. Composite
+  mappings are first-class relationships, and relationship changes require focused
+  false-positive, ambiguity, and fail-closed regression coverage.
 - Keep runtime metadata access read-only and fixture provisioning separate.
 - Before introducing third-party dependencies, copied/adapted code, vendored source,
   binaries, or external assets, follow the license/provenance gate in
   [AGENTS.md](AGENTS.md) and `PROJECT_DEVELOPMENT_PLAN.md`. Do not introduce material
-  whose compatibility with the project's approved future `GPL-3.0-only` distribution
+  whose compatibility with the project's `GPL-3.0-only` distribution
   model is unknown or unresolved.
 - Update `THIRD_PARTY_NOTICES.md` and required license/NOTICE material in the same
   coherent change when third-party use or redistribution obligations change.
@@ -80,10 +82,12 @@ Detailed implementation invariants live in [AGENTS.md](AGENTS.md). Human
 contributors do not need to duplicate that document in a pull request, but changes
 must preserve the contracts relevant to the affected subsystem.
 
-The contributor-rights model for the future GPL phase (for example DCO versus CLA)
-is a project-governance decision and is not silently established by this document.
-Follow the repository's license and contribution policy in force when submitting a
-contribution.
+Query Puppy version 0.12.6 and subsequent versions are licensed under
+`GPL-3.0-only`; officially published releases through 0.12.5 retain their original
+MIT terms. Contributions are accepted under the repository license in force for the
+contributed version. This repository does not silently establish a separate CLA or
+DCO requirement; any future contributor-rights process must be introduced as an
+explicit project-governance change.
 
 ## Pull requests
 
