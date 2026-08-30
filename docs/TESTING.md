@@ -243,6 +243,7 @@ promises.
 | Shared mssql connection context without extension-owned credentials                  | Implemented                      | `connection.test.ts` mssql adapter contracts                                                                  |
 | Read-only Schema Intelligence initialization                                         | Implemented                      | `metadata-loader.test.ts` — catalog-read-only contract                                                        |
 | Document semantic version cache                                                      | Implemented                      | `document-semantic-cache.test.ts` — invalidation contract                                                     |
+| Document-local semantic symbol/reference foundation                                  | Implemented, internal foundation | `document-semantic-symbols.test.ts` — identity, range, scope, shadowing, and isolation contracts              |
 | Concurrent in-memory catalog load coalescing                                         | Implemented                      | `metadata-cache.test.ts` — catalog coalescing contract                                                        |
 | Persistent hydration, stale-while-revalidate, isolation, allow-listing, and recovery | Implemented                      | all `contract:` tests in `persistent-metadata.test.ts`                                                        |
 | Microsoft suggestion first-run coexistence                                           | Implemented                      | `microsoft-suggestions.test.ts` — explicit scoped setup contract                                              |
@@ -508,6 +509,23 @@ expressions, bare insertion for unaliased sources and projection aliases, no dup
 qualification after `alias.`/`alias.fragment`, distinct insertion for same-name
 columns from different RowSources, correlated alias ownership, derived/CTE aliases,
 and syntax-restricted DML targets.
+
+## Document-local symbol/reference tests
+
+Protect editor-neutral semantic identity and exact token ranges for:
+
+- CTE declarations, consuming references, and chained CTEs
+- written RowSource aliases and qualified occurrences
+- nested alias shadowing, legal outer correlation, and sibling isolation
+- scalar local variables and standalone `GO` batch boundaries
+- table-variable declarations, RowSource uses, and distinct aliases
+- deterministic temporary-table declaration/use binding
+- unresolved and ambiguous occurrences remaining unbound
+
+These tests must assert declaration-derived identity rather than matching identifier
+text. They must not introduce VS Code provider types, catalog I/O, a navigation-only
+parser, or a second scope resolver. Projection-alias navigation remains deferred until
+its declaration/reference identity is reliable.
 
 ## Set operation tests
 

@@ -2733,6 +2733,9 @@ Query Store / plan cache research comes only after this local pipeline is proven
 
 ## 52. Phase F — Semantic foundation completion
 
+**Status:** F1 document-local symbol/reference foundation implemented in 0.12.6.
+Native navigation, highlights, symbols, rename, and diagnostics remain Phase G work.
+
 1. Close high-value language gaps.
 2. Harden reusable symbol/reference information.
 3. Improve semantic output needed by navigation.

@@ -411,6 +411,29 @@ declarations are indexed once per semantic document analysis for the current bat
 and expression completion consumes that canonical list. Table variables keep their
 existing RowSource representation and are excluded from scalar-variable candidates.
 
+## Document-local symbol and reference index
+
+`DocumentSemanticModel` exposes an editor-neutral symbol/reference index built from
+the same tokenizer, QueryScopes, RowSources, and batch-local variable declarations
+used by completion. It currently models CTEs, written RowSource aliases, scalar local
+variables, table variables, and temporary tables. Each symbol has a declaration-token
+range, a declaration-derived identity, a kind, and its controlling query, batch, or
+document scope. Bound references point to that identity rather than merely sharing a
+normalized spelling.
+
+Alias binding walks the existing QueryScope hierarchy, respects local shadowing,
+correlation policy, sibling isolation, and APPLY's left-side visibility boundary.
+Variable identity remains batch-local, while temporary-table binding is limited to
+the deterministic local RowSource uses already represented by the analyzer. The
+index performs no catalog access, persistence, filesystem access, or remote work and
+contains no VS Code API types.
+
+Projection aliases are not yet part of this index: current completion semantics can
+surface them where legal, but do not retain sufficiently reliable declaration and
+reference identity for navigation. Go to Definition/Peek, Find References, Document
+Highlights, Document Symbols/Outline, semantic Rename, and Diagnostics are not yet
+registered consumers of this foundation.
+
 ## Schema Intelligence
 
 Persistent catalog columns may contain schema-role information.

@@ -14,6 +14,11 @@ import {
   resolveBatchLocalVariables,
   type LocalVariableSymbol,
 } from "./LocalVariableSymbols.js";
+import {
+  buildDocumentSemanticSymbolIndex,
+  type DocumentSemanticSymbolIndex,
+} from "./DocumentSemanticSymbols.js";
+import { resolveQueryScopeRowSource } from "./QueryScopeResolver.js";
 
 export interface RowSource {
   readonly sourceId: string;
@@ -32,6 +37,7 @@ export interface RowSource {
     | "deleted";
   readonly columns: readonly ColumnMetadata[];
   readonly origin: { readonly start: number; readonly end: number };
+  readonly declaration?: { readonly start: number; readonly end: number };
 }
 export type QueryScopeKind =
   | "topLevelQuery"
@@ -45,6 +51,10 @@ export interface ScopedRowSource {
   readonly explicitAlias: boolean;
   readonly scopeDistance: number;
   readonly outer: boolean;
+  readonly sourceName?: { readonly start: number; readonly end: number };
+  readonly sourcePath?: { readonly start: number; readonly end: number };
+  readonly sourceExpression?: { readonly start: number; readonly end: number };
+  readonly aliasDeclaration?: { readonly start: number; readonly end: number };
 }
 export interface QueryScope {
   readonly id: string;
@@ -53,6 +63,7 @@ export interface QueryScope {
   readonly parentId?: string;
   readonly localRowSources: readonly ScopedRowSource[];
   readonly allowsOuterReferences: boolean;
+  readonly outerReferenceUpperBound?: number;
 }
 export type SetOperator = "union" | "unionAll" | "intersect" | "except";
 export type SetQueryExpression =
@@ -78,6 +89,7 @@ export interface DocumentSemanticModel {
   readonly setQueryExpressions: readonly SetQueryExpression[];
   readonly orderByColumns: readonly ColumnMetadata[];
   readonly localVariables: readonly LocalVariableSymbol[];
+  readonly documentLocalSymbols: DocumentSemanticSymbolIndex;
 }
 export interface SemanticCatalog {
   readonly activeDatabase: string;
@@ -915,20 +927,44 @@ function queryScopeModel(
       let p = i + 1;
       let source: RowSource | undefined;
       let parts: string[] = [];
+      let sourceName:
+        { readonly start: number; readonly end: number } | undefined;
+      let sourcePath:
+        { readonly start: number; readonly end: number } | undefined;
+      let sourceExpression:
+        { readonly start: number; readonly end: number } | undefined;
       if (tokens[p]?.text === "(") {
         const close = matching(tokens, p);
+        sourceExpression = {
+          start: tokens[p]?.start ?? 0,
+          end: tokens[close]?.end ?? tokens[p]?.end ?? 0,
+        };
         p = close;
         source = known.find(
           (candidate) => candidate.origin.start === tokens[i]?.start,
         );
       } else if (ident(tokens[p])) {
+        const sourceStart = tokens[p]?.start ?? 0;
         parts = [tokens[p]?.text ?? ""];
+        sourceName = {
+          start: tokens[p]?.start ?? 0,
+          end: tokens[p]?.end ?? 0,
+        };
         while (tokens[p + 1]?.text === "." && ident(tokens[p + 2])) {
           parts.push(tokens[p + 2]?.text ?? "");
           p += 2;
+          sourceName = {
+            start: tokens[p]?.start ?? 0,
+            end: tokens[p]?.end ?? 0,
+          };
         }
         if (tokens[p + 1]?.text === "." && !ident(tokens[p + 2])) continue;
         if (tokens[p + 1]?.text === "(") p = matching(tokens, p + 1);
+        sourceExpression = {
+          start: sourceStart,
+          end: tokens[p]?.end ?? sourceName.end,
+        };
+        sourcePath = { start: sourceStart, end: sourceName.end };
       } else continue;
       if (tokens[p + 1]?.normalized === "as") p++;
       const aliasToken =
@@ -958,6 +994,17 @@ function queryScopeModel(
         explicitAlias: Boolean(aliasToken),
         scopeDistance: 0,
         outer: false,
+        ...(sourceName ? { sourceName } : {}),
+        ...(sourcePath ? { sourcePath } : {}),
+        sourceExpression,
+        ...(aliasToken
+          ? {
+              aliasDeclaration: {
+                start: aliasToken.start,
+                end: aliasToken.end,
+              },
+            }
+          : {}),
       });
     }
   }
@@ -970,6 +1017,12 @@ function queryScopeModel(
     allowsOuterReferences:
       scope.kind === "correlatedExpressionSubquery" ||
       scope.kind === "applyRightQuery",
+    ...(scope.applyOpenToken === undefined
+      ? {}
+      : {
+          outerReferenceUpperBound:
+            tokens[scope.applyOpenToken]?.start ?? scope.range.start,
+        }),
   }));
   const visible: ScopedRowSource[] = [];
   const names = new Set<string>();
@@ -1020,11 +1073,19 @@ export function resolveVisibleRowSource(
   model: DocumentSemanticModel,
   alias: string,
 ): ScopedRowSource | undefined {
-  const normalized = normalizeName(alias);
-  const scoped = model.visibleRowSources.find(
-    (binding) => normalizeName(binding.qualifier) === normalized,
+  const resolved = resolveQueryScopeRowSource(
+    model.queryScopes,
+    model.activeQueryScope,
+    alias,
   );
-  if (scoped || model.activeQueryScope) return scoped;
+  if (resolved)
+    return {
+      ...resolved.binding,
+      scopeDistance: resolved.scopeDistance,
+      outer: resolved.scopeDistance > 0,
+    };
+  if (model.activeQueryScope) return undefined;
+  const normalized = normalizeName(alias);
   const statementSource = model.aliases.get(normalized);
   return statementSource
     ? {
@@ -1045,7 +1106,8 @@ export function analyzeDocumentSemantics(
   const before = tokens.filter((t) => t.start < cursor);
   const statement = statementTokenRangeAtCursor(tokens, cursor);
   const batch = statement.start;
-  const currentBatch = batchTokenRangeAtCursor(tokens, cursor).start;
+  const batchTokenRange = batchTokenRangeAtCursor(tokens, cursor);
+  const currentBatch = batchTokenRange.start;
   const rowSources: RowSource[] = [];
   const statementEnd = statement.end;
   for (let i = 0; i < before.length; i++) {
@@ -1072,6 +1134,7 @@ export function analyzeDocumentSemantics(
             start: before[i]?.start ?? 0,
             end: before[close]?.end ?? name.end,
           },
+          declaration: { start: name.start, end: name.end },
         }),
       );
     }
@@ -1098,6 +1161,7 @@ export function analyzeDocumentSemantics(
               catalog,
             ),
             origin: { start: before[select]?.start ?? 0, end: name.end },
+            declaration: { start: name.start, end: name.end },
           }),
         );
     }
@@ -1154,6 +1218,7 @@ export function analyzeDocumentSemantics(
           sourceKind: "cte",
           columns,
           origin: { start: name.start, end: before[close]?.end ?? name.end },
+          declaration: { start: name.start, end: name.end },
         }),
       );
       i = close + 1;
@@ -1230,6 +1295,25 @@ export function analyzeDocumentSemantics(
       t.normalized === "order" &&
       before[i + 1]?.normalized === "by",
   );
+  const localVariables = resolveBatchLocalVariables(tokens, cursor);
+  const documentRange = { start: 0, end: sql.length };
+  const batchRange = {
+    start: tokens[batchTokenRange.start]?.start ?? 0,
+    end: tokens[batchTokenRange.end - 1]?.end ?? sql.length,
+  };
+  const statementRange = {
+    start: tokens[statement.start]?.start ?? batchRange.start,
+    end: tokens[statement.end - 1]?.end ?? batchRange.end,
+  };
+  const documentLocalSymbols = buildDocumentSemanticSymbolIndex({
+    tokens,
+    documentRange,
+    batchRange,
+    statementRange,
+    rowSources,
+    queryScopes: queryModel.scopes,
+    localVariables,
+  });
   return {
     rowSources,
     aliases,
@@ -1238,7 +1322,8 @@ export function analyzeDocumentSemantics(
     visibleRowSources: queryModel.visible,
     setQueryExpressions,
     orderByColumns: inOrderBy ? currentProjection : [],
-    localVariables: resolveBatchLocalVariables(tokens, cursor),
+    localVariables,
+    documentLocalSymbols,
   };
 }
 

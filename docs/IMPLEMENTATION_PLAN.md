@@ -48,6 +48,8 @@ architecture documents describe the intended present-day design.
   complete; qualifying local evidence enters the canonical runtime graph
 - Relationship Intelligence Phase E3 conservative heuristic JOIN candidates —
   complete; bounded fallback applies only to already-selected physical pairs
+- Phase F1 document-local semantic symbol/reference foundation — complete; native
+  navigation, symbols, highlights, rename, and diagnostics remain future consumers
 - 0.12.6 GPL-3.0-only relicensing and repository compliance — complete; officially
   published releases through 0.12.5 retain their original MIT terms
 
@@ -66,6 +68,26 @@ target. Its compliance slice established the official GPLv3 license text, packag
 metadata, third-party inventory, bundle/VSIX audit, public documentation, and the
 release requirement for immutable source/tag/artifact traceability. The historical
 MIT notes below remain accurate for their original release milestones.
+
+## Phase F1 — document-local semantic symbol/reference foundation
+
+- [x] Add declaration-derived identities, exact offset ranges, kinds, and controlling
+      scopes for CTEs, written RowSource aliases, scalar local variables, table
+      variables, and deterministic temporary-table uses.
+- [x] Bind CTE and alias references through the existing RowSource and QueryScope
+      model, including chained CTEs, shadowing, legal correlation, APPLY visibility,
+      and sibling isolation.
+- [x] Preserve standalone `GO` batch ownership for scalar/table variables and leave
+      unresolved or ambiguous occurrences unbound.
+- [x] Keep the index editor-neutral, local-only, non-persistent, and free of catalog,
+      filesystem, backend, relationship, and VS Code provider dependencies.
+- [x] Add focused positive and negative semantic identity/reference contracts.
+
+Projection aliases remain deferred because their current completion representation
+does not retain reliable declaration/reference identity. Go to Definition/Peek, Find
+References, Document Highlights, Document Symbols/Outline, semantic Rename, and
+Diagnostics remain unimplemented Phase G consumers. This internal foundation keeps
+version `0.12.6` and changes no user-facing completion behavior.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 
