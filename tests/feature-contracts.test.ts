@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import {
   createCandidates,
@@ -413,6 +413,42 @@ test("contract: learned JOIN candidates use the local cached evidence policy bou
       await readFile(productionConsumer, "utf8"),
       /LearnedRelationshipEvidenceStore|WorkspaceLearnedRelationshipEvidence/,
     );
+});
+
+test("contract: relationship infrastructure consumes the neutral semantic catalog", async () => {
+  const relationshipModules = (await readdir("src/relationships"))
+    .filter((name) => name.endsWith(".ts"))
+    .sort();
+  for (const name of relationshipModules) {
+    const source = await readFile(`src/relationships/${name}`, "utf8");
+    assert.doesNotMatch(
+      source,
+      /from\s+["'][^"']*completion\//,
+      `${name} must not import Completion-layer infrastructure`,
+    );
+    assert.doesNotMatch(
+      source,
+      /\bCompletionScope\b/,
+      `${name} must consume the neutral semantic catalog instead of CompletionScope`,
+    );
+  }
+
+  const candidateFactory = await readFile(
+    "src/completion/CandidateFactory.ts",
+    "utf8",
+  );
+  assert.match(
+    candidateFactory,
+    /interface CompletionScope extends SemanticCatalog/,
+  );
+  const semanticAnalyzer = await readFile(
+    "src/parser/DocumentSemanticAnalyzer.ts",
+    "utf8",
+  );
+  assert.match(
+    semanticAnalyzer,
+    /interface SemanticCatalog\s*\{[\s\S]*activeDatabase:[\s\S]*indexes:/,
+  );
 });
 
 test("contract: heuristic relationships are bounded transient JOIN-predicate candidates", async () => {

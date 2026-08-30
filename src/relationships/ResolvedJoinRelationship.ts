@@ -1,4 +1,3 @@
-import type { CompletionScope } from "../completion/CandidateFactory.js";
 import type {
   ColumnMetadata,
   DatabaseObject,
@@ -11,6 +10,7 @@ import {
 } from "../metadata/SqlTypeDescriptor.js";
 import type {
   DocumentSemanticModel,
+  SemanticCatalog,
   ScopedRowSource,
 } from "../parser/DocumentSemanticAnalyzer.js";
 import { analyzeDocumentSemantics } from "../parser/DocumentSemanticAnalyzer.js";
@@ -94,7 +94,7 @@ const boundaryWords = new Set([
 export function resolveJoinRelationshipCandidate(
   sql: string,
   selection: { readonly start: number; readonly end: number },
-  scope: CompletionScope,
+  scope: SemanticCatalog,
   semantics: DocumentSemanticModel = analyzeDocumentSemantics(
     sql,
     selection.start,
@@ -210,7 +210,7 @@ export function resolveJoinRelationshipCandidate(
 /** Resolves every conservative physical JOIN occurrence in a complete SQL document. */
 export function resolveJoinRelationshipCandidates(
   sql: string,
-  scope: CompletionScope,
+  scope: SemanticCatalog,
 ): ResolvedJoinRelationshipCandidate[] {
   const candidates = new Map<string, ResolvedJoinRelationshipCandidate>();
   for (const token of tokenizeSql(sql)) {
@@ -442,7 +442,7 @@ function resolveDirection(
   endpointA: ResolvedJoinEndpoint,
   endpointB: ResolvedJoinEndpoint,
   mappings: readonly ResolvedJoinColumnMapping[],
-  scope: CompletionScope,
+  scope: SemanticCatalog,
 ): ResolvedJoinDirection {
   const index = scope.indexes.get(normalizeName(endpointA.database));
   if (!index) return "ambiguous";

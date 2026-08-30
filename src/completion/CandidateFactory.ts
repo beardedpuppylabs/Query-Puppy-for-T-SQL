@@ -21,6 +21,7 @@ import {
   resolveVisibleRowSource,
   type DocumentSemanticModel,
   type RowSource,
+  type SemanticCatalog,
   type ScopedRowSource,
 } from "../parser/DocumentSemanticAnalyzer.js";
 import { tokenizeSql } from "../parser/SqlTokenizer.js";
@@ -48,9 +49,7 @@ import {
 } from "../parser/BuiltinFunctionCatalog.js";
 import { resolveCallableAtCursor } from "../parser/CallableAnalyzer.js";
 
-export interface CompletionScope {
-  readonly activeDatabase: string;
-  readonly indexes: ReadonlyMap<string, DatabaseIndex>;
+export interface CompletionScope extends SemanticCatalog {
   readonly databaseNames?: readonly string[];
 }
 const normalizedDatabase = (database: string): string =>

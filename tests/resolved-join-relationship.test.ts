@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { CompletionScope } from "../src/completion/CandidateFactory.js";
 import { DatabaseIndex } from "../src/metadata/DatabaseIndex.js";
+import type { SemanticCatalog } from "../src/parser/DocumentSemanticAnalyzer.js";
 import type {
   ColumnMetadata,
   DatabaseMetadata,
@@ -81,12 +81,12 @@ const metadata: DatabaseMetadata = {
 };
 
 const index = new DatabaseIndex(metadata);
-const scope: CompletionScope = {
+const scope: SemanticCatalog = {
   activeDatabase: "IntelliSenseLab",
   indexes: new Map([["intellisenselab", index]]),
 };
 
-const resolve = (markedSql: string, catalog: CompletionScope = scope) => {
+const resolve = (markedSql: string, catalog: SemanticCatalog = scope) => {
   const cursor = markedSql.indexOf("|");
   assert.notEqual(cursor, -1, "test SQL needs a cursor marker");
   const sql = markedSql.replace("|", "");
@@ -260,7 +260,7 @@ test("resolved JOIN action scope excludes unrelated ranges and cross-database ed
     objects: [objects[1]!],
     keys: [],
   });
-  const crossDatabaseScope: CompletionScope = {
+  const crossDatabaseScope: SemanticCatalog = {
     ...scope,
     indexes: new Map([...scope.indexes, ["reporting", reporting]]),
   };

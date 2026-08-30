@@ -432,6 +432,15 @@ INCLUDE columns are not key members.
 
 ## Relationship Intelligence
 
+Relationship Intelligence consumes the neutral `SemanticCatalog` database-resolution
+context: the active database and the existing canonical `DatabaseIndex` lookup. It
+does not consume `CompletionScope`, CompletionItem state, ranking, ranges, or
+presentation state. Completion's scope extends that neutral context with its own
+database-name discovery data and passes the neutral capabilities to Relationship
+Intelligence. Other semantic consumers can therefore resolve JOIN relationships,
+project overlays, or learned overlays without constructing a Completion-specific
+container or duplicating catalog metadata.
+
 SQL Server foreign-key catalog metadata, project relationship configuration, and
 canonical semantic relationships are separate layers:
 

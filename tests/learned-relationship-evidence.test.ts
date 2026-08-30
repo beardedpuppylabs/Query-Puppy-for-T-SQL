@@ -4,7 +4,6 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import type { CompletionScope } from "../src/completion/CandidateFactory.js";
 import { DatabaseIndex } from "../src/metadata/DatabaseIndex.js";
 import type {
   ColumnMetadata,
@@ -12,6 +11,7 @@ import type {
   DatabaseObject,
   KeyMetadata,
 } from "../src/metadata/MetadataModels.js";
+import type { SemanticCatalog } from "../src/parser/DocumentSemanticAnalyzer.js";
 import {
   applyLearnedEvidenceMutation,
   applyLearnedRelationshipEvidenceSave,
@@ -101,7 +101,7 @@ const metadata: DatabaseMetadata = {
   loadedAt: 1,
 };
 const index = new DatabaseIndex(metadata);
-const scope: CompletionScope = {
+const scope: SemanticCatalog = {
   activeDatabase: metadata.database,
   indexes: new Map([["intellisenselab", index]]),
 };
@@ -211,7 +211,7 @@ SELECT * FROM local p JOIN qpacc.ProjectChild c ON c.ParentRef = p.ParentId`),
       database: "IntelliSenseLabReporting",
     })),
   };
-  const crossDatabaseScope: CompletionScope = {
+  const crossDatabaseScope: SemanticCatalog = {
     activeDatabase: metadata.database,
     indexes: new Map([
       ["intellisenselab", index],

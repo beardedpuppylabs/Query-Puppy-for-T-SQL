@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import type { CompletionScope } from "../completion/CandidateFactory.js";
 import { DatabaseIndex } from "../metadata/DatabaseIndex.js";
+import type { SemanticCatalog } from "../parser/DocumentSemanticAnalyzer.js";
 import {
   appendProjectRelationshipDefinition,
   PROJECT_RELATIONSHIP_FILE,
@@ -47,10 +47,10 @@ export class WorkspaceProjectRelationships implements vscode.Disposable {
     );
   }
 
-  async apply(
+  async apply<T extends SemanticCatalog>(
     document: vscode.TextDocument,
-    scope: CompletionScope,
-  ): Promise<CompletionScope> {
+    scope: T,
+  ): Promise<T> {
     const folder = vscode.workspace.getWorkspaceFolder(document.uri);
     if (!folder) return scope;
     const state = this.states.get(folder.uri.toString());

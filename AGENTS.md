@@ -35,6 +35,17 @@ cross-cutting engineering principles are defined by:
 policy. Repository instructions and operational documentation must apply that
 policy and must not redefine or contradict it.
 
+The repository policy chain is:
+
+    PROJECT_DEVELOPMENT_PLAN.md
+        -> AGENTS.md
+        -> maintained repository documentation
+        -> development and Codex tasks
+        -> implementation
+
+The Development Plan owns strategy. This file operationalizes it for repository
+work; it does not independently redefine project strategy.
+
 Current architecture is defined by:
 
 - `docs/ARCHITECTURE.md`
@@ -686,6 +697,13 @@ same canonical runtime graph and existing consumers, remain below ProjectDefined
 trust, never acquire physical FK metadata, and never enter project files or physical
 metadata snapshots.
 
+Learned relationship sources are active only through the explicitly implemented and
+tested learned-evidence pipeline. Heuristic relationship sources are active only
+through explicitly implemented and tested product paths. The current heuristic scope
+is solely the conservative JOIN-predicate fallback for an already-selected physical
+table pair; no broader heuristic table discovery, relationship discovery, or related-
+table ranking is active.
+
 Phase E1 local learned evidence remains uncertain local evidence rather than explicit
 or authoritative relationship truth. When enabled, the active workspace SQL document
 may be observed
@@ -1078,7 +1096,9 @@ A version bump is normally not required for:
 Local development builds and temporary test VSIX files do not reserve or consume a
 version number.
 
-Do not publish automatically.
+Normal Codex development tasks must not publish ad hoc. Publication may occur only
+when the user explicitly requests it or when an established documented release
+workflow owns publication under its configured release condition.
 
 For normal Codex development work, do not run production builds, bundle commands,
 VSIX packaging, or publication unless they are explicitly required by the task or
@@ -1156,6 +1176,7 @@ All maintained project documentation remains version-controlled.
 
 Do not add:
 
+- `PROJECT_DEVELOPMENT_PLAN.md`
 - `AGENTS.md`
 - `docs/ARCHITECTURE.md`
 - `docs/COMPLETION_PIPELINE.md`

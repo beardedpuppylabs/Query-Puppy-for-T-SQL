@@ -5,6 +5,10 @@
 This document records milestone planning, implementation history, completed work,
 release-specific verification state, and deliberately deferred work.
 
+The repository-root `PROJECT_DEVELOPMENT_PLAN.md` owns product strategy, roadmap
+direction, versioning policy, and cross-cutting engineering principles. This document
+must not replace or redefine that strategic authority.
+
 It is useful for understanding how the project evolved.
 
 It is not the authoritative source for current architecture.

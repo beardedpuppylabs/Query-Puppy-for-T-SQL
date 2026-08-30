@@ -49,6 +49,12 @@ production consumers, including class or interface inheritance that requires bot
 The fake active context contains only the opaque connection identity and database
 used by current production routing and cache behavior.
 
+A focused source contract also protects the semantic layering boundary: Relationship
+Intelligence consumes the neutral `SemanticCatalog` database/index context and must
+not import Completion-layer context types. Completion may extend and adapt that
+context, but Relationship tests and future semantic consumers must not need a fake
+`CompletionScope`.
+
 ### Persistent metadata lifecycle tests
 
 Protect the cache lifecycle with deterministic stores and an injectable clock:
@@ -607,7 +613,7 @@ Protect:
 - synthetic future provenances cannot fabricate FK details or enter production JOIN
   suggestions
 
-Never treat same-name/type heuristic matches as proof of an FK relationship. A future
+Never treat same-name/type heuristic matches as proof of an FK relationship. A
 provenance-tagged logical relationship is still not a physical FK and must never be
 tested or presented as one.
 
@@ -853,4 +859,6 @@ Packaging/installing locally is testing.
 
 Publishing is not testing.
 
-Never publish automatically unless the user explicitly requests publication.
+Never publish ad hoc as a test. Publication requires an explicit user request or an
+established documented release workflow whose configured release condition owns the
+publication step.

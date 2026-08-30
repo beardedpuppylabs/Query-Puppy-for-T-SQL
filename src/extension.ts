@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { join } from "node:path";
 import { SqlCompletionProvider } from "./completion/SqlCompletionProvider.js";
+import { CompletionScopeResolver } from "./completion/CompletionScopeResolver.js";
 import {
   clearMetadataCache,
   refreshMetadata,
@@ -42,6 +43,7 @@ import {
   CLEAR_LEARNED_RELATIONSHIP_EVIDENCE_COMMAND,
   WorkspaceLearnedRelationshipEvidence,
 } from "./relationships/WorkspaceLearnedRelationshipEvidence.js";
+import { resolveSqlContext } from "./parser/SqlContextResolver.js";
 
 const EXTENSION_ID = "BeardedPuppyLabs.query-puppy-for-t-sql";
 let suggestionNoticePending = false;
@@ -76,11 +78,21 @@ export function activate(context: vscode.ExtensionContext): void {
     projectRelationships,
     output,
   );
-  const relationshipCodeActions = new SqlRelationshipCodeActionProvider(
-    mssqlBackend,
+  const relationshipScopes = new CompletionScopeResolver(
     mssqlBackend,
     loader,
     cache,
+    (key, error) =>
+      output.appendLine(
+        `[user-confirmed-relationship] ${key}: ${error instanceof Error ? error.message : String(error)}`,
+      ),
+  );
+  const relationshipCodeActions = new SqlRelationshipCodeActionProvider(
+    mssqlBackend,
+    {
+      resolve: (active, sql, cursor) =>
+        relationshipScopes.resolve(active, resolveSqlContext(sql, cursor)),
+    },
     projectRelationships,
     output,
   );

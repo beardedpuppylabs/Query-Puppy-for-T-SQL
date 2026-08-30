@@ -95,6 +95,13 @@ Publishing must never occur automatically as a side effect of:
 
 Marketplace publication requires an explicit release action.
 
+Normal contributor and Codex development tasks must not publish ad hoc. An explicit
+user publication request may authorize publication, and a future established,
+documented release workflow may own publication when its configured deliberate
+release condition is met. The current repository procedure remains the manual,
+explicit workflow documented below; this distinction does not itself add or change
+release automation.
+
 Never commit:
 
 - Marketplace credentials

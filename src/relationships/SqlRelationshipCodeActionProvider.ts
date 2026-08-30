@@ -1,14 +1,10 @@
 import * as vscode from "vscode";
 import type {
+  ActiveConnectionContext,
   ConnectionContextResolver,
-  MetadataBackend,
 } from "../backend/MetadataBackend.js";
-import type { CompletionScope } from "../completion/CandidateFactory.js";
-import { CompletionScopeResolver } from "../completion/CompletionScopeResolver.js";
-import { MetadataCache } from "../metadata/MetadataCache.js";
-import type { MetadataLoader } from "../metadata/MetadataLoader.js";
 import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
-import { resolveSqlContext } from "../parser/SqlContextResolver.js";
+import type { SemanticCatalog } from "../parser/DocumentSemanticAnalyzer.js";
 import {
   resolveJoinRelationshipCandidate,
   resolvedJoinRelationshipIdentity,
@@ -31,31 +27,29 @@ interface SaveJoinRequest {
   readonly end: number;
 }
 
+export interface RelationshipSemanticCatalogResolver {
+  resolve(
+    active: ActiveConnectionContext,
+    sql: string,
+    cursor: number,
+  ): Promise<SemanticCatalog>;
+}
+
 /** Native editor adapter around the reusable resolved-JOIN semantic model. */
 export class SqlRelationshipCodeActionProvider
   implements vscode.CodeActionProvider, vscode.Disposable
 {
-  private readonly scopes: CompletionScopeResolver;
   private readonly documentSemantics = new DocumentSemanticCache();
-  private testScope: CompletionScope | undefined;
+  private testScope: SemanticCatalog | undefined;
 
   constructor(
     private readonly connectionContext: ConnectionContextResolver,
-    metadataBackend: MetadataBackend,
-    loader: MetadataLoader,
-    cache: MetadataCache,
+    private readonly catalogs: RelationshipSemanticCatalogResolver,
     private readonly projectRelationships: WorkspaceProjectRelationships,
     private readonly output: vscode.OutputChannel,
-  ) {
-    this.scopes = new CompletionScopeResolver(
-      metadataBackend,
-      loader,
-      cache,
-      (key, error) => this.reportFailure(key, error),
-    );
-  }
+  ) {}
 
-  setTestScope(scope: CompletionScope | undefined): void {
+  setTestScope(scope: SemanticCatalog | undefined): void {
     this.testScope = scope;
   }
 
@@ -126,7 +120,7 @@ export class SqlRelationshipCodeActionProvider
       let resolved:
         | {
             readonly candidate: ResolvedJoinRelationshipCandidate;
-            readonly scope: CompletionScope;
+            readonly scope: SemanticCatalog;
           }
         | undefined;
       try {
@@ -196,19 +190,18 @@ export class SqlRelationshipCodeActionProvider
   ): Promise<
     | {
         readonly candidate: ResolvedJoinRelationshipCandidate;
-        readonly scope: CompletionScope;
+        readonly scope: SemanticCatalog;
       }
     | undefined
   > {
     const start = document.offsetAt(range.start);
     const end = document.offsetAt(range.end);
     const sql = document.getText();
-    const context = resolveSqlContext(sql, start);
     let scope = this.testScope;
     if (!scope) {
       const active = await this.connectionContext.active();
       if (!active || token.isCancellationRequested) return undefined;
-      scope = await this.scopes.resolve(active, context);
+      scope = await this.catalogs.resolve(active, sql, start);
     }
     if (token.isCancellationRequested) return undefined;
     scope = await this.projectRelationships.apply(document, scope);
@@ -230,7 +223,7 @@ export class SqlRelationshipCodeActionProvider
 
   private duplicate(
     candidate: ResolvedJoinRelationshipCandidate,
-    scope: CompletionScope,
+    scope: SemanticCatalog,
   ): boolean {
     const index = scope.indexes.get(
       candidate.endpointA.database.toLocaleLowerCase("en-US"),

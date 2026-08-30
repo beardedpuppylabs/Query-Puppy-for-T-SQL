@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
 import { posix } from "node:path";
 import type { ConnectionContextResolver } from "../backend/MetadataBackend.js";
-import type { CompletionScope } from "../completion/CandidateFactory.js";
 import type { MetadataCache } from "../metadata/MetadataCache.js";
 import { DatabaseIndex } from "../metadata/DatabaseIndex.js";
 import { normalizeName } from "../metadata/MetadataModels.js";
+import type { SemanticCatalog } from "../parser/DocumentSemanticAnalyzer.js";
 import {
   createLearnedRelationshipEvidenceSave,
   learnedDocumentIdentity,
@@ -44,7 +44,7 @@ export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
       }
     >
   >();
-  private testScope: CompletionScope | undefined;
+  private testScope: SemanticCatalog | undefined;
 
   constructor(
     private readonly store: FileLearnedRelationshipEvidenceStore | undefined,
@@ -66,7 +66,7 @@ export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
     );
   }
 
-  setTestScope(scope: CompletionScope | undefined): void {
+  setTestScope(scope: SemanticCatalog | undefined): void {
     this.testScope = scope;
   }
 
@@ -138,10 +138,10 @@ export class WorkspaceLearnedRelationshipEvidence implements vscode.Disposable {
   }
 
   /** Applies qualifying learned candidates without re-reading cached evidence per keystroke. */
-  async applyCandidates(
+  async applyCandidates<T extends SemanticCatalog>(
     document: vscode.TextDocument,
-    scope: CompletionScope,
-  ): Promise<CompletionScope> {
+    scope: T,
+  ): Promise<T> {
     const folder = vscode.workspace.getWorkspaceFolder(document.uri);
     if (!this.store || !folder) return scope;
     const state = await this.store.read(folder.uri.toString());

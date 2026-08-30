@@ -8,6 +8,7 @@
 .vscode/**
 .vscode-test/**
 AGENTS.md
+PROJECT_DEVELOPMENT_PLAN.md
 CONTRIBUTING.md
 SECURITY.md
 docs/**

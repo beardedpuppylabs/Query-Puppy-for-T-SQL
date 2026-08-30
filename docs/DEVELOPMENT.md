@@ -19,6 +19,12 @@ For release and publication procedures, see:
 
 - [Publishing](PUBLISHING.md)
 
+The repository-root [Central Development Plan](../PROJECT_DEVELOPMENT_PLAN.md) is
+the strategic source of truth. `AGENTS.md` operationalizes that strategy for
+repository work, and the maintained documents in `docs/` describe current technical
+and operational contracts. Development tasks and implementation follow that policy
+chain; `docs/IMPLEMENTATION_PLAN.md` remains milestone history rather than strategy.
+
 ## Prerequisites
 
 - Node.js 24 LTS and npm
