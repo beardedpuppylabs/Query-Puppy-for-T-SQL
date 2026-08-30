@@ -4,6 +4,19 @@
 
 ## 0.12.6
 
+- Added the Phase E3 conservative heuristic JOIN fallback for an already-selected
+  persistent physical table pair when no declared FK, UserConfirmed,
+  ProjectDefined, or qualifying LearnedFromQuery relationship connects the pair.
+- Kept heuristic inference deliberately bounded and fail-closed: candidates require
+  one complete unfiltered target PK/UQ, known compatible types, exact target-aware
+  naming evidence, a complete unambiguous mapping, and exactly one qualifying
+  direction.
+- Reused the existing canonical Relationship shape and JOIN renderer while keeping
+  HeuristicCandidate/Candidate results outside the canonical database relationship
+  graph, persistence, global table discovery, and related-source ranking.
+- Preserved explicit non-FK presentation, insertion-only/non-confirming completion,
+  and the existing Save JOIN action as the only promotion path to UserConfirmed
+  project knowledge.
 - Added deliberately conservative heuristic JOIN predicate candidates for pairs of
   physical tables already selected in the active `JOIN ... ON` context. This does not
   perform table discovery or database-wide relationship inference.

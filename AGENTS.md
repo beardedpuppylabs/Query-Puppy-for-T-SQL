@@ -26,25 +26,15 @@ the project's existing connection-sharing integration.
 
 The repository documentation has distinct responsibilities.
 
-Project strategy, product boundaries, roadmap direction, versioning policy, and
-cross-cutting engineering principles are defined by:
+Project strategy, product boundaries, roadmap direction, versioning policy,
+licensing/compliance policy, sustainability policy, and cross-cutting engineering
+principles are defined by:
 
 - `PROJECT_DEVELOPMENT_PLAN.md`
 
-`PROJECT_DEVELOPMENT_PLAN.md` is the authoritative source for release-version
-policy. Repository instructions and operational documentation must apply that
-policy and must not redefine or contradict it.
-
-The repository policy chain is:
-
-    PROJECT_DEVELOPMENT_PLAN.md
-        -> AGENTS.md
-        -> maintained repository documentation
-        -> development and Codex tasks
-        -> implementation
-
-The Development Plan owns strategy. This file operationalizes it for repository
-work; it does not independently redefine project strategy.
+`PROJECT_DEVELOPMENT_PLAN.md` is the authoritative strategic source. Repository
+instructions and operational documentation must apply that policy and must not
+redefine or contradict it.
 
 Current architecture is defined by:
 
@@ -102,13 +92,18 @@ commands:
 
     read docs/DEVELOPMENT.md
 
-Before modifying versioning or deciding whether a publishable code change requires
-a package-version bump:
+Before modifying versioning, licensing/compliance policy, or deciding whether a
+publishable code change requires a package-version bump:
+
+    read PROJECT_DEVELOPMENT_PLAN.md
+
+Before adding, copying, vendoring, replacing, or materially upgrading third-party
+software or redistributable assets:
 
     read PROJECT_DEVELOPMENT_PLAN.md
 
 Before modifying VSIX release procedures, Marketplace publication, publisher
-identity, publishing authentication, or release security checks:
+identity, publishing authentication, relicensing, or release security checks:
 
     read PROJECT_DEVELOPMENT_PLAN.md
     read docs/PUBLISHING.md
@@ -142,7 +137,7 @@ When a task changes or introduces:
 - development prerequisites or workflows
 - build or packaging commands
 - release or publishing procedures
-- versioning policy or release metadata
+- versioning, licensing/compliance policy, or release metadata
 - publisher identity
 - milestone scope or completion state
 - known limitations
@@ -690,72 +685,21 @@ after the user invokes the native save-JOIN Code Action for a safely resolved di
 equality predicate. Ordinary query editing never persists confirmed or authoritative
 relationship knowledge.
 
-Production completion also admits local LearnedFromQuery/StrongEvidence relationships
-only when the pure candidate policy resolves at least three independently deduplicated
-observations against current canonical metadata. These learned relationships use the
-same canonical runtime graph and existing consumers, remain below ProjectDefined in
-trust, never acquire physical FK metadata, and never enter project files or physical
-metadata snapshots.
+Production completion also admits local `LearnedFromQuery`/`StrongEvidence`
+relationships only after at least three independently deduplicated saved observations
+are revalidated against current canonical metadata. They use the same canonical
+runtime graph, remain below `ProjectDefined` in trust, never acquire physical FK
+metadata, and never enter project files or physical metadata snapshots. Acquisition is
+local, save-driven, bounded, and cross-session-deduplicated; accepting completion is
+not confirmation.
 
-Learned relationship sources are active only through the explicitly implemented and
-tested learned-evidence pipeline. Heuristic relationship sources are active only
-through explicitly implemented and tested product paths. The current heuristic scope
-is solely the conservative JOIN-predicate fallback for an already-selected physical
-table pair; no broader heuristic table discovery, relationship discovery, or related-
-table ranking is active.
-
-Phase E1 local learned evidence remains uncertain local evidence rather than explicit
-or authoritative relationship truth. When enabled, the active workspace SQL document
-may be observed
-only on save, using the same conservative resolved-JOIN semantic model and already-
-loaded metadata. Passive acquisition skips ambiguous direction and must never trigger
-catalog loading, query execution, Query Store/plan-cache access, UI prompts, or writes
-per keystroke.
-
-Learned evidence lives only in bounded extension-managed workspace storage. It stores
-canonical physical endpoints, ordered mappings, aggregate observation counts, and
-bounded seen-occurrence state. Occurrences use SHA-256 fingerprints of workspace-
-relative document identity and canonical relationship identity plus a same-relationship
-ordinal and stable eviction order—never raw SQL, literals, aliases, plaintext filenames
-or paths, source locations, credentials, connection strings, confidence thresholds, or
-complete occurrence history. Multi-root folders remain isolated; untitled/outside-
-workspace documents do not persist evidence.
-
-Persisted occurrence identity, rather than editor lifetime, owns count deduplication.
-Unchanged semantic occurrences must remain deduplicated across close/reopen and
-extension/editor restart. Formatting, alias changes, reordered equality terms, and
-offset movement do not create evidence. Independent duplicate occurrences do. A saved
-absence removes only its occurrence marker, never historical evidence; reintroduction
-may count once. Both evidence and occurrence state remain deterministically bounded,
-and the clear command resets both.
-
-Phase E2 resolves evidence at the fixed product-owned threshold
-`observationCount >= 3`. It must revalidate endpoints, mappings, types, and same-database
-scope against the current canonical index, fail closed for stale/invalid evidence, and
-overlay valid LearnedFromQuery/StrongEvidence relationships into that same graph.
-Exact declared-FK, UserConfirmed, or ProjectDefined edges suppress learned duplicates;
-distinct mappings remain independent. Candidate overlays must be cached and invalidated
-by evidence, project relationship, or metadata changes rather than reparsed or rebuilt
-per keystroke. Clearing evidence removes learned candidates on the next completion.
-Disabling learning stops acquisition but retains qualifying stored candidates.
-
-Completion acceptance is not confirmation. Only the explicit save-JOIN Code Action may
-promote the resolved edge to UserConfirmed project knowledge. Learned relationships
-must be presented as learned StrongEvidence from repeated JOIN usage and explicitly not
-as SQL Server foreign keys. Internal occurrence fingerprints never enter presentation.
-
-Phase E3 admits HeuristicCandidate/Candidate only as a transient fallback for JOIN
-predicate completion after both physical tables are already selected. The pure policy
-evaluates only that bounded pair and requires one complete unfiltered target PK/UQ,
-known compatible types for every mapping, at least one exact target-object-plus-key
-naming signal, and an unambiguous full mapping. Same-name columns may only complete a
-composite key beside the target-aware signal. Multiple qualifying keys, mappings, or
-directions fail closed. Any declared FK, UserConfirmed, ProjectDefined, or
-LearnedFromQuery relationship between the pair suppresses the heuristic candidate.
-Heuristics never enter metadata/project/evidence persistence, global relationship
-indexes, table discovery/ranking, comparison ranking, navigation, diagnostics, or
-multi-hop discovery. Acceptance inserts SQL only; explicit save-JOIN remains the sole
-promotion path.
+The E3 heuristic source is active only as a transient, conservative JOIN-predicate
+fallback for an already-selected physical table pair. It requires one complete
+unfiltered target key, compatible known types, target-aware deterministic naming, and
+an unambiguous full mapping. Any stronger relationship suppresses it. A heuristic
+candidate never enters persistence, the canonical database relationship graph, global
+discovery/ranking, navigation, diagnostics, or multi-hop paths. The explicit save-JOIN
+Code Action remains the sole promotion path to `UserConfirmed` project knowledge.
 
 ## JOIN semantics
 
@@ -937,8 +881,11 @@ same-named objects.
 
 Physical FK roles and constraint documentation must use actual SQL Server catalog
 metadata. Never relabel same-name/type guesses or provenance-tagged logical
-relationships as foreign keys. Learned and heuristic sources must retain their explicit
-non-FK provenance, confidence, scope, and persistence boundaries.
+relationships as foreign keys. Learned relationships are active only through the
+explicitly implemented and tested E1/E2 learned-evidence pipeline. Conservative
+heuristic JOIN candidates are active only through the implemented E3 pair-bounded
+fallback and remain Candidate-confidence non-FK suggestions outside the canonical
+database relationship graph.
 
 ## Presentation must not affect semantics
 
@@ -1027,6 +974,61 @@ Within equivalent groups, expected candidate lists should be alphabetical.
 Generic editor word suggestions do not count as Query Puppy for T-SQL semantic
 results.
 
+## Licensing and third-party compliance
+
+Current public releases through 0.12.6 remain MIT-licensed. The approved license for
+the first deliberately relicensed release and subsequent releases is
+`GPL-3.0-only`.
+
+Do not change the current root `LICENSE`, package license field, README license claim,
+or Marketplace-facing license claim piecemeal before the deliberate relicensing
+release task is ready. Historical MIT releases remain historical MIT releases.
+
+The approved GPL direction creates a mandatory pre-adoption gate now. Before adding,
+copying, vendoring, replacing, or materially upgrading third-party software, source,
+binaries, or redistributable assets:
+
+1. identify the material and authoritative upstream source;
+2. verify the exact license/version/exception terms;
+3. verify compatibility with Query Puppy's approved `GPL-3.0-only` distribution model
+   for the intended use;
+4. determine whether it is bundled, copied, linked, generated into, or otherwise
+   redistributed with the VSIX;
+5. determine required copyright, attribution, NOTICE, source, relinking, offer, or
+   other redistribution obligations;
+6. update `THIRD_PARTY_NOTICES.md` and other required notice/license material in the
+   same coherent change.
+
+Do not rely solely on a package-manager `license` field when compatibility or
+redistribution is material. Prefer authoritative upstream LICENSE/NOTICE files and
+project licensing documentation.
+
+If compatibility is unknown, ambiguous, unusual, or depends on unresolved legal
+interpretation, do not adopt the material. Report it for explicit review.
+
+The gate applies to dependencies, copied/adapted code, vendored source, drivers,
+embedded runtimes, native binaries, fonts, icons/assets, generated third-party code,
+and similar external material. Ordinary language/runtime/platform facilities such as
+Node.js built-ins and normal VS Code/VSCodium public API usage are not individually
+credited merely for being platform facilities.
+
+Microsoft `mssql` is currently a separately installed extension dependency. Do not
+represent its code as bundled with Query Puppy unless artifact inspection proves that
+Query Puppy actually redistributes Microsoft material.
+
+For every GPL release, inspect the actual production bundle and final VSIX. Verify
+that required notices survive packaging and that the exact distributed VSIX maps to
+an immutable release tag/source revision whose required Corresponding Source is
+available for that exact release.
+
+Public/project communication must not describe GPL as non-commercial, prohibit
+commercial use or sale, prohibit forks/modification, claim that all modifications must
+always be published, or claim that private/internal modification is forbidden.
+
+Sponsorship is voluntary support for independent development. It does not create a
+right to features, support/SLA commitments, roadmap priority, proprietary licensing,
+governance, or technical influence.
+
 ## Publisher identity
 
 Current publisher display name:
@@ -1054,8 +1056,8 @@ Do not rewrite Git history.
 
 ## Release safety
 
-`PROJECT_DEVELOPMENT_PLAN.md` is the authoritative source for release-version
-policy.
+`PROJECT_DEVELOPMENT_PLAN.md` is the authoritative source for release-version,
+licensing/compliance, and relicensing policy.
 
 Versioning is part of publishable product work, not merely a release-time
 administrative step.
@@ -1070,9 +1072,7 @@ For every task that changes publishable production behavior:
 6. keep those changes in the same coherent task as the behavior change.
 
 Never reuse a version that has already been officially released for different code
-or behavior.
-
-Released version numbers identify immutable product states.
+or behavior. Released version numbers identify immutable product states.
 
 Use the project SemVer policy from `PROJECT_DEVELOPMENT_PLAN.md` rather than
 inventing a local rule.
@@ -1083,52 +1083,48 @@ In particular:
   increment PATCH;
 - meaningful new user-facing capabilities or feature milestones increment MINOR;
 - incompatible configuration, public API, or migration changes increment MAJOR
-  where appropriate.
+  where appropriate;
+- the first MIT-to-`GPL-3.0-only` relicensing release is a deliberate MINOR
+  milestone; use `0.13.0` if no intervening release has consumed it.
 
-A version bump is normally not required for:
-
-- documentation-only changes
-- test-only changes
-- internal behavior-preserving refactoring
-- research-only work
-- non-publishable experimental work
-
+A version bump is normally not required for documentation-only, test-only, internal
+behavior-preserving refactoring, research-only, or non-publishable experimental work.
 Local development builds and temporary test VSIX files do not reserve or consume a
 version number.
 
-Normal Codex development tasks must not publish ad hoc. Publication may occur only
-when the user explicitly requests it or when an established documented release
-workflow owns publication under its configured release condition.
+Do not publish ad hoc as part of normal Codex development work.
 
 For normal Codex development work, do not run production builds, bundle commands,
 VSIX packaging, or publication unless they are explicitly required by the task or
 the established release/test workflow. Codex should still run relevant tests,
 ESLint, strict TypeScript checking, Prettier checking, and `git diff --check`.
 
-Keep human build and packaging instructions available in the maintained developer
-and publishing documentation.
-
-VSIX packaging for verification is allowed when requested or part of the
-established test flow.
-
-Marketplace/Open VSX publication requires explicit user instruction unless the
-repository later adopts an explicitly documented automated release workflow in
-accordance with `PROJECT_DEVELOPMENT_PLAN.md`.
+VSIX packaging for verification is allowed when requested or part of the established
+test/release flow. Marketplace/Open VSX publication requires explicit user
+instruction unless an established documented release workflow explicitly owns
+publication under its deliberate release condition.
 
 Before packaging or publishing, ensure no credentials, tokens, private SQL
 connection strings, fixture secrets, or other sensitive local data are included.
 
-Before packaging or publishing, verify that required third-party attribution and
-license notices are present in the final artifact according to
-`PROJECT_DEVELOPMENT_PLAN.md` and the repository's maintained notice files.
+Before any release, verify required third-party attribution and license notices in
+the final artifact according to `PROJECT_DEVELOPMENT_PLAN.md` and the maintained
+notice files.
 
-For release-process changes, keep `docs/PUBLISHING.md` synchronized with the
-actual package scripts and current supported publication workflow.
+Before the first GPL release, complete the full relicensing/compliance gate rather
+than changing license files piecemeal. The gate includes ownership/provenance review,
+bundle/VSIX inventory, exclusion of research-only material such as `spike/**`,
+creation/verification of `THIRD_PARTY_NOTICES.md`, exact `GPL-3.0-only` package and
+LICENSE metadata, public-document synchronization, and exact release-tag/source/VSIX
+Corresponding Source traceability.
 
-If `docs/PUBLISHING.md` or another repository instruction conflicts with
-`PROJECT_DEVELOPMENT_PLAN.md` on versioning policy, treat the development plan as
-authoritative and update the conflicting repository documentation in the same
-coherent task where appropriate.
+For release-process changes, keep `docs/PUBLISHING.md` synchronized with the actual
+package scripts and current supported publication workflow.
+
+If repository instructions conflict with `PROJECT_DEVELOPMENT_PLAN.md` on strategic
+versioning, licensing, or sustainability policy, treat the Development Plan as
+authoritative and update the conflicting maintained repository documentation in the
+same coherent task where appropriate.
 
 ## Documentation growth
 
@@ -1209,35 +1205,44 @@ Before considering a development task complete:
 5. confirm semantic metadata remains lossless through affected pipelines
 6. determine whether the task changes publishable production behavior
 7. if publishable behavior changed, apply the required SemVer bump from
-   `PROJECT_DEVELOPMENT_PLAN.md` and update `package.json`, `package-lock.json`,
-   and `CHANGELOG.md`
-8. if no version bump was applied, ensure the task is genuinely documentation-only,
-   test-only, internal behavior-preserving refactoring, research-only, or
-   non-publishable experimental work, or that another explicit project rule explains
-   the decision
+   `PROJECT_DEVELOPMENT_PLAN.md` and update `package.json`, `package-lock.json`, and
+   `CHANGELOG.md`
+8. if no version bump was applied, ensure the task genuinely falls under a documented
+   no-bump category or another explicit project rule explains the decision
 9. confirm no officially released version was reused for different code or behavior
-10. run relevant provider/unit tests
-11. run Extension Host/integration tests when applicable
-12. run formatting, lint, and strict TypeScript; run a production build only when
-    the user explicitly delegates it or the established task/release workflow
-    requires it
-13. perform installed VSCodium acceptance when native UI behavior requires it
-14. inspect the final diff
-15. remove temporary diagnostics/debugging
-16. confirm no credentials or private data were introduced
-17. confirm third-party dependency changes received the required license/notice
-    review and `THIRD_PARTY_NOTICES.md` update where applicable
-18. review whether `AGENTS.md` or any `docs/` file needs updating
-19. update documentation when its architectural, operational, release, versioning,
-    or milestone contract genuinely changed
-20. verify maintained publisher identity references when public/release metadata was
+10. if third-party material was added, copied, vendored, replaced, or materially
+    upgraded, verify provenance, exact license, `GPL-3.0-only` compatibility,
+    redistribution status, and required notices before accepting the change
+11. if third-party compatibility remains unclear or unresolved, do not ship or adopt
+    it; report the blocker explicitly
+12. update `THIRD_PARTY_NOTICES.md` and other required notice/license material when
+    applicable
+13. run relevant provider/unit tests
+14. run Extension Host/integration tests when applicable
+15. run formatting, lint, and strict TypeScript; run a production build only when the
+    user explicitly delegates it or the established task/release workflow requires it
+16. perform installed VSCodium acceptance when native UI behavior requires it
+17. inspect the final diff
+18. remove temporary diagnostics/debugging
+19. confirm no credentials or private data were introduced
+20. for packaging/release work, inspect the actual intended VSIX contents and verify
+    required notices survive packaging
+21. for GPL release work, verify the exact release version/tag/source revision/VSIX
+    mapping and availability of the required Corresponding Source
+22. review whether `AGENTS.md`, `PROJECT_DEVELOPMENT_PLAN.md`, or any `docs/` file needs
+    updating
+23. update documentation when its architectural, operational, release, versioning,
+    licensing/compliance, sustainability, or milestone contract genuinely changed
+24. verify maintained publisher identity references when public/release metadata was
     affected
-21. verify operational documentation still references commands that actually exist
-    in `package.json`
-22. verify internal documentation remains tracked and package inclusion/exclusion is
+25. verify operational documentation still references commands that actually exist in
+    `package.json`
+26. verify internal documentation remains tracked and package inclusion/exclusion is
     controlled through the appropriate mechanism
-23. report the versioning decision, including old/new version for publishable changes
+27. report the versioning decision, including old/new version for publishable changes
     or the reason no version bump was required
-24. report exactly what was verified and what was not
-25. do not publish unless explicitly instructed or an established documented release
+28. report third-party/license impact, including `none` when no external material
+    changed
+29. report exactly what was verified and what was not
+30. do not publish unless explicitly instructed or an established documented release
     workflow explicitly owns publication

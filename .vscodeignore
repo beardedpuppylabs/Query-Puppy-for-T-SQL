@@ -16,6 +16,7 @@ manual-acceptance/**
 src/**
 tests/**
 scripts/**
+spike/**
 *.vsix
 eslint.config.mjs
 package-lock.json

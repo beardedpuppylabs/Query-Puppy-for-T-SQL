@@ -47,8 +47,10 @@ acceptance.
 
 ## Engineering principles
 
-- Reuse the active `mssql` connection. Do not add a second database connection or
-  Query Puppy credential management.
+- Reuse the active `mssql` connection through the project's current backend-neutral
+  connection/metadata boundary. Do not add an independent production SQL connection
+  or Query Puppy credential management unless a future approved backend explicitly
+  changes that contract.
 - Use supported public VS Code and `mssql` integration surfaces. Do not depend on
   private APIs.
 - Stay inside native editor completion and Signature Help UI; do not add a custom
@@ -58,15 +60,30 @@ acceptance.
 - Prefer `Unknown` to confidently incorrect SQL semantics.
 - Treat performance on large schemas as a product requirement. Keep catalog work
   out of the per-keystroke hot path.
-- Use real SQL Server FK metadata, never naming or datatype heuristics, for
-  relationship intelligence.
+- Preserve provenance-aware Relationship Intelligence. Physical FK metadata must
+  come only from actual SQL Server constraints. ProjectDefined, UserConfirmed,
+  LearnedFromQuery, and conservative HeuristicCandidate relationships must remain
+  explicitly non-FK and follow the repository's confidence/trust rules.
 - Keep runtime metadata access read-only and fixture provisioning separate.
+- Before introducing third-party dependencies, copied/adapted code, vendored source,
+  binaries, or external assets, follow the license/provenance gate in
+  [AGENTS.md](AGENTS.md) and `PROJECT_DEVELOPMENT_PLAN.md`. Do not introduce material
+  whose compatibility with the project's approved future `GPL-3.0-only` distribution
+  model is unknown or unresolved.
+- Update `THIRD_PARTY_NOTICES.md` and required license/NOTICE material in the same
+  coherent change when third-party use or redistribution obligations change.
 - Update the maintained documentation whenever behavior, architecture, testing,
-  development, or release contracts meaningfully change.
+  development, release, versioning, or licensing/compliance contracts meaningfully
+  change.
 
 Detailed implementation invariants live in [AGENTS.md](AGENTS.md). Human
 contributors do not need to duplicate that document in a pull request, but changes
 must preserve the contracts relevant to the affected subsystem.
+
+The contributor-rights model for the future GPL phase (for example DCO versus CLA)
+is a project-governance decision and is not silently established by this document.
+Follow the repository's license and contribution policy in force when submitting a
+contribution.
 
 ## Pull requests
 
@@ -81,6 +98,8 @@ Before requesting review:
 - assess documentation impact
 - remove diagnostics and local data
 - confirm that no credentials or sensitive production details were introduced
+- disclose any third-party dependency, copied code, binary, or asset introduced or
+  materially changed and its license/provenance review
 
 Small, well-scoped contributions are welcome. A pull request does not need to run
 live SQL or manual editor acceptance when those layers are unrelated; state clearly

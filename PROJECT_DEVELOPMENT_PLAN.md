@@ -1,9 +1,11 @@
 # Query Puppy for T-SQL — Central Development Plan
 
-**Status:** 2026-08-28  
-**Current repository/package version:** 0.12.2  
+**Status:** 2026-08-30  
+**Current repository/package version:** 0.12.6  
 **Project:** Bearded Puppy Labs / Query Puppy for T-SQL  
-**License:** MIT
+**Current public license:** MIT through 0.12.6  
+**Approved license for the first relicensed release and subsequent releases:** GPL-3.0-only  
+**Relicensing status:** approved strategically; release/compliance work still pending
 
 ---
 
@@ -90,7 +92,7 @@ Query Puppy should become particularly useful in exactly these environments.
 
 ## 4. Current baseline
 
-As of repository/package version 0.12.2, Query Puppy already has a substantial semantic engine.
+As of repository/package version 0.12.6, Query Puppy already has a substantial semantic engine.
 
 Do not describe the following as merely future roadmap items unless repository inspection shows otherwise.
 
@@ -122,8 +124,14 @@ Existing capabilities include, among other things:
 - composite keys and composite foreign keys
 - bidirectional declared-FK relationship graph
 - declared-FK JOIN generation
+- one provenance-aware canonical relationship model and runtime graph
+- ProjectDefined and explicit UserConfirmed relationships
+- native **Save JOIN as Query Puppy relationship** promotion
+- local save-driven learned JOIN evidence with bounded persistence and cross-session occurrence deduplication
+- metadata-revalidated `LearnedFromQuery` / `StrongEvidence` JOIN candidates at the fixed threshold `observationCount >= 3`
+- conservative pair-bounded `HeuristicCandidate` / `Candidate` JOIN fallback outside persistence and the canonical database relationship graph
 - automatic semantic completion after JOIN ... ON whitespace
-- relationship-aware ranking based on declared FKs
+- relationship-aware ranking across admitted relationship provenance
 - normalized SQL type descriptors
 - ExpectedType inference
 - type-aware ranking
@@ -155,9 +163,8 @@ Callable Model
 Context-aware T-SQL Developer Intelligence
 ```
 
-Historically, Relationship Intelligence has primarily meant declared SQL Server foreign keys.
-
-That is no longer sufficient as the long-term model.
+Relationship Intelligence now extends beyond declared SQL Server foreign keys while
+preserving provenance, confidence, and strict source-specific boundaries.
 
 Completion is only one consumer of the semantic engine.
 
@@ -696,7 +703,7 @@ makes relationship-aware functionality ineffective precisely where Query Puppy i
 
 Therefore:
 
-> Query Puppy must evolve from declared-FK intelligence into provenance-aware Relationship Intelligence.
+> Query Puppy has evolved from declared-FK-only intelligence into provenance-aware Relationship Intelligence.
 
 Declared foreign keys remain the strongest source of relationship truth.
 
@@ -706,9 +713,9 @@ They are no longer the only possible source of relationship evidence.
 
 ## 8.2 Relationship evidence model
 
-The long-term relationship model must distinguish relationship provenance explicitly.
+The canonical relationship model distinguishes relationship provenance explicitly.
 
-At minimum, it should be capable of representing conceptual sources such as:
+Current sources are:
 
 ```text
 DeclaredForeignKey
@@ -718,15 +725,13 @@ LearnedFromQuery
 HeuristicCandidate
 ```
 
-Exact type names are an implementation decision.
-
-The important requirement is that provenance and confidence remain explicit.
+Provenance and confidence remain explicit structured semantics rather than presentation-only labels.
 
 ---
 
 ## 8.3 Confidence model
 
-Relationship confidence should conceptually distinguish levels such as:
+Relationship confidence currently distinguishes:
 
 ```text
 Authoritative
@@ -734,8 +739,6 @@ Confirmed
 StrongEvidence
 Candidate
 ```
-
-The exact representation is an implementation decision.
 
 Confidence must never be inferred solely from presentation ranking.
 
@@ -768,7 +771,7 @@ No heuristic may silently override a declared FK.
 
 ## 8.5 Project-defined / user-confirmed relationships
 
-Query Puppy should eventually support explicit logical relationships that are not declared in SQL Server.
+Query Puppy supports explicit logical relationships that are not declared in SQL Server.
 
 Example:
 
@@ -796,22 +799,18 @@ even though:
 - no FK constraint exists
 - naïve identical-PK matching would produce the wrong JOIN
 
-A developer should eventually be able to confirm such a relationship once.
-
-After confirmation it becomes a persistent logical relationship for an appropriate scope such as:
-
-- project
-- workspace
-- server/database identity
-- another future configuration boundary justified by real requirements
-
-The exact persistence scope must be designed deliberately.
+A developer can author `ProjectDefined` relationships or explicitly save a safely
+resolved JOIN as `UserConfirmed` project knowledge. Both are persisted in the
+source-controlled workspace file `.query-puppy/relationships.json`, validated against
+canonical same-database metadata, and loaded into the canonical runtime graph without
+being represented as physical SQL Server foreign keys.
 
 ---
 
 ## 8.6 User confirmation as promotion
 
-A relationship candidate may be promoted by explicit user action.
+A safely resolved JOIN may be promoted by explicit user action through the native
+**Save JOIN as Query Puppy relationship** Code Action.
 
 Conceptually:
 
@@ -827,13 +826,15 @@ Confirmation must be explicit.
 
 Do not silently convert uncertain inference into permanent truth.
 
-Users should be able to inspect why Query Puppy proposed a relationship before confirming it.
+Accepting a learned or heuristic completion inserts SQL only. Completion acceptance
+is not confirmation and never persists relationship knowledge. The explicit save-JOIN
+action remains the promotion path to `UserConfirmed` project truth.
 
 ---
 
 ## 8.7 Learned relationships from SQL
 
-Existing SQL written by the developer is an important future evidence source.
+Existing SQL written by the developer is a current local evidence source.
 
 For example, repeated observations of:
 
@@ -845,23 +846,21 @@ JOIN PreislistenArtikel pa
 
 between the same resolved physical objects provide evidence of a logical relationship.
 
-Query Puppy may eventually observe and aggregate such usage.
+On save, Query Puppy reuses the conservative resolved-JOIN model to acquire physical,
+same-database equality evidence from active workspace SQL documents. It canonicalizes
+aliases, operand orientation, identifier spelling, composite term order, endpoints,
+and mappings; aggregates bounded local observation counts; and persists bounded
+occurrence identities so unchanged occurrences remain deduplicated across editor and
+extension-host sessions.
 
-Possible evidence may include:
+At the fixed product threshold `observationCount >= 3`, qualifying evidence is
+revalidated against current canonical objects, columns, mappings, database scope, and
+known type compatibility. Valid evidence becomes a `LearnedFromQuery` /
+`StrongEvidence` relationship in the canonical runtime graph. Exact declared-FK,
+`UserConfirmed`, or `ProjectDefined` knowledge suppresses the learned duplicate.
 
-- resolved source table
-- resolved target table
-- column-pair mapping
-- composite predicate structure
-- direction
-- observation count
-- recency
-- source provenance
-- user confirmation state
-
-Repeated use increases evidence.
-
-Repeated use does not automatically make a relationship authoritative.
+Repeated use increases evidence. It never makes a relationship authoritative or
+confirmed by itself.
 
 ---
 
@@ -887,7 +886,8 @@ Do not require AI.
 
 ## 8.9 Heuristic candidates
 
-Heuristics are permitted only as conservative candidate generation.
+Heuristics are implemented only as conservative candidate generation for one
+already-selected pair of physical tables.
 
 A heuristic relationship must never masquerade as:
 
@@ -895,7 +895,25 @@ A heuristic relationship must never masquerade as:
 - a confirmed project relationship
 - an authoritative fact
 
-Possible evidence inputs may eventually include:
+The current E3 policy requires:
+
+- exactly one complete qualifying unfiltered target primary key, unique constraint, or unique index mapping
+- known compatible normalized types for every mapping
+- at least one exact target-object-plus-key-column source name, with only a narrow trailing-`s` target-name variant
+- deterministic full-key mapping
+- same-name tenant/context columns only to complete a composite target key beside target-aware evidence
+
+Incomplete keys, unknown or incompatible types, filtered keys, multiple qualifying
+keys, multiple source assignments, both qualifying directions, self-pairs, and other
+ambiguity fail closed. Any relationship from a stronger source suppresses the
+heuristic fallback.
+
+The result is at most one transient `HeuristicCandidate` / `Candidate`. It is not an
+FK, is not persisted, does not enter the canonical database relationship graph, and
+does not participate in global relationship discovery, table discovery/ranking,
+comparison ranking, navigation, diagnostics, or multi-hop paths.
+
+Possible evidence inputs for a deliberately broader future heuristic policy may include:
 
 - target primary-key structure
 - unique-key structure
@@ -988,18 +1006,17 @@ Learned relationship
 Heuristic candidate
 ```
 
-Completion and future UI should not visually imply equal certainty.
+Completion and future UI must not visually imply equal certainty.
 
-Potential presentation might eventually use labels such as:
+Current native completion presentation distinguishes:
 
 ```text
-FK
-Confirmed
-Learned
-Suggested
+Relationship JOIN
+User-confirmed relationship JOIN
+Project relationship JOIN
+Learned relationship JOIN
+Heuristic relationship JOIN
 ```
-
-Exact wording is a UX decision.
 
 The underlying semantic distinction is mandatory.
 
@@ -1057,7 +1074,7 @@ Any future server-side mining must be optional, bounded, and evidence-driven.
 
 ## 8.15 Relationship source architecture
 
-Relationship Intelligence should use one canonical relationship model and one graph infrastructure.
+Relationship Intelligence uses one canonical relationship model and one graph infrastructure.
 
 Do not create:
 
@@ -1080,46 +1097,48 @@ Relationship Evidence Sources
         |
         +-- Declared FK source
         +-- Project-defined source
+        +-- User-confirmed source
         +-- Learned-query source
         +-- Heuristic source
         |
         v
 Canonical Relationship Model
         |
-        v
-Relationship Graph
+        +-- Canonical Relationship Graph
+        |       +-- Completion
+        |       +-- Ranking
+        |       +-- Discovery
+        |       +-- JOIN generation
+        |       +-- Diagnostics
+        |       +-- Navigation
         |
-        +-- Completion
-        +-- Ranking
-        +-- Discovery
-        +-- JOIN generation
-        +-- Diagnostics
-        +-- Navigation
+        +-- Bounded heuristic JOIN-predicate consumer
 ```
 
-Evidence sources may be pluggable.
-
-The graph remains canonical.
+Evidence sources may be pluggable. The graph remains canonical for declared,
+project-defined, user-confirmed, and qualifying learned relationships. The current
+pair-bounded heuristic is deliberately transient at the JOIN-predicate consumer and
+does not create a competing or global heuristic graph.
 
 ---
 
 ## 8.16 Relationship ranking
 
-Relationship ranking must consider provenance before secondary heuristics.
+Relationship ranking considers provenance before secondary heuristics.
 
-Conceptually:
+The current deterministic trust order is:
 
 ```text
-Declared FK
+DeclaredForeignKey
     >
-User-confirmed
+UserConfirmed
     >
-Strong learned evidence
+ProjectDefined
     >
-Heuristic candidate
+LearnedFromQuery
+    >
+HeuristicCandidate
 ```
-
-Exact ordering may evolve.
 
 Do not allow a high heuristic score to silently outrank contradictory authoritative metadata.
 
@@ -1133,34 +1152,29 @@ Within equivalent confidence levels:
 
 ## 8.17 Relationship persistence
 
-Persistence should be introduced only when a real first persistent relationship source requires it.
+Current persistent state is deliberately separated by ownership:
 
-Likely first persistent data:
+- `ProjectDefined` and `UserConfirmed` project relationships persist in `.query-puppy/relationships.json`.
+- bounded learned endpoint/mapping evidence, observation counts, and cross-session occurrence-deduplication state persist in extension-managed workspace storage.
+- `LearnedFromQuery` candidates are rebuilt after canonical metadata revalidation; they are not written into physical metadata snapshots or project relationship files.
+- `HeuristicCandidate` relationships are transient and non-persistent.
 
-- user-confirmed relationships
-- project-defined relationships
-
-Possible later persistent data:
-
-- learned observations
-- evidence counts
-- rejection/suppression decisions
-
-Do not build an oversized generic relationship database before the first use case requires it.
+Possible future persistent data includes explicit rejection/suppression decisions. Do
+not build an oversized generic relationship database before a concrete use case
+requires it.
 
 ---
 
 ## 8.18 Relationship rejection
 
-Future inference UX should consider explicit rejection.
+Future inference UX should consider explicit rejection or suppression.
 
 If Query Puppy repeatedly suggests an incorrect logical relationship, the user should eventually be able to suppress or reject it.
 
 A rejection may itself be useful evidence.
 
-Do not implement this before candidate generation exists.
-
-Design persistence so this can be added without replacing the entire model.
+Candidate generation now exists, but rejection/suppression state remains future work.
+Design it without replacing the canonical model or current persistence boundaries.
 
 ---
 
@@ -1276,6 +1290,35 @@ Release infrastructure changes should remain isolated from semantic work.
 
 ---
 
+## 10.1 P0 — GPL-3.0-only relicensing and sustainable FLOSS governance
+
+**Strategic decision:** Query Puppy will move from MIT to `GPL-3.0-only` for the first deliberately relicensed release and subsequent releases.
+
+Current public releases through 0.12.6 remain under MIT. Previously granted MIT rights remain attached to those historical releases. Do not rewrite historical release licensing.
+
+The first GPL release must use a package version that has never been officially released before and should be treated as a visible MINOR milestone. If no intervening release consumes it, `0.13.0` is the preferred target.
+
+Before the first GPL release, complete a dedicated relicensing/compliance slice that at minimum:
+
+1. confirms project ownership/provenance for code, logo, assets, and other copyrightable project material;
+2. inventories the production bundle using build evidence such as the esbuild metafile;
+3. inspects `dist/extension.js` for actually bundled third-party code;
+4. inspects the final VSIX for third-party code, binaries, assets, and notice obligations;
+5. verifies that development-only tooling is not accidentally redistributed;
+6. excludes `spike/**` and other research-only material from the VSIX where appropriate;
+7. creates and verifies `THIRD_PARTY_NOTICES.md`;
+8. replaces the root `LICENSE` with the unmodified official GNU GPL version 3 license text;
+9. changes package metadata to the exact SPDX identifier `GPL-3.0-only`;
+10. synchronizes README, CHANGELOG, CONTRIBUTING, Marketplace-facing text, `AGENTS.md`, release/publishing documentation, and project sources;
+11. verifies that the distributed artifact and the exact source revision/tag are traceable to one another;
+12. verifies that the Corresponding Source required for the distributed GPL artifact is available for the exact released version.
+
+Do not change the current public manifest or root LICENSE to GPL before this coherent relicensing release change is ready.
+
+The relicensing goal is strong copyleft, not a non-commercial restriction. Public communication must not describe GPL as prohibiting commercial use, sale, forks, modification, or private/internal modification. GPL obligations must be described accurately in terms of the applicable license conditions, especially when covered work is conveyed or distributed.
+
+---
+
 # PART IV — PRODUCT ROADMAP
 
 ## 11. P1 — Semantic correctness and T-SQL language coverage
@@ -1306,21 +1349,19 @@ Prioritize syntax that unlocks reliable semantic consumers.
 
 ## 12. P1 — Relationship Intelligence foundation
 
-Before aggressive heuristic JOIN suggestions, generalize the relationship architecture.
+**Status:** complete in the current 0.12.6 repository.
 
-Execution order:
+The provenance-aware canonical relationship architecture is established and remains the required foundation for all relationship consumers.
 
-1. define provenance-aware canonical relationship model;
-2. preserve current declared-FK behavior;
-3. ensure the existing relationship graph can represent additional relationship provenance;
-4. add confidence/provenance contracts;
-5. add focused migration/regression tests;
-6. introduce persistence boundary only where needed;
-7. avoid actual heuristic suggestion changes until the model is stable.
+The completed foundation:
 
-The first implementation slice should preferably change architecture without changing user-visible declared-FK behavior.
+1. defines the provenance-aware canonical relationship model;
+2. preserves declared-FK behavior and physical constraint identity;
+3. represents additional provenance and confidence without parallel relationship graphs;
+4. supplies focused model, graph, consumer, and regression contracts;
+5. keeps source-specific persistence boundaries explicit.
 
-When this phase begins, synchronize repository-level FK-only architecture instructions such as `AGENTS.md` and relevant architecture documentation so they preserve the rule:
+Repository-level architecture instructions preserve the rule:
 
 > Never invent a foreign key.
 
@@ -1330,11 +1371,13 @@ while also allowing explicitly non-FK relationship sources with provenance and c
 
 ## 13. P1 — Project-defined relationships
 
-After the canonical model is stable, implement explicit logical relationships.
+**Status:** complete in the current 0.12.6 repository, including ProjectDefined and explicit UserConfirmed project relationships.
 
-Initial scope should favor reliability over automation.
+Explicit logical relationships are supported without being represented as physical SQL Server foreign keys.
 
-Goals:
+The implemented scope favors reliability over automation.
+
+Current behavior:
 
 - define a logical relationship explicitly
 - persist it
@@ -1350,18 +1393,18 @@ This provides immediate value on ERP databases without requiring heuristic infer
 
 ## 14. P1 — Learned relationships from queries
 
-After explicit relationships are stable, investigate local learning from real SQL JOIN predicates.
+**Status:** Phase E1/E2 complete in the current 0.12.6 repository.
 
-Start conservatively.
+Query Puppy locally observes safely resolved JOIN evidence on save, aggregates bounded privacy-conscious evidence, and promotes qualifying evidence at the fixed product threshold to `LearnedFromQuery` / `StrongEvidence` candidates after revalidation against canonical metadata.
 
-Potential stages:
+Implemented stages:
 
-1. parse already-resolved JOIN predicates;
-2. normalize aliases to canonical table/column identities;
-3. detect repeated table-pair/column-pair patterns;
-4. aggregate evidence locally;
-5. offer learned candidates;
-6. require confirmation before promotion where appropriate.
+1. reuse already-resolved physical equality JOIN predicates on document save;
+2. normalize aliases and syntax to canonical table/column identities;
+3. aggregate bounded evidence with persisted cross-session occurrence deduplication;
+4. revalidate qualifying evidence against current canonical metadata;
+5. offer `LearnedFromQuery` / `StrongEvidence` candidates at `observationCount >= 3`;
+6. keep completion acceptance non-confirming and use the explicit save-JOIN action for promotion.
 
 Do not automatically convert observation frequency into authoritative truth.
 
@@ -1369,13 +1412,17 @@ Do not automatically convert observation frequency into authoritative truth.
 
 ## 15. P1 — Heuristic relationship candidates
 
-Only after provenance and confirmation infrastructure exist should schema heuristics become user-visible.
+**Status:** Phase E3 complete in the current 0.12.6 repository.
 
-Heuristic inference may combine multiple signals.
+A deliberately narrow pair-bounded heuristic fallback is implemented only for an already-selected physical table pair when no stronger declared, confirmed, project-defined, or learned relationship exists. It remains a `HeuristicCandidate` / `Candidate`, never an FK, and does not participate in global table discovery, persistence, or the canonical database relationship graph.
+
+Any future heuristic expansion must remain conservative and evidence-driven.
 
 Requirements:
 
-- conservative candidate generation
+- one already-selected physical table pair only
+- one complete qualifying target key and an unambiguous full mapping
+- known compatible types and target-aware deterministic naming
 - explainable evidence
 - explicit Candidate status
 - no name-only inference
@@ -1385,6 +1432,7 @@ Requirements:
 - deterministic ranking
 - suppression when stronger contradictory evidence exists
 - no invented FK metadata
+- no persistence, canonical-graph overlay, global discovery, or related-table ranking
 
 False confidence is worse than a missing suggestion.
 
@@ -1465,7 +1513,8 @@ Safe fixes should use native Quick Fixes.
 
 ## 18. P1 — Relationship Discovery and Join Paths
 
-Once Relationship Intelligence supports multiple evidence sources, expose it as a user workflow.
+Relationship Intelligence now supports multiple evidence sources. A future dedicated
+workflow may expose that knowledge as Relationship Discovery and bounded Join Paths.
 
 Potential features:
 
@@ -1568,7 +1617,9 @@ Possible ranking inputs:
 - bounded relationship distance
 - deterministic alphabetical fallback
 
-Heuristic relationship candidates should be clearly weaker than confirmed or declared relationships.
+The current pair-bounded heuristic candidate does not participate in object discovery
+or related-object ranking. Any future expansion into that consumer must remain clearly
+weaker than confirmed or declared relationships.
 
 Do not introduce hidden AI/fuzzy ranking.
 
@@ -2038,7 +2089,10 @@ Dialect-specific metadata may exist where semantically necessary.
 
 Relationship provenance may come from multiple evidence sources.
 
-There must still be one canonical relationship representation consumed by the relationship graph.
+There must still be one canonical relationship representation. Persisted and learned
+production relationships are consumed by the canonical graph; the current transient
+pair-bounded heuristic uses the same structured model only at its bounded predicate
+consumer and does not create a global heuristic graph.
 
 Do not allow declared, learned, project-defined, and heuristic relationships to become unrelated competing graph implementations.
 
@@ -2107,40 +2161,30 @@ Relationship learning should default to local processing.
 
 ---
 
-## 40.1 Third-party attribution and license hygiene
+## 40.1 License transition and FLOSS responsibility
 
 Query Puppy is FLOSS and benefits from the work of other open-source projects.
 
-The project should explicitly acknowledge third-party libraries it deliberately uses.
+Current public releases through 0.12.6 are MIT-licensed. The approved license for the first deliberately relicensed release and subsequent releases is:
+
+```text
+GPL-3.0-only
+```
+
+Use that exact SPDX identifier. Do not substitute `GPL-3.0-or-later`, deprecated ambiguous shorthand, or language that grants a later-version option.
+
+The GPL decision does not prohibit commercial use, sale, modification, or forks. Do not describe Query Puppy as non-commercial software. Do not claim that every modification must always be published or that private/internal modification is prohibited.
+
+The purpose of strong copyleft is to preserve the applicable software freedoms and source-availability obligations when GPL-covered versions are conveyed or distributed under the license terms.
 
 Third-party attribution is both:
 
 - a compliance responsibility; and
 - a matter of proper open-source credit.
 
-Third-party material included in a distributed Query Puppy artifact must retain all:
+Third-party material included in a distributed Query Puppy artifact must retain all copyright, attribution, license, NOTICE, source, and other redistribution obligations required by the applicable licenses.
 
-- copyright notices
-- attribution notices
-- license notices
-- required license texts
-- other redistribution notices
-
-required by the applicable license.
-
-Use SPDX license identifiers where available.
-
-Examples include:
-
-```text
-MIT
-Apache-2.0
-BSD-2-Clause
-BSD-3-Clause
-ISC
-```
-
-Do not silently introduce a dependency whose license status is unknown.
+Use authoritative upstream license information and SPDX identifiers where available.
 
 ---
 
@@ -2154,9 +2198,7 @@ THIRD_PARTY_NOTICES.md
 
 as Query Puppy's central human-readable third-party attribution and license inventory.
 
-All deliberately used direct third-party libraries should be identified there.
-
-Distinguish at least where applicable:
+All deliberately used direct third-party libraries should be identified there, separated where useful into:
 
 ### Runtime / distributed dependencies
 
@@ -2172,19 +2214,19 @@ Do not manually reproduce a huge transitive development dependency tree merely a
 
 ---
 
-## 40.3 Distributed transitive dependencies
+## 40.3 Distributed transitive dependencies and artifact boundary
 
 License responsibility is not limited to dependencies explicitly imported by Query Puppy.
 
-If a dependency bundles or introduces other third-party material into the distributed VSIX, those components may also require attribution.
+If a dependency bundles or introduces other third-party material into the distributed VSIX, those components may also require attribution, source availability, or other treatment.
 
 Therefore:
 
 > Identify third-party material actually redistributed as part of the extension, not merely direct entries in `package.json`.
 
-Dependency-tree structure alone does not determine notice requirements.
+Dependency-tree structure alone does not determine redistribution obligations.
 
-The packaged artifact is the relevant redistribution boundary.
+The final packaged artifact is the relevant technical inspection boundary.
 
 ---
 
@@ -2192,13 +2234,13 @@ The packaged artifact is the relevant redistribution boundary.
 
 Do not create individual project acknowledgements for ordinary standard/platform functionality such as:
 
-- JavaScript language built-ins
-- Node.js built-in modules
-- TypeScript language constructs
-- normal VS Code/VSCodium public API usage
-- comparable standard runtime libraries
+- JavaScript language built-ins;
+- Node.js built-in modules;
+- TypeScript language constructs;
+- normal VS Code/VSCodium public API usage;
+- comparable standard runtime facilities.
 
-Third-party packages, embedded runtimes, drivers, parser libraries, bundled binaries, and similar external components must be evaluated separately.
+Third-party packages, embedded runtimes, drivers, parser libraries, bundled binaries, copied source, and external assets must be evaluated separately.
 
 ---
 
@@ -2206,98 +2248,176 @@ Third-party packages, embedded runtimes, drivers, parser libraries, bundled bina
 
 An external extension that Query Puppy depends on or integrates with is not automatically a redistributed third-party component.
 
-For example, Microsoft mssql may be:
+Microsoft mssql is currently a separately installed extension dependency and integration dependency. Do not represent its code as bundled with Query Puppy unless artifact inspection proves that Query Puppy actually redistributes Microsoft material.
 
-- an extension dependency
-- an integration dependency
-- a separately installed product
-
-without its source code being bundled into Query Puppy's VSIX.
-
-Such integrations should still be acknowledged appropriately in:
-
-- README
-- documentation
-- integration descriptions
-- acknowledgements where useful
-
-but must not be represented as bundled third-party software unless Query Puppy actually redistributes its code or assets.
+Such integrations may still be acknowledged appropriately in README and integration documentation.
 
 ---
 
-## 40.6 Dependency changes are compliance changes
+## 40.6 Mandatory third-party adoption gate
 
-When adding, removing, replacing, or materially upgrading a third-party dependency:
+The GPL compatibility check is a pre-adoption engineering gate, not a release-day cleanup task.
 
-1. verify the dependency's license;
-2. identify whether it or relevant transitive components are redistributed;
-3. determine required copyright/notice obligations;
-4. update `THIRD_PARTY_NOTICES.md`;
-5. verify compatibility with Query Puppy's distribution model and MIT licensing;
-6. include the dependency and notice changes in the same coherent change.
+Before Codex or a developer adds, vendors, copies, replaces, or materially upgrades third-party software or other redistributable material, verify from authoritative upstream sources:
 
-Do not defer license review until release day.
+1. what the material is and where it came from;
+2. the exact license and version/exception terms that apply;
+3. whether the intended use and combination are compatible with Query Puppy's approved `GPL-3.0-only` distribution model;
+4. whether the material will be bundled, copied, linked, generated into, or otherwise redistributed with the VSIX;
+5. applicable copyright, attribution, NOTICE, source, relinking, offer, or other redistribution obligations;
+6. whether `THIRD_PARTY_NOTICES.md` or other license files must change.
+
+This gate applies even before the first GPL release so that new work does not introduce material that blocks the approved relicensing direction.
+
+Do not rely solely on a package-manager `license` field when compatibility or redistribution is material. Inspect upstream LICENSE/NOTICE files and authoritative project licensing information where needed.
+
+If compatibility is unknown, ambiguous, unusual, or depends on unresolved legal interpretation:
+
+> Do not adopt the material. Return it for explicit review.
+
+Do not defer compatibility review until after implementation.
 
 ---
 
 ## 40.7 License review triggers
 
-Dependencies with familiar permissive licenses may normally be straightforward, subject to their notice requirements.
+Dependencies with familiar permissive licenses may be straightforward, subject to their actual terms and notice requirements.
 
 The following require explicit review rather than automatic acceptance:
 
-- unknown or missing license
-- custom/non-standard license
-- GPL-family licenses
-- AGPL
-- LGPL
-- SSPL
-- source-available licenses
-- non-commercial restrictions
-- field-of-use restrictions
-- unusual attribution obligations
-- dependencies bundling native or proprietary binaries
-- dependencies with unclear transitive licensing
+- unknown or missing license;
+- custom/non-standard license;
+- GPL-family licenses with version-specific compatibility questions;
+- AGPL;
+- LGPL;
+- MPL or other file-level copyleft where combination/redistribution details matter;
+- SSPL;
+- source-available licenses;
+- non-commercial restrictions;
+- field-of-use restrictions;
+- unusual attribution obligations;
+- dependencies bundling native or proprietary binaries;
+- dependencies with unclear transitive licensing;
+- copied/adapted source or assets whose provenance is unclear.
 
-This does not mean every such dependency is automatically prohibited.
-
-It means the implications must be understood before adoption.
+This list is a review trigger, not an assertion that every listed license is automatically incompatible.
 
 ---
 
-## 40.8 Automated license verification
+## 40.8 Mandatory GPL release compliance gate
 
-As the dependency footprint grows, automate as much license inventory and compliance verification as practical.
+Every GPL release must inspect the actual release artifact and not merely the manifest.
 
-A future CI/release check may:
+Before publishing a GPL release:
+
+1. build from the intended clean release source revision;
+2. inspect the production bundler inputs/outputs;
+3. inspect `dist/extension.js` and other generated runtime artifacts for bundled third-party material;
+4. inspect the final VSIX file list and contents;
+5. verify `THIRD_PARTY_NOTICES.md` and all required license/NOTICE material;
+6. verify the root license and package metadata consistently identify `GPL-3.0-only`;
+7. verify development-only/research material that should not ship is excluded;
+8. verify all included third-party material remains compatible with the GPL release model;
+9. verify the exact source revision/tag corresponding to the distributed artifact;
+10. verify that the Corresponding Source required for the distributed artifact is available for that exact release.
+
+A dependency audit from an earlier release does not replace inspection of the current release artifact.
+
+---
+
+## 40.9 Corresponding Source and release traceability
+
+For GPL releases, preserve a clear immutable mapping:
 
 ```text
-dependency change
+release version
+    =
+Git tag / exact source revision
+    =
+GitHub Release source milestone
+    =
+distributed VSIX build
+```
+
+The source made available for a distributed GPL artifact must correspond to the actual released version rather than an older or newer moving branch state.
+
+Release documentation must make the corresponding source location clear enough for recipients to obtain the source associated with that release.
+
+Do not delete or rewrite historical release tags merely because later versions exist.
+
+---
+
+## 40.10 Automated license verification
+
+Automate license inventory and compliance checks where they reduce repeatable error, but do not let automation replace explicit review of ambiguous licensing.
+
+A future CI/release check may implement:
+
+```text
+third-party change
         ↓
-license inventory
+license / provenance inventory
         ↓
-known / approved?
+GPL-3.0-only compatible and obligations known?
         |
         +-- yes → continue
         |
-        +-- no / unusual → explicit review
+        +-- no / unclear → stop for explicit review
 ```
 
-Automation should assist human review rather than blindly declaring legal compatibility.
-
-Do not introduce heavy compliance infrastructure before the dependency footprint justifies it.
+Artifact inspection remains required because package manifests alone do not prove what is redistributed.
 
 ---
 
-## 40.9 FLOSS credit principle
+## 40.11 Sustainability principle
+
+Query Puppy does not monetize access to software features.
+
+The project may accept voluntary sponsorship from individuals and organizations to support independent development, project costs, infrastructure, and development tools.
+
+Sponsorship does not create entitlement to:
+
+- features;
+- support or SLA obligations;
+- roadmap priority;
+- sponsor-exclusive functionality;
+- proprietary license rights;
+- governance rights;
+- technical decision-making authority.
+
+The strategic model is:
+
+> Free software + strong copyleft + commercial use allowed + no paid feature gates + voluntary individual and organizational sponsorship.
+
+The objective is sustainable independent development, not revenue maximization or conversion into a commercial licensing product.
+
+---
+
+## 40.12 Contributor governance
+
+Before substantial external contribution volume develops, deliberately choose and document the contributor-rights model.
+
+The current strategic preference is:
+
+```text
+GPL-3.0-only + DCO + inbound = outbound
+```
+
+but this preference is not yet a repository contribution requirement until the project deliberately adopts and documents it.
+
+A DCO-style model is preferred if Query Puppy prioritizes low-friction provenance and community contributions without granting Bearded Puppy Labs extra relicensing rights.
+
+A CLA or copyright-assignment model should be adopted only if the project deliberately decides that future unilateral relicensing or additional licensing rights justify the added contributor burden.
+
+Do not silently introduce a CLA, copyright assignment, or DCO requirement as an implementation detail.
+
+---
+
+## 40.13 FLOSS credit principle
 
 Where Query Puppy materially benefits from another open-source project, credit should be easy to find rather than hidden only in machine-generated dependency metadata.
 
-The project should give visible recognition to upstream work where appropriate.
-
-This principle applies without overstating relationships, endorsement, or ownership.
-
----
+The project should give visible recognition to upstream work where appropriate without overstating affiliation, endorsement, or ownership.
 
 ## 41. Tests
 
@@ -2472,6 +2592,8 @@ A version bump is normally not required for:
 
 If a task changes publishable product behavior, the appropriate next version must be determined and applied as part of that task rather than deferred to a later release-preparation pass.
 
+The MIT-to-`GPL-3.0-only` relicensing is a meaningful project/distribution milestone and should use a new MINOR release. If no intervening release consumes it, `0.13.0` is the preferred first GPL version.
+
 ---
 
 ## 46. Release quality
@@ -2490,6 +2612,10 @@ Every release should have:
 - the exact published VSIX attached as a GitHub Release asset once automation is complete
 - current `THIRD_PARTY_NOTICES.md`
 - verified dependency licensing for redistributed third-party material
+- for GPL releases, exact `GPL-3.0-only` package/license metadata
+- for GPL releases, artifact-level third-party inspection
+- for GPL releases, an immutable source revision/tag corresponding to the distributed VSIX
+- for GPL releases, availability of the required Corresponding Source for the exact released artifact
 
 Do not market planned functionality as implemented.
 
@@ -2521,16 +2647,18 @@ The same release artifact published to the Marketplace and attached to GitHub sh
 
 ### Remaining Phase A work
 
-1. finish push-driven release automation;
-2. synchronize `AGENTS.md` and `docs/PUBLISHING.md` when the automated release process is implemented;
-3. continue tracking mssql issue #22819;
-4. establish `THIRD_PARTY_NOTICES.md`;
-5. inventory current direct third-party libraries;
-6. inventory third-party material redistributed in the VSIX;
-7. verify applicable licenses and required notices;
-8. ensure release packaging retains required notices.
+1. complete the GPL-3.0-only relicensing/compliance slice before the first GPL release;
+2. confirm code/asset ownership and provenance needed for relicensing;
+3. establish and verify `THIRD_PARTY_NOTICES.md`;
+4. inventory current direct third-party libraries and material actually redistributed in the VSIX;
+5. inspect production bundle inputs/output and the final VSIX for third-party material and notice/source obligations;
+6. exclude research-only `spike/**` material from the VSIX;
+7. establish the immutable release-version/tag/source/VSIX mapping and Corresponding Source check for GPL releases;
+8. finish push-driven release automation;
+9. synchronize `AGENTS.md` and `docs/PUBLISHING.md` when release/relicensing processes change;
+10. continue tracking mssql issue #22819.
 
-License automation may be added later when the dependency footprint justifies it.
+GPL compatibility review is now mandatory before adoption of new third-party material. CI automation may assist that review later, but ambiguous cases must still stop for explicit review.
 
 ---
 
@@ -2556,25 +2684,24 @@ A technically strong connectivity technology may still be unsuitable if packagin
 
 ## 49. Phase C — Relationship model foundation
 
-1. Inspect current FK relationship representation.
-2. Define provenance-aware canonical relationship model.
-3. Preserve existing FK semantics unchanged.
-4. Integrate confidence/provenance into the graph.
-5. Ensure existing JOIN generation remains stable.
-6. Add relationship provenance regression tests.
-7. Establish persistence boundary without premature storage infrastructure.
-8. Synchronize FK-only repository guidelines and architecture docs with the new provenance-aware model without weakening the rule that real FKs must never be fabricated.
+**Status:** complete.
+
+The completed Phase C foundation provides one provenance-aware canonical relationship
+model and graph, structured confidence, source/target references, ordered mappings,
+declared-FK-specific physical details, preserved FK/JOIN behavior, source-specific
+persistence boundaries, and focused provenance regressions. Repository guidance keeps
+the rule that real FKs must never be fabricated.
 
 ---
 
 ## 50. Phase D — Explicit relationship intelligence
 
-1. Project-defined relationships.
-2. User-confirmed relationships.
-3. Composite virtual relationships.
-4. Persistence.
-5. Loading into canonical graph.
-6. Presentation of provenance.
+**Status:** complete.
+
+Phase D implements `ProjectDefined` and explicitly saved `UserConfirmed` relationships,
+including composite mappings, workspace project persistence, canonical metadata
+validation, canonical graph loading, provenance-aware presentation, and the native
+save-JOIN promotion workflow.
 
 This phase should produce immediate value on databases without declared FKs.
 
@@ -2582,14 +2709,18 @@ This phase should produce immediate value on databases without declared FKs.
 
 ## 51. Phase E — Learned and inferred relationship intelligence
 
-1. Learn resolved JOIN predicates locally.
-2. Normalize observed relationships.
-3. Aggregate evidence.
-4. Present learned candidates.
-5. Add confirmation workflow.
-6. Add conservative heuristics.
-7. Add explanation.
-8. Add rejection/suppression later as needed.
+**Status:** complete through E3 in 0.12.6.
+
+E1/E2 locally acquires, normalizes, bounds, persists, and cross-session-deduplicates
+save-driven resolved-JOIN evidence. It revalidates qualifying evidence and presents
+`LearnedFromQuery` / `StrongEvidence` candidates at `observationCount >= 3` without
+automatic confirmation. E3 adds the conservative transient pair-bounded
+`HeuristicCandidate` / `Candidate` fallback with structured explanation and no
+persistence or global graph/discovery role. The existing save-JOIN action is the sole
+explicit promotion path to `UserConfirmed` project knowledge.
+
+Rejection/suppression, broader heuristics, and server-side evidence mining remain
+future work.
 
 Query Store / plan cache research comes only after this local pipeline is proven.
 
@@ -2765,6 +2896,12 @@ When generating a Codex prompt:
 27. Update `package.json`, `package-lock.json`, and `CHANGELOG.md` together for publishable production-behavior changes.
 28. Never reuse a version that has already been officially released for different code or behavior.
 29. Do not bump the package version for documentation-only, test-only, internal behavior-preserving refactoring, research-only, or non-publishable experimental work unless another explicit release requirement applies.
+30. Before adding, copying, vendoring, replacing, or materially upgrading third-party software/assets, verify provenance, exact license, `GPL-3.0-only` compatibility for the intended use, redistribution status, and required notices from authoritative upstream sources.
+31. If third-party compatibility is unknown, ambiguous, unusual, or legally unresolved, do not adopt the material; return it for explicit review.
+32. Update `THIRD_PARTY_NOTICES.md` and other required license/NOTICE material in the same coherent change when third-party material changes.
+33. Do not rely only on package-manager license metadata when redistribution or compatibility is material.
+34. For GPL release work, inspect the actual bundle and VSIX contents and verify the exact Corresponding Source/release-tag mapping.
+35. Do not change current MIT package/license metadata to GPL outside the deliberate relicensing release slice.
 
 Final reports should normally include:
 
@@ -2777,6 +2914,8 @@ Final reports should normally include:
 - follow-up risks
 - third-party dependencies added or changed
 - applicable license/notice actions where relevant
+- third-party provenance and `GPL-3.0-only` compatibility decision for any added/changed external material
+- redistribution/artifact impact and unresolved compliance questions
 - versioning decision, including old/new version for publishable changes or the reason no version bump was required
 
 ---
@@ -2872,7 +3011,7 @@ When a feature requires a new third-party dependency, consider:
 - license
 - notice obligations
 - redistribution implications
-- compatibility with Query Puppy's FLOSS distribution model
+- compatibility with Query Puppy's approved `GPL-3.0-only` distribution model
 
 A dependency is not free merely because `npm install` is easy.
 
@@ -2936,6 +3075,9 @@ Do not assume these facts forever:
 - licensing of third-party dependencies when upgraded
 - redistribution requirements of bundled runtimes/drivers
 - Marketplace/Open VSX requirements relevant to future separate dialect products
+- current project license-transition state
+- licensing and redistribution obligations of third-party dependencies and bundled artifacts
+- availability of exact Corresponding Source for each GPL release
 
 Verify them when they materially affect a decision.
 
@@ -3044,6 +3186,16 @@ Not:
 
 ---
 
+### 5. Preserve software freedom and sustainable independence
+
+The approved future release license is `GPL-3.0-only`.
+
+Keep commercial use permitted while using strong copyleft to preserve the GPL freedoms and source obligations that apply when covered versions are conveyed or distributed.
+
+Fund development, where useful, through voluntary sponsorship rather than paid feature gates, proprietary editions, seat licensing, or sponsor-controlled roadmap commitments.
+
+---
+
 ## 71. Strategic restraint
 
 Do not respond to Connection Sharing retirement by building an entire SQL client.
@@ -3056,7 +3208,11 @@ Do not respond to feature competition by copying every checkbox from commercial 
 
 Do not generalize architecture for hypothetical futures.
 
-Do not introduce third-party dependencies without understanding their maintenance and licensing implications.
+Do not introduce third-party dependencies or copied external material before verifying provenance, license, `GPL-3.0-only` compatibility, redistribution obligations, and required notices.
+
+Do not describe GPL as non-commercial or as prohibiting sale, forks, or private/internal modification.
+
+Do not let sponsorship buy features, support obligations, roadmap priority, proprietary rights, governance, or technical control.
 
 Build where Query Puppy has structural advantage:
 
@@ -3077,7 +3233,9 @@ Build where Query Puppy has structural advantage:
 
 ## 72. Long-term product thesis
 
-Query Puppy should eventually understand not only what SQL Server explicitly declares, but also what developers and real SQL usage reveal about the schema.
+Query Puppy already understands bounded, provenance-aware knowledge from developers
+and real local SQL usage in addition to what SQL Server explicitly declares. It should
+deepen that understanding conservatively.
 
 It should distinguish those sources rather than pretending they are equally certain.
 
@@ -3093,30 +3251,48 @@ Dialect-specific behavior should remain honest and explicit.
 
 Open-source dependencies that help make Query Puppy possible should receive the attribution and license treatment their authors and licenses deserve.
 
+The project should remain freely available for personal and commercial use while sustaining independent development through voluntary support rather than paid feature access.
+
 ---
 
-## 73. FLOSS principle
+## 73. FLOSS and copyleft principle
 
-Query Puppy is free and open-source software under the MIT license.
+Query Puppy is free and open-source software.
+
+Public releases through 0.12.6 remain available under MIT. The approved license for the first relicensed release and subsequent releases is `GPL-3.0-only`.
 
 The project benefits from the open-source ecosystem and should participate in that ecosystem responsibly.
 
 Therefore:
 
 - respect upstream licenses;
-- preserve required notices;
+- preserve required notices and source obligations;
 - credit deliberately used third-party libraries;
+- verify GPL-3.0-only compatibility before adopting new external material;
 - keep attribution discoverable;
 - avoid disguising upstream work as Query Puppy's own;
-- prefer transparent dependency choices;
-- keep redistributed software legally and technically understandable.
+- keep redistributed software legally and technically understandable;
+- preserve an exact source-to-release-artifact mapping for GPL releases;
+- describe GPL permissions and obligations accurately.
 
-FLOSS is not merely a distribution license for Query Puppy.
+Strong copyleft is intended to preserve software freedoms for redistributed covered versions, not to prohibit commercial use.
 
-It is also a responsibility toward the projects on which Query Puppy builds.
+FLOSS is not merely a distribution label for Query Puppy. It is a responsibility toward users, contributors, and the projects on which Query Puppy builds.
 
 ---
 
-## 74. Mission
+## 74. Sustainability principle
+
+Query Puppy does not sell access to software features.
+
+The project may receive voluntary individual or organizational sponsorship to support development time, infrastructure, project costs, and development tools.
+
+Sponsorship does not buy features, support/SLA commitments, roadmap priority, sponsor-exclusive functionality, proprietary license rights, governance rights, or influence over technical decisions.
+
+The goal is sustainable independent development rather than revenue maximization.
+
+---
+
+## 75. Mission
 
 > Make native T-SQL development in Visual Studio Code and VSCodium intelligent, productive, and reliable enough that commercial SQL coding-assistance tools become unnecessary for many SQL Server developers.
