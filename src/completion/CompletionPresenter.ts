@@ -155,6 +155,13 @@ export function documentation(
       );
       return md;
     }
+    if (relationship.provenance === RelationshipProvenance.HeuristicCandidate) {
+      md.appendMarkdown("**Suggested relationship**\n\n");
+      md.appendMarkdown(
+        `Relationship: \`${relationship.source.database}.${relationship.source.schema}.${relationship.source.objectName}\`  \n→ \`${relationship.target.database}.${relationship.target.schema}.${relationship.target.objectName}\`\n\nMappings:\n${relationship.mappings.map((mapping) => `- \`${mapping.sourceColumnName}\` → \`${mapping.targetColumnName}\``).join("\n")}\n\nEvidence:\n${relationship.evidence.map(heuristicEvidenceDocumentation).join("\n")}\n\nConfidence: **Candidate**.\n\nThis is a heuristic Query Puppy suggestion, not a SQL Server foreign key. Accepting it inserts the predicate only; it does not confirm or persist a relationship.\n`,
+      );
+      return md;
+    }
     const userConfirmed =
       relationship.provenance === RelationshipProvenance.UserConfirmed;
     md.appendMarkdown(
@@ -218,6 +225,25 @@ export function documentation(
   if (candidate.baseObjectName)
     md.appendMarkdown(`\nBase object: \`${candidate.baseObjectName}\`\n`);
   return md;
+}
+
+function heuristicEvidenceDocumentation(
+  evidence: import("../relationships/RelationshipModels.js").HeuristicRelationshipEvidence,
+): string {
+  if (evidence.kind === "completeTargetKey") {
+    const keyKind =
+      evidence.keyKind === "primaryKey"
+        ? "primary key"
+        : evidence.keyKind === "uniqueConstraint"
+          ? "unfiltered unique constraint"
+          : "unfiltered unique index";
+    return `- Target columns form the complete ${keyKind} \`${evidence.keyName}\`.`;
+  }
+  if (evidence.kind === "compatibleTypes")
+    return `- Every source/target mapping has known compatible SQL types (${evidence.mappings.map((mapping) => `\`${mapping.sourceColumnName}\` → \`${mapping.targetColumnName}\`: ${mapping.compatibility}`).join(", ")}).`;
+  if (evidence.kind === "targetAwareColumnName")
+    return `- \`${evidence.sourceColumnName}\` deterministically combines target name \`${evidence.targetNameForm}\` with target key column \`${evidence.targetColumnName}\` for \`${evidence.targetObjectName}\`.`;
+  return `- Same-name context mapping${evidence.mappings.length === 1 ? "" : "s"} ${evidence.mappings.map((mapping) => `\`${mapping.sourceColumnName}\` → \`${mapping.targetColumnName}\``).join(", ")} complete${evidence.mappings.length === 1 ? "s" : ""} the composite target key.`;
 }
 
 function appendPhysicalColumnDocumentation(

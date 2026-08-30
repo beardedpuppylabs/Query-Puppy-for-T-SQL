@@ -42,14 +42,18 @@ architecture documents describe the intended present-day design.
   complete; counts survive editor/extension lifecycle noise
 - Relationship Intelligence Phase E2 learned relationship candidate policy —
   complete; qualifying local evidence enters the canonical runtime graph
+- Relationship Intelligence Phase E3 conservative heuristic JOIN candidates —
+  complete; bounded fallback applies only to already-selected physical pairs
 
-0.12.5 completes Phase E2 by resolving three or more independently deduplicated JOIN
-observations as local LearnedFromQuery/StrongEvidence candidates against current
-canonical metadata. The candidates reuse the one runtime graph and existing JOIN
-consumers below declared FK, UserConfirmed, and ProjectDefined trust. Completion
-acceptance remains non-confirming; the existing explicit save-JOIN action is the only
-promotion path to UserConfirmed project truth. Navigation & Code Understanding remains
-a larger forward-roadmap area.
+0.12.6 completes Phase E3 by adding zero-or-one conservative
+HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
+The pure policy requires one complete unfiltered target PK/UQ, known compatible types,
+an exact target-aware object-plus-key name, a complete unambiguous mapping, and no
+stronger relationship for the pair. It reuses the canonical Relationship and JOIN
+renderer without entering the global graph, persistence, table discovery, or ranking.
+Completion acceptance remains non-confirming; the existing explicit save-JOIN action
+is the only promotion path to UserConfirmed project truth. Navigation & Code
+Understanding remains a larger forward-roadmap area.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 
@@ -179,6 +183,40 @@ compatibility tradeoffs, not candidate confidence policy.
 Phase E2 does not add heuristics, guessed name/type relationships, remote services,
 Query Store/plan-cache/query-history mining, confidence scoring, rejection learning,
 automatic confirmation, a relationship editor, or navigation.
+
+## Relationship Intelligence Phase E3 — conservative heuristic JOIN candidates
+
+- [x] Add one pure pair-bounded policy receiving two already-resolved physical tables;
+      never parse SQL, scan all object pairs, query metadata, or access persistence.
+- [x] Require exactly one complete primary key, unfiltered unique constraint, or
+      unfiltered unique-index mapping on the target side.
+- [x] Require known compatible normalized SQL types for every mapping and at least one
+      exact target-object-plus-key-column source name, with only a narrow trailing-`s`
+      target variant.
+- [x] Allow same-name ERP tenant/context columns only to complete a composite target key
+      beside target-aware evidence; never infer from same names/types/keys alone.
+- [x] Fail closed for incomplete/stale/unknown/filtered metadata, multiple qualifying
+      keys, multiple target-aware assignments, both qualifying directions, self pairs,
+      and multiple heuristic relationships for a pair.
+- [x] Suppress heuristic fallback whenever any declared FK, UserConfirmed,
+      ProjectDefined, or LearnedFromQuery relationship already connects the pair.
+- [x] Materialize HeuristicCandidate/Candidate with structured evaluated evidence and
+      no physical FK details, then reuse the existing predicate renderer.
+- [x] Present **Heuristic relationship JOIN**, Candidate confidence, mappings, evidence,
+      non-FK status, and insertion-only/non-persistent acceptance.
+- [x] Keep heuristics outside DatabaseIndex overlays, metadata/project/evidence storage,
+      object discovery/ranking, comparison ranking, navigation, diagnostics, and
+      multi-hop paths.
+- [x] Reuse **Save JOIN as Query Puppy relationship** for explicit promotion to
+      UserConfirmed; add no automatic confirmation or second workflow.
+- [x] Add positive PK/UQ/composite, mandatory false-positive, ambiguity, stronger-source,
+      no-persistence, source-boundary, provider, presentation, and activated Extension
+      Host promotion coverage.
+
+Phase E3 does not add global relationship/table discovery, heuristic source ranking,
+fuzzy or AI matching, settings/scores, rejection persistence, Query Store/plan-cache
+mining, cross-database inference, self-relationship heuristics, navigation, diagnostics,
+or multi-hop paths.
 
 ## P0 Connection Resilience Stage 1
 

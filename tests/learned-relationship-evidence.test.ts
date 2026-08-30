@@ -364,6 +364,7 @@ test("declared FK and confirmed relationship provenances are known evidence iden
           ...shared,
           provenance,
           confidence: RelationshipConfidence.Candidate,
+          evidence: [],
         };
     }
   };

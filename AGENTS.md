@@ -726,6 +726,19 @@ promote the resolved edge to UserConfirmed project knowledge. Learned relationsh
 must be presented as learned StrongEvidence from repeated JOIN usage and explicitly not
 as SQL Server foreign keys. Internal occurrence fingerprints never enter presentation.
 
+Phase E3 admits HeuristicCandidate/Candidate only as a transient fallback for JOIN
+predicate completion after both physical tables are already selected. The pure policy
+evaluates only that bounded pair and requires one complete unfiltered target PK/UQ,
+known compatible types for every mapping, at least one exact target-object-plus-key
+naming signal, and an unambiguous full mapping. Same-name columns may only complete a
+composite key beside the target-aware signal. Multiple qualifying keys, mappings, or
+directions fail closed. Any declared FK, UserConfirmed, ProjectDefined, or
+LearnedFromQuery relationship between the pair suppresses the heuristic candidate.
+Heuristics never enter metadata/project/evidence persistence, global relationship
+indexes, table discovery/ranking, comparison ranking, navigation, diagnostics, or
+multi-hop discovery. Acceptance inserts SQL only; explicit save-JOIN remains the sole
+promotion path.
+
 ## JOIN semantics
 
 JOIN visibility is positional.
@@ -734,9 +747,10 @@ A future RowSource must not be visible in an earlier ON condition.
 
 Current JOIN intelligence uses enabled authoritative declared-FK, confirmed
 UserConfirmed, confirmed ProjectDefined, and qualifying LearnedFromQuery relationships
-from the canonical relationship graph. Explicit trust order is declared FK,
-UserConfirmed, ProjectDefined, then LearnedFromQuery. Heuristic sources remain
-excluded.
+from the canonical relationship graph, plus a contextual HeuristicCandidate fallback
+for the already-selected physical pair. Explicit trust order is declared FK,
+UserConfirmed, ProjectDefined, LearnedFromQuery, then HeuristicCandidate. Heuristics do
+not participate in JOIN source discovery or relationship-aware source/member ranking.
 
 Do not infer an FK merely because names or datatypes match.
 
@@ -905,8 +919,8 @@ same-named objects.
 
 Physical FK roles and constraint documentation must use actual SQL Server catalog
 metadata. Never relabel same-name/type guesses or provenance-tagged logical
-relationships as foreign keys. No learned or heuristic relationship source is active
-until explicitly implemented and tested by a later phase.
+relationships as foreign keys. Learned and heuristic sources must retain their explicit
+non-FK provenance, confidence, scope, and persistence boundaries.
 
 ## Presentation must not affect semantics
 

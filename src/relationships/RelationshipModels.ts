@@ -74,9 +74,40 @@ export interface LearnedFromQueryRelationship extends RelationshipCore {
   readonly declaredForeignKey?: never;
 }
 
+export type HeuristicRelationshipEvidence =
+  | {
+      readonly kind: "completeTargetKey";
+      readonly keyKind: "primaryKey" | "uniqueConstraint" | "uniqueIndex";
+      readonly keyName: string;
+    }
+  | {
+      readonly kind: "compatibleTypes";
+      readonly mappings: readonly {
+        readonly sourceColumnName: string;
+        readonly targetColumnName: string;
+        readonly compatibility: "exact" | "sameBaseType" | "compatibleFamily";
+      }[];
+    }
+  | {
+      readonly kind: "targetAwareColumnName";
+      readonly sourceColumnName: string;
+      readonly targetColumnName: string;
+      readonly targetObjectName: string;
+      readonly targetNameForm: string;
+    }
+  | {
+      readonly kind: "compositeContextMatch";
+      readonly mappings: readonly {
+        readonly sourceColumnName: string;
+        readonly targetColumnName: string;
+      }[];
+    };
+
 export interface HeuristicCandidateRelationship extends RelationshipCore {
   readonly provenance: typeof RelationshipProvenance.HeuristicCandidate;
   readonly confidence: typeof RelationshipConfidence.Candidate;
+  /** Deterministic structural reasons evaluated by the heuristic policy. */
+  readonly evidence: readonly HeuristicRelationshipEvidence[];
   readonly declaredForeignKey?: never;
 }
 
@@ -149,23 +180,25 @@ export type ProductionRelationship =
   | DeclaredForeignKeyRelationship
   | UserConfirmedRelationship
   | ProjectDefinedRelationship
-  | LearnedFromQueryRelationship;
+  | LearnedFromQueryRelationship
+  | HeuristicCandidateRelationship;
 
 /**
  * Returns the explicit trust tier used by production relationship consumers.
- * Future provenances remain excluded until their own production workflow exists.
+ * Source-specific boundaries still decide which consumers may receive each provenance.
  */
 export function productionRelationshipRank(
   relationship: Relationship,
 ): number | undefined {
-  if (isEnabledDeclaredForeignKeyRelationship(relationship)) return 0;
+  if (isDeclaredForeignKeyRelationship(relationship))
+    return relationship.declaredForeignKey.disabled ? undefined : 0;
   if (relationship.provenance === RelationshipProvenance.UserConfirmed)
     return 1;
   if (relationship.provenance === RelationshipProvenance.ProjectDefined)
     return 2;
   if (relationship.provenance === RelationshipProvenance.LearnedFromQuery)
     return 3;
-  return undefined;
+  return 4;
 }
 
 export function isProductionRelationship(

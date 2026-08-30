@@ -219,6 +219,7 @@ promises.
 | Workspace ProjectDefined relationships, validation, isolation, and JOIN use          | Implemented                      | `project-relationships.test.ts`, `feature-contracts.test.ts`, and activated Extension Host contracts          |
 | Explicit resolved-JOIN save as UserConfirmed, persistence, and reuse                 | Implemented                      | `resolved-join-relationship.test.ts`, `project-relationships.test.ts`, and activated Extension Host contracts |
 | Learned JOIN evidence acquisition and candidate policy                               | Implemented                      | `learned-relationship-candidates.test.ts` and activated Extension Host contracts                              |
+| Conservative pair-bounded heuristic JOIN predicate candidates                        | Implemented                      | `heuristic-relationship-candidates.test.ts`, source contracts, and activated Extension Host contracts         |
 | Same-named objects across schemas/databases                                          | Implemented                      | `schema-intelligence.test.ts` database-index contract                                                         |
 | FK-aware JOIN predicates, multiple FKs, and composite FKs                            | Implemented                      | `join-intelligence.test.ts` FK predicate contracts                                                            |
 | Relationship ranking after Contains                                                  | Implemented                      | `join-intelligence.test.ts` — relationship ranking contract                                                   |
@@ -636,8 +637,8 @@ Protect the explicit UserConfirmed workflow with:
   RowSources, unrelated ranges, cross-database endpoints, and exact existing edges
 - version-1 creation/appending, absent-provenance backward compatibility, invalid-file
   refusal, deterministic mapping persistence, and no fabricated FK details
-- explicit production order: declared FK, UserConfirmed, ProjectDefined,
-  LearnedFromQuery; heuristic provenance remains excluded
+- explicit persistent/project order: declared FK, UserConfirmed, ProjectDefined,
+  LearnedFromQuery; heuristic provenance cannot be persisted or loaded by this boundary
 - activated native Code Action registration, file creation in a disposable workspace,
   cache invalidation/reload, subsequent JOIN reuse, unsafe-predicate absence,
   declared-FK duplicate suppression, and untitled-document refusal
@@ -704,6 +705,39 @@ The learning setting/clear command and source-boundary sentinel live in
 `feature-contracts.test.ts`. The threshold is product-owned and must not become a
 setting. Candidate resolution must not add a per-keystroke disk parse, catalog load, or
 parallel relationship graph.
+
+## Heuristic relationship candidate tests
+
+Phase E3 tests protect precision before recall. The pure policy receives exactly two
+already-resolved physical tables and must return zero or one transient
+HeuristicCandidate/Candidate. Focused tests cover:
+
+- exact `CustomerId -> Customers.Id` target-aware naming and the deliberately narrow
+  single trailing-`s` form
+- complete single-column PK and unfiltered UQ targets
+- complete composite targets with same-name tenant/context components only beside a
+  target-aware mapping
+- deterministic structured evidence and explicit trust rank below LearnedFromQuery
+- same-name-only, same-type-only, identical-PK, identical composite-PK, classic
+  `Preislisten`/`PreislistenArtikel`, incomplete composite, incompatible/unknown type,
+  missing key/column, filtered uniqueness, self-pair, ambiguous target-key, ambiguous
+  source-assignment, and bidirectional ambiguity rejection
+- whole-pair suppression by declared FK, UserConfirmed, ProjectDefined, or
+  LearnedFromQuery truth
+- canonical predicate rendering and native **Heuristic relationship JOIN** detail and
+  documentation without fabricated FK metadata
+- completion acceptance causing no project/evidence persistence and explicit save-JOIN
+  promotion producing UserConfirmed truth
+- unchanged FROM/JOIN object discovery and related-table ranking
+- a source contract proving the policy does not scan `DatabaseIndex.objects`, load
+  metadata, access storage, or enter learned/project persistence
+
+Activated Extension Host coverage uses controlled physical table/key metadata with no
+stronger relationship. It proves one composite heuristic predicate, Candidate evidence
+presentation, identical-key false-positive rejection, stronger relationship
+suppression, insertion-only acceptance, and promotion through the existing native
+save-JOIN action in a disposable workspace. The promoted UserConfirmed relationship
+must replace the fallback while learned evidence remains unchanged.
 
 ## DML target tests
 

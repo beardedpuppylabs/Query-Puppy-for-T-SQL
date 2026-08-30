@@ -441,9 +441,11 @@ canonical semantic relationships are separate layers:
         -> project definition validation/resolution
     extension-managed learned evidence
         -> fixed threshold + current-metadata candidate resolution
+    current JOIN physical endpoint pair
+        -> conservative transient heuristic candidate policy
     all qualifying sources
         -> canonical Relationship
-        -> one DatabaseIndex relationship graph
+        -> one DatabaseIndex relationship graph or bounded JOIN consumer
 
 Every canonical relationship contains:
 
@@ -471,8 +473,9 @@ ProjectDefined/Confirmed relationships. It also admits local
 LearnedFromQuery/StrongEvidence candidates only after the Phase E2 policy resolves at
 least three independently deduplicated observations against current canonical
 metadata. Logical relationships never receive physical FK details and are presented
-as relationships rather than constraints. Heuristic sources remain excluded. Never
-infer or label a foreign key from matching names or datatypes.
+as relationships rather than constraints. A contextual HeuristicCandidate/Candidate
+may enter only JOIN predicate completion under the Phase E3 policy below. Never infer
+or label a foreign key from matching names or datatypes.
 
 Persistent snapshots continue storing canonical SQL Server catalog metadata,
 including physical FK records. Project relationships live separately in the owning
@@ -625,6 +628,42 @@ Accepting a learned completion changes only SQL text. Explicit invocation of **S
 JOIN as Query Puppy relationship** is still required to create UserConfirmed project
 truth. That stronger exact edge suppresses the learned candidate immediately.
 
+## Conservative heuristic relationship candidates
+
+Phase E3 adds a pure, runtime-only policy for one pair of physical tables already
+resolved by the active JOIN scope:
+
+    current right physical RowSource + one visible left physical RowSource
+        -> complete eligible target-key evaluation in either direction
+        -> zero or one HeuristicCandidate/Candidate Relationship
+        -> existing ordered JOIN predicate renderer
+
+The policy does not parse SQL, query the catalog, read or write files, inspect learned
+evidence, or iterate database objects. It receives the exact pair from existing
+QueryScope/RowSource resolution. It considers canonical primary keys, unfiltered unique
+constraints, and unfiltered unique indexes. A proposal requires the complete target key,
+known non-incompatible normalized SQL types for every component, and at least one exact
+target-aware source name formed as target object name plus target key-column name. A
+single conservative trailing `s` form supports `CustomerId -> Customers.Id`; there is
+no general singularization, fuzzy matching, stemming, or synonym inference.
+
+Same-name mappings such as `CompanyId -> CompanyId` are context only: they may complete
+a composite target key when another component supplies target-aware evidence, but they
+never create a relationship alone. Multiple qualifying target keys, multiple
+target-aware source assignments, both qualifying directions, missing/unknown metadata,
+incomplete composite keys, filtered uniqueness, and self-table pairs all fail closed.
+If any declared-FK, UserConfirmed, ProjectDefined, or LearnedFromQuery relationship
+already connects the pair, no heuristic fallback is produced.
+
+The result carries structured evidence for the complete key, known type compatibility,
+target-aware mapping, and any composite context mappings. It is passed directly to the
+same canonical JOIN predicate consumer and is never installed in `DatabaseIndex`.
+Consequently it cannot affect FROM/JOIN object discovery, related-object ranking,
+comparison ranking, navigation, diagnostics, or unrelated documents. It is not written
+to SQL snapshots, `.query-puppy/relationships.json`, or learned evidence. Completion
+acceptance inserts text only; the existing explicit save-JOIN action can later persist
+the concrete resolved predicate as UserConfirmed project knowledge.
+
 ## Relationship graph and indexes
 
 There is one canonical runtime relationship graph. A relationship is stored once;
@@ -644,9 +683,11 @@ Relationship-aware completion must avoid full-database scans per keystroke.
 JOIN predicate suggestions are generated from enabled authoritative declared FKs,
 confirmed UserConfirmed relationships, confirmed ProjectDefined relationships, and
 qualifying LearnedFromQuery/StrongEvidence relationships in the canonical runtime
-graph. Explicit trust order is declared FK, UserConfirmed, ProjectDefined, then
-LearnedFromQuery. Exact logical duplicates collapse, and any stronger exact relationship
-wins; distinct mappings between the same pair remain distinct.
+graph. When none of those sources connects the already-selected physical pair, the
+bounded Phase E3 policy may add one HeuristicCandidate/Candidate to this same predicate
+consumer. Explicit trust order is declared FK, UserConfirmed, ProjectDefined,
+LearnedFromQuery, then HeuristicCandidate. Exact logical duplicates collapse, and any
+stronger pair relationship suppresses heuristic fallback.
 
 A relationship may generate a complete expression such as:
 
@@ -660,6 +701,7 @@ Composite relationships may generate:
 Multiple declared FKs between the same objects remain separate candidates.
 
 JOIN source ranking may boost related objects but must preserve Contains filtering.
+Heuristic candidates never participate in JOIN source ranking.
 
 ## Positional SQL visibility
 

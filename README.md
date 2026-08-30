@@ -4,7 +4,7 @@ Query Puppy for T-SQL is context-aware SQL Server IntelliSense for large and com
 
 Query Puppy for T-SQL itself is free and open-source software under the [MIT License](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/LICENSE). [Source code, issues, and development](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL) are hosted publicly on GitHub.
 
-In a schema with hundreds or thousands of objects, remembering part of a name should be enough to find it. Types and real schema relationships help rank the most useful suggestions, and actual foreign keys can construct `JOIN` predicates. The extension provides its own completion provider while reusing the active Microsoft SQL Server (`mssql`) connection—there is no second login or separate connection configuration.
+In a schema with hundreds or thousands of objects, remembering part of a name should be enough to find it. Types and trustworthy schema relationships help rank the most useful suggestions, and relationship intelligence can construct `JOIN` predicates. The extension provides its own completion provider while reusing the active Microsoft SQL Server (`mssql`) connection—there is no second login or separate connection configuration.
 
 ## Highlights
 
@@ -12,7 +12,7 @@ In a schema with hundreds or thousands of objects, remembering part of a name sh
 - Context- and query-scope-aware completion
 - Type-aware ranking that keeps legal alternatives available
 - PK, UQ, and FK metadata on physical columns
-- JOIN predicates and comparison ranking based on actual foreign keys, explicit project relationships, user-confirmed JOINs, and qualifying learned evidence
+- JOIN predicates based on actual foreign keys, explicit project relationships, user-confirmed JOINs, qualifying learned evidence, and conservative pair-bounded heuristic fallback
 - Local, privacy-conscious acquisition of resolved JOIN evidence on document save
 - Built-in and catalog function completion, typing, and Signature Help
 - Smart Alias and Tab-only wildcard productivity features
@@ -310,12 +310,37 @@ occurrence fingerprints, the first eligible save after upgrade may contribute on
 
 An observation identical to a declared FK, ProjectDefined relationship, or
 UserConfirmed relationship is excluded and any matching local evidence is removed.
-No heuristic, Query Store, plan-cache, query-history, telemetry, remote service, or
-query-execution hook participates. Stale objects, missing columns, incompatible types,
-and cross-database mappings fail closed when evidence is resolved against current
-metadata. Accepting a learned completion is not confirmation and writes no project
-file. Use **Save JOIN as Query Puppy relationship** to explicitly promote a resolved
-JOIN to UserConfirmed project knowledge.
+No heuristic participates in learned-evidence acquisition. Query Store, plan-cache,
+query history, telemetry, remote services, and query-execution hooks are also absent.
+Stale objects, missing columns, incompatible types, and cross-database mappings fail
+closed when evidence is resolved against current metadata. Accepting a learned
+completion is not confirmation and writes no project file. Use **Save JOIN as Query
+Puppy relationship** to explicitly promote a resolved JOIN to UserConfirmed project
+knowledge.
+
+## Conservative heuristic JOIN candidates
+
+When both physical tables are already present in a JOIN, Query Puppy may offer one
+**Heuristic relationship JOIN** predicate as a last-resort fallback. It does not use
+heuristics to discover tables or rank JOIN targets.
+
+A heuristic candidate appears only when one direction has exactly one complete
+unfiltered target primary/unique key mapping, every component has known compatible SQL
+types, at least one source column exactly combines the target object name with the
+target key-column name (for example `CustomerId -> Customers.Id`), and the result is
+unambiguous. A same-name tenant/context mapping such as `CompanyId -> CompanyId` may
+complete a composite key only when another component supplies that target-aware signal.
+Incomplete keys, filtered uniqueness, identical key names alone, incompatible or
+unknown types, multiple plausible assignments, and difficult ERP naming intentionally
+produce no suggestion.
+
+The candidate is visibly marked **Candidate** and its documentation lists the exact
+structural evidence. It is not a SQL Server FK or confirmed relationship. It is
+calculated only for the current physical pair, is not persisted to metadata snapshots,
+project relationships, or learned evidence, and disappears when current metadata no
+longer supports it. Accepting it inserts only the predicate. The developer may then
+explicitly invoke **Save JOIN as Query Puppy relationship** to persist the resolved
+JOIN as UserConfirmed project knowledge.
 
 ## Query-local intelligence
 
@@ -466,8 +491,8 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 - Type inference is conservative. Unnamed computed projections may be omitted, and recursive CTE/set-branch type reconciliation is best-effort.
 - Type-aware ranking does not implement SQL Server's complete conversion and datatype-precedence engine. Built-in intelligence is intentionally limited to the documented supported set rather than a complete SQL Server function catalog.
 - Stored-procedure result-set discovery is not performed, so the extension does not fabricate procedure result columns.
-- JOIN predicates require a real enabled FK, an explicit valid project relationship, or qualifying repeated resolved-JOIN evidence. The extension does not infer relationships from naming conventions or similar datatypes.
-- Learned candidates require three independently deduplicated eligible occurrences. They remain local StrongEvidence rather than SQL Server FKs or explicit project truth; there is no rejection model, heuristic discovery, relationship editor, or navigation feature yet.
+- Heuristic JOIN predicates are deliberately narrow: they apply only after both physical tables are selected, require complete key/type/name evidence, and fail closed for ambiguous or unfamiliar naming. They do not discover or rank tables.
+- Learned candidates require three independently deduplicated eligible occurrences. They remain local StrongEvidence rather than SQL Server FKs or explicit project truth; there is no rejection model, relationship editor, or navigation feature yet.
 - Project relationship format version 1 supports same-database tables only and binds by workspace folder plus database name; cross-database project edges and stable cross-server identities are not yet supported.
 - Background refresh replaces a complete snapshot rather than applying incremental schema changes. A recent DDL change may remain absent until refresh completes; run **Query Puppy for T-SQL: Refresh Schema Metadata** when immediate discovery is needed.
 - Completion detail width is controlled by the native Suggest Widget and may be truncated in narrow layouts.

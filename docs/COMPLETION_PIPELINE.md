@@ -393,16 +393,31 @@ physical column members. They retain their canonical relationship, including
 provenance and confidence, rather than carrying the physical catalog record or
 project definition as a parallel semantic edge.
 
-At an empty relevant ON position, a declared-FK, explicit project relationship, or
-qualifying learned relationship predicate may outrank ordinary column expressions.
+At an empty relevant ON position, a declared-FK, explicit project relationship,
+qualifying learned relationship, or bounded heuristic relationship predicate may
+outrank ordinary column expressions.
 Trust order is DeclaredForeignKey/Authoritative, UserConfirmed/Confirmed,
-ProjectDefined/Confirmed, then LearnedFromQuery/StrongEvidence. Native
+ProjectDefined/Confirmed, LearnedFromQuery/StrongEvidence, then
+HeuristicCandidate/Candidate. Native
 detail/documentation distinguishes `FK JOIN`, `User-confirmed relationship JOIN`,
-`Project relationship JOIN`, and `Learned relationship JOIN`; logical relationship
-documentation lists the explicit mappings and states that it is not a SQL Server
-foreign key. Learned documentation also explains repeated JOIN usage and shows the
-aggregate observation count and StrongEvidence confidence, never internal occurrence
-fingerprints.
+`Project relationship JOIN`, `Learned relationship JOIN`, and
+`Heuristic relationship JOIN`; logical relationship documentation lists the explicit
+mappings and states that it is not a SQL Server foreign key. Learned documentation also
+explains repeated JOIN usage and shows the aggregate observation count and
+StrongEvidence confidence, never internal occurrence fingerprints. Heuristic
+documentation shows the actual complete-key, compatible-type, target-aware-name, and
+composite-context evidence evaluated by the policy, Candidate confidence, and the fact
+that acceptance neither confirms nor persists it.
+
+Heuristic predicate generation is invoked only here, after the current right and one
+visible left RowSource have resolved to physical tables in the same `DatabaseIndex`.
+The pure policy considers that pair in both directions and returns zero or one canonical
+Relationship. It requires exactly one complete qualifying unfiltered PK/UQ mapping,
+known compatible types, at least one exact target-object-plus-key-column source name,
+and no ambiguity. Same-name columns may complete a composite key only beside the
+target-aware mapping. Any stronger relationship for the pair suppresses the fallback.
+The result uses the existing predicate renderer; there is no heuristic-specific JOIN
+parser or generator.
 
 Type-aware member ranking applies normally once the developer explicitly writes an
 operand such as:
@@ -431,7 +446,8 @@ or catalog replacement. The CandidateFactory consumes the resulting canonical
 `Relationship` exactly like other relationship sources and never reads evidence files.
 Accepting a CompletionItem does not persist or confirm the edge.
 
-Heuristic candidates remain excluded.
+Heuristic candidates remain excluded from JOIN source candidates and related-object
+ranking. They are evaluated only after both endpoint tables have already been selected.
 
 Contains filtering remains intact.
 

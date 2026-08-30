@@ -296,8 +296,10 @@ the current physical index, and reapplied as ProjectDefined/Confirmed or explici
 saved UserConfirmed/Confirmed relationships after cache hydration or refresh. It is
 not stored in the physical metadata snapshot. The native save-JOIN Code Action writes
 only direct equality mappings after explicit user acceptance. Qualifying local
-LearnedFromQuery relationships are runtime-only production inputs below project trust;
-heuristic relationships remain excluded. See
+LearnedFromQuery relationships are runtime-only production inputs below project trust.
+HeuristicCandidate relationships are an even lower-trust, transient input only to JOIN
+predicate completion for an already-selected physical pair; they never enter the
+workspace/global graph overlays or source ranking. See
 [Architecture](ARCHITECTURE.md#relationship-intelligence).
 
 Use **Query Puppy for T-SQL: Open Project Relationships** to create or open the file
@@ -376,6 +378,22 @@ not retain raw SQL or credentials, and performs no per-keystroke store write. Ca
 tests must prove the fixed 3-observation boundary, current-metadata fail-closed behavior,
 cached workspace overlay invalidation, explicit trust order, non-FK presentation, and
 promotion only through the existing save-JOIN Code Action.
+
+## Testing conservative heuristic JOIN candidates
+
+Phase E3 is an editor-neutral metadata policy plus existing provider integration. Run
+its focused policy/provider/false-positive suite with:
+
+```bash
+node --import tsx --test tests/heuristic-relationship-candidates.test.ts tests/relationship-model.test.ts
+```
+
+The policy must receive one known physical pair; tests must not precompute or
+materialize all table pairs. Keep positive composite coverage and the full negative
+suite together because false-positive behavior is the primary safety contract. `npm
+run test:extension` verifies native detail/documentation and the disposable-workspace
+UserConfirmed promotion path. No live SQL fixture, DDL, catalog query, setting, or
+persisted heuristic record is required.
 
 ## Completion architecture
 

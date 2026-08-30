@@ -345,7 +345,7 @@ test("contract: learned JOIN candidates use the local cached evidence policy bou
       };
     };
   };
-  assert.equal(manifest.version, "0.12.5");
+  assert.equal(manifest.version, "0.12.6");
   assert.equal(
     manifest.contributes?.commands?.some(
       (command) =>
@@ -413,4 +413,64 @@ test("contract: learned JOIN candidates use the local cached evidence policy bou
       await readFile(productionConsumer, "utf8"),
       /LearnedRelationshipEvidenceStore|WorkspaceLearnedRelationshipEvidence/,
     );
+});
+
+test("contract: heuristic relationships are bounded transient JOIN-predicate candidates", async () => {
+  const policySource = await readFile(
+    "src/relationships/HeuristicRelationshipCandidatePolicy.ts",
+    "utf8",
+  );
+  assert.match(policySource, /resolveHeuristicRelationshipCandidate/);
+  assert.match(policySource, /proposals\.length !== 1/);
+  assert.match(policySource, /completeTargetKey/);
+  assert.match(policySource, /compatibleTypes/);
+  assert.match(policySource, /targetAwareColumnName/);
+  assert.match(policySource, /compositeContextMatch/);
+  assert.doesNotMatch(
+    policySource,
+    /index\.objects|for \(const .* of index\.metadata\.objects/,
+  );
+  assert.doesNotMatch(
+    policySource,
+    /node:fs|vscode|EvidenceStore|ProjectRelationshipConfig|MetadataLoader|MetadataBackend|listDatabases|ensureLoaded/,
+  );
+
+  const candidateSource = await readFile(
+    "src/completion/CandidateFactory.ts",
+    "utf8",
+  );
+  assert.match(
+    candidateSource,
+    /joinPredicateCandidates[\s\S]*resolveHeuristicRelationshipCandidate/,
+  );
+  assert.doesNotMatch(
+    await readFile("src/metadata/DatabaseIndex.ts", "utf8"),
+    /HeuristicRelationshipCandidatePolicy/,
+  );
+  assert.doesNotMatch(
+    await readFile(
+      "src/relationships/WorkspaceLearnedRelationshipEvidence.ts",
+      "utf8",
+    ),
+    /HeuristicRelationshipCandidatePolicy|HeuristicCandidate/,
+  );
+  const projectSchema = await readFile(
+    "schemas/project-relationships.schema.json",
+    "utf8",
+  );
+  assert.doesNotMatch(projectSchema, /heuristicCandidate/);
+
+  const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
+    readonly contributes?: {
+      readonly configuration?: {
+        readonly properties?: Record<string, unknown>;
+      };
+    };
+  };
+  assert.equal(
+    Object.keys(manifest.contributes?.configuration?.properties ?? {}).some(
+      (key) => /heuristic/i.test(key),
+    ),
+    false,
+  );
 });

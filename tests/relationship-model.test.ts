@@ -207,6 +207,7 @@ test("future relationship provenances remain explicit and cannot fabricate FK de
     ...relationshipCore,
     provenance: RelationshipProvenance.HeuristicCandidate,
     confidence: RelationshipConfidence.Candidate,
+    evidence: [],
   };
   const futureRelationships: readonly Relationship[] = [
     projectDefined,
@@ -232,7 +233,7 @@ test("future relationship provenances remain explicit and cannot fabricate FK de
   assert.equal(invalidHeuristicAuthority, heuristic);
 });
 
-test("contract: explicit and qualifying learned relationships enter production while heuristic sources stay excluded", () => {
+test("contract: production relationship trust order is explicit through heuristic Candidate", () => {
   const projectDefined: ProjectDefinedRelationship = {
     ...relationshipCore,
     provenance: RelationshipProvenance.ProjectDefined,
@@ -285,6 +286,7 @@ test("contract: explicit and qualifying learned relationships enter production w
     ...relationshipCore,
     provenance: RelationshipProvenance.HeuristicCandidate,
     confidence: RelationshipConfidence.Candidate,
+    evidence: [],
   };
   const heuristicIndex = new DatabaseIndex({ ...metadata, foreignKeys: [] }, [
     heuristic,
@@ -293,14 +295,18 @@ test("contract: explicit and qualifying learned relationships enter production w
     createCandidates(resolveSqlContext(sql), heuristicIndex).some(
       (candidate) => candidate.kind === "joinPredicate",
     ),
-    false,
+    true,
   );
 
   const declaredRelationship = relationshipFromForeignKey(foreignKey);
   assert.deepEqual(
-    [declaredRelationship, userConfirmed, projectDefined, learned].map(
-      productionRelationshipRank,
-    ),
-    [0, 1, 2, 3],
+    [
+      declaredRelationship,
+      userConfirmed,
+      projectDefined,
+      learned,
+      heuristic,
+    ].map(productionRelationshipRank),
+    [0, 1, 2, 3, 4],
   );
 });

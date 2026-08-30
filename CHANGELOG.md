@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 0.12.6
+
+- Added deliberately conservative heuristic JOIN predicate candidates for pairs of
+  physical tables already selected in the active `JOIN ... ON` context. This does not
+  perform table discovery or database-wide relationship inference.
+- Required one complete unfiltered target PK/UQ, known compatible SQL types, an exact
+  target-aware object-name-plus-key-column signal, and an unambiguous full mapping.
+  Same-name context columns may only complete a composite key beside that stronger
+  signal; uncertain and ambiguous shapes fail closed.
+- Added `HeuristicCandidate`/`Candidate` to the explicit trust order below declared
+  FKs, UserConfirmed, ProjectDefined, and LearnedFromQuery relationships. Any stronger
+  relationship for the selected table pair suppresses the heuristic fallback.
+- Added native **Heuristic relationship JOIN** presentation with complete mappings,
+  structured evaluated evidence, Candidate confidence, and explicit non-FK and
+  non-persistence wording.
+- Kept heuristic results transient and JOIN-predicate-only. Accepting one inserts SQL
+  text without changing project relationships or learned evidence; the existing
+  **Save JOIN as Query Puppy relationship** action remains the only promotion path to
+  UserConfirmed project knowledge.
+- Added positive single/composite/UQ tests, mandatory false-positive and ambiguity
+  regressions, bounded-source contracts, and activated Extension Host coverage for
+  presentation, stronger-source suppression, and explicit promotion.
+
 ## 0.12.5
 
 - Added the Phase E2 learned-relationship candidate policy. Local evidence becomes a

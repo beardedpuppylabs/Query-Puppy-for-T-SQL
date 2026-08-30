@@ -8,6 +8,7 @@ import {
   RelationshipConfidence,
   RelationshipProvenance,
   type ProjectDefinedRelationship,
+  type UserConfirmedRelationship,
 } from "../../src/relationships/RelationshipModels.js";
 
 const database = "IntelliSenseLab";
@@ -480,6 +481,68 @@ const index = new DatabaseIndex({
         ordinal: ordinal + 1,
       })),
     },
+    {
+      id: 70,
+      schema: "reltest",
+      name: "HeuristicCustomers",
+      normalizedName: "heuristiccustomers",
+      kind: "table",
+      parameters: [],
+      columns: ["CompanyId", "Id"].map((name, ordinal) => ({
+        name,
+        normalizedName: name.toLocaleLowerCase("en-US"),
+        type: { name: "int" },
+        nullable: false,
+        ordinal: ordinal + 1,
+      })),
+    },
+    {
+      id: 71,
+      schema: "reltest",
+      name: "HeuristicOrders",
+      normalizedName: "heuristicorders",
+      kind: "table",
+      parameters: [],
+      columns: ["CompanyId", "OrderId", "HeuristicCustomerId"].map(
+        (name, ordinal) => ({
+          name,
+          normalizedName: name.toLocaleLowerCase("en-US"),
+          type: { name: "int" },
+          nullable: false,
+          ordinal: ordinal + 1,
+        }),
+      ),
+    },
+    {
+      id: 72,
+      schema: "reltest",
+      name: "HeuristicIdenticalA",
+      normalizedName: "heuristicidenticala",
+      kind: "table",
+      parameters: [],
+      columns: ["CompanyId", "Id"].map((name, ordinal) => ({
+        name,
+        normalizedName: name.toLocaleLowerCase("en-US"),
+        type: { name: "int" },
+        nullable: false,
+        ordinal: ordinal + 1,
+      })),
+    },
+    {
+      id: 73,
+      schema: "reltest",
+      name: "HeuristicIdenticalB",
+      normalizedName: "heuristicidenticalb",
+      kind: "table",
+      parameters: [],
+      columns: ["CompanyId", "Id"].map((name, ordinal) => ({
+        name,
+        normalizedName: name.toLocaleLowerCase("en-US"),
+        type: { name: "int" },
+        nullable: false,
+        ordinal: ordinal + 1,
+      })),
+    },
   ],
   keys: [
     {
@@ -582,6 +645,32 @@ const index = new DatabaseIndex({
       columns: [
         { columnId: 1, columnName: "CompanyId", ordinal: 1 },
         { columnId: 2, columnName: "ParentId", ordinal: 2 },
+      ],
+    },
+    {
+      database,
+      objectId: 70,
+      schema: "reltest",
+      objectName: "HeuristicCustomers",
+      name: "PK_HeuristicCustomers",
+      kind: "primaryKey",
+      filtered: false,
+      columns: [
+        { columnId: 1, columnName: "CompanyId", ordinal: 1 },
+        { columnId: 2, columnName: "Id", ordinal: 2 },
+      ],
+    },
+    {
+      database,
+      objectId: 72,
+      schema: "reltest",
+      objectName: "HeuristicIdenticalA",
+      name: "PK_HeuristicIdenticalA",
+      kind: "primaryKey",
+      filtered: false,
+      columns: [
+        { columnId: 1, columnName: "CompanyId", ordinal: 1 },
+        { columnId: 2, columnName: "Id", ordinal: 2 },
       ],
     },
   ],
@@ -1997,6 +2086,121 @@ JOIN reltest.ProjectChild c
       "an authoritative declared FK must not create learned evidence",
     );
 
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.setCompletionScope",
+      baseScope,
+    );
+    const heuristicInput =
+      "SELECT * FROM reltest.HeuristicOrders ho JOIN reltest.HeuristicCustomers hc ON";
+    const heuristicItem = (await joinPredicates(heuristicInput))[0];
+    assert.ok(heuristicItem, "activated heuristic completion is missing");
+    const acceptedHeuristicSql = accept(heuristicInput, heuristicItem);
+    const acceptedHeuristicDocument = await openWorkspaceSql(
+      "accepted-heuristic-completion.sql",
+      acceptedHeuristicSql,
+      unrelatedWorkspacePath,
+    );
+    const unrelatedRelationshipFile = vscode.Uri.joinPath(
+      vscode.Uri.file(unrelatedWorkspacePath),
+      ".query-puppy",
+      "relationships.json",
+    );
+    await assert.rejects(async () =>
+      vscode.workspace.fs.stat(unrelatedRelationshipFile),
+    );
+    const unrelatedEvidenceBefore = await learnedEvidence(
+      unrelatedLearnedDocument,
+    );
+    assert.deepEqual(
+      await learnedEvidence(acceptedHeuristicDocument),
+      unrelatedEvidenceBefore,
+      "accepting a heuristic completion must not acquire learned evidence",
+    );
+    const heuristicActionOffset = acceptedHeuristicSql.indexOf("hc.CompanyId");
+    const heuristicActions = await relationshipCodeActions(
+      acceptedHeuristicDocument,
+      heuristicActionOffset,
+    );
+    const saveHeuristicAction = heuristicActions.find(
+      (action) => action.title === "Save JOIN as Query Puppy relationship",
+    );
+    assert.ok(
+      saveHeuristicAction && "command" in saveHeuristicAction,
+      "accepted heuristic predicate must use the existing save-JOIN action",
+    );
+    if (
+      !("command" in saveHeuristicAction) ||
+      typeof saveHeuristicAction.command !== "object"
+    )
+      throw new Error("heuristic save-JOIN action has no command");
+    const heuristicCommandArguments: readonly unknown[] =
+      saveHeuristicAction.command.arguments ?? [];
+    await vscode.commands.executeCommand(
+      saveHeuristicAction.command.command,
+      ...heuristicCommandArguments,
+    );
+    const persistedHeuristic = JSON.parse(
+      new TextDecoder().decode(
+        await vscode.workspace.fs.readFile(unrelatedRelationshipFile),
+      ),
+    ) as {
+      readonly relationships: readonly {
+        readonly provenance?: string;
+        readonly source: { readonly object: string };
+        readonly target: { readonly object: string };
+      }[];
+    };
+    assert.deepEqual(persistedHeuristic.relationships, [
+      {
+        provenance: "userConfirmed",
+        source: {
+          database,
+          schema: "reltest",
+          object: "HeuristicOrders",
+        },
+        target: {
+          database,
+          schema: "reltest",
+          object: "HeuristicCustomers",
+        },
+        mappings: [
+          { source: "CompanyId", target: "CompanyId" },
+          { source: "HeuristicCustomerId", target: "Id" },
+        ],
+      },
+    ]);
+    const promotedHeuristicScope = await vscode.commands.executeCommand<
+      typeof baseScope
+    >(
+      "queryPuppyForTSql.test.applyProjectRelationships",
+      acceptedHeuristicDocument,
+      baseScope,
+    );
+    assert.ok(promotedHeuristicScope);
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.setCompletionScope",
+      promotedHeuristicScope,
+    );
+    const promotedHeuristicJoin = await joinPredicates(heuristicInput);
+    assert.equal(promotedHeuristicJoin.length, 1);
+    assert.match(
+      completionDetail(promotedHeuristicJoin[0]),
+      /User-confirmed relationship JOIN/,
+    );
+    assert.doesNotMatch(
+      completionDetail(promotedHeuristicJoin[0]),
+      /Heuristic/,
+    );
+    assert.deepEqual(
+      await learnedEvidence(unrelatedLearnedDocument),
+      unrelatedEvidenceBefore,
+      "explicit heuristic promotion must not mutate learned evidence",
+    );
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.setCompletionScope",
+      baseScope,
+    );
+
     const untitledJoin = await vscode.workspace.openTextDocument({
       language: "sql",
       content: joinSql,
@@ -2256,6 +2460,101 @@ FROM reltest.Customers AS c`,
       forwardJoin[0],
     ),
     "SELECT * FROM reltest.Customers c JOIN reltest.OrderHeaders oh ON oh.CustomerId = c.CustomerId",
+  );
+  const heuristicSql =
+    "SELECT * FROM reltest.HeuristicOrders ho JOIN reltest.HeuristicCustomers hc ON";
+  const heuristicJoin = await joinPredicates(heuristicSql);
+  assert.deepEqual(predicateLabels(heuristicJoin), [
+    "hc.CompanyId = ho.CompanyId AND hc.Id = ho.HeuristicCustomerId",
+  ]);
+  assert.match(
+    completionDetail(heuristicJoin[0]),
+    /Heuristic relationship JOIN/,
+  );
+  assert.ok(heuristicJoin[0]?.documentation instanceof vscode.MarkdownString);
+  assert.match(heuristicJoin[0].documentation.value, /Suggested relationship/);
+  assert.match(heuristicJoin[0].documentation.value, /complete primary key/);
+  assert.match(
+    heuristicJoin[0].documentation.value,
+    /known compatible SQL types/,
+  );
+  assert.match(heuristicJoin[0].documentation.value, /target name/i);
+  assert.match(
+    heuristicJoin[0].documentation.value,
+    /Confidence: \*\*Candidate\*\*/,
+  );
+  assert.match(
+    heuristicJoin[0].documentation.value,
+    /not a SQL Server foreign key/,
+  );
+  assert.doesNotMatch(
+    heuristicJoin[0].documentation.value,
+    /ON DELETE|constraint ID|StrongEvidence|Confirmed/,
+  );
+  assert.equal(
+    accept(heuristicSql, heuristicJoin[0]!),
+    `${heuristicSql} hc.CompanyId = ho.CompanyId AND hc.Id = ho.HeuristicCustomerId`,
+  );
+  assert.equal(
+    (
+      await joinPredicates(
+        "SELECT * FROM reltest.HeuristicIdenticalA a JOIN reltest.HeuristicIdenticalB b ON",
+      )
+    ).length,
+    0,
+    "identical composite key names must not produce a heuristic candidate",
+  );
+  const confirmedHeuristicRelationship: UserConfirmedRelationship = {
+    provenance: RelationshipProvenance.UserConfirmed,
+    confidence: RelationshipConfidence.Confirmed,
+    source: {
+      database,
+      schema: "reltest",
+      objectName: "HeuristicOrders",
+      objectId: 71,
+    },
+    target: {
+      database,
+      schema: "reltest",
+      objectName: "HeuristicCustomers",
+      objectId: 70,
+    },
+    mappings: [
+      {
+        sourceColumnName: "CompanyId",
+        targetColumnName: "CompanyId",
+        ordinal: 1,
+      },
+      {
+        sourceColumnName: "HeuristicCustomerId",
+        targetColumnName: "Id",
+        ordinal: 2,
+      },
+    ],
+  };
+  await vscode.commands.executeCommand(
+    "queryPuppyForTSql.test.setCompletionScope",
+    {
+      ...baseScope,
+      indexes: new Map([
+        [
+          database.toLowerCase(),
+          new DatabaseIndex(index.metadata, [confirmedHeuristicRelationship]),
+        ],
+        [reportingDatabase.toLowerCase(), reportingIndex],
+      ]),
+    },
+  );
+  const strongerHeuristicJoin = await joinPredicates(heuristicSql);
+  assert.equal(strongerHeuristicJoin.length, 1);
+  assert.match(
+    completionDetail(strongerHeuristicJoin[0]),
+    /User-confirmed relationship JOIN/,
+  );
+  assert.doesNotMatch(completionDetail(strongerHeuristicJoin[0]), /Heuristic/);
+  await vscode.commands.executeCommand(
+    "queryPuppyForTSql.test.setCompletionScope",
+    baseScope,
   );
   assert.deepEqual(
     predicateLabels(

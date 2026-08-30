@@ -10,6 +10,7 @@ import {
   RelationshipProvenance,
   type Relationship,
 } from "../relationships/RelationshipModels.js";
+import { resolveHeuristicRelationshipCandidate } from "../relationships/HeuristicRelationshipCandidatePolicy.js";
 import { quoteIdentifier } from "../metadata/SqlTypeFormatter.js";
 import type {
   SqlCompletionContext,
@@ -689,10 +690,16 @@ function joinPredicateCandidates(
       return [];
     const resolvedLeft = physicalBinding(left, scope);
     if (!resolvedLeft || resolvedLeft.index !== resolvedRight.index) return [];
-    return resolvedRight.index
+    const relationships = resolvedRight.index
       .relationshipsBetween(resolvedRight.object, resolvedLeft.object)
-      .filter(isProductionRelationship)
-      .map((relationship) => {
+      .filter(isProductionRelationship);
+    const heuristic = resolveHeuristicRelationshipCandidate(
+      resolvedRight.index,
+      resolvedRight.object,
+      resolvedLeft.object,
+    );
+    return [...relationships, ...(heuristic ? [heuristic] : [])].map(
+      (relationship) => {
         const predicate = renderJoinPredicate(
           relationship,
           right,
@@ -711,7 +718,8 @@ function joinPredicateCandidates(
           relationship,
           priority: -100 + (productionRelationshipRank(relationship) ?? 10),
         };
-      });
+      },
+    );
   });
 }
 
@@ -724,7 +732,7 @@ function relationshipSearchDescription(relationship: Relationship): string {
     return "project relationship";
   if (relationship.provenance === RelationshipProvenance.LearnedFromQuery)
     return "learned relationship repeated join usage strong evidence";
-  return "relationship";
+  return "heuristic suggested relationship candidate";
 }
 
 function isJoinSourcePosition(sql: string, cursor: number): boolean {

@@ -97,7 +97,7 @@ export function presentationModel(
             : candidate.relationship.provenance ===
                 RelationshipProvenance.LearnedFromQuery
               ? " Learned relationship JOIN"
-              : " JOIN"
+              : " Heuristic relationship JOIN"
       : " JOIN";
   else if (candidate.relatedRelationshipCount) {
     const declared = candidate.relationships?.filter(
