@@ -2264,7 +2264,7 @@ Before Codex or a developer adds, vendors, copies, replaces, or materially upgra
 
 1. what the material is and where it came from;
 2. the exact license and version/exception terms that apply;
-3. whether the intended use and combination are compatible with Query Puppy's approved `GPL-3.0-only` distribution model;
+3. whether the intended use and combination are compatible with Query Puppy's active `GPL-3.0-only` distribution model;
 4. whether the material will be bundled, copied, linked, generated into, or otherwise redistributed with the VSIX;
 5. applicable copyright, attribution, NOTICE, source, relinking, offer, or other redistribution obligations;
 6. whether `THIRD_PARTY_NOTICES.md` or other license files must change.
@@ -2659,7 +2659,7 @@ The same release artifact published to the Marketplace and attached to GitHub sh
 
 ### Remaining release operations
 
-1. commit the final reviewed source, create immutable tag `v0.12.6`, and establish the exact source/tag/VSIX/Corresponding Source mapping;
+1. create immutable tag `v0.12.6` from the final reviewed source commit and establish the exact source/tag/VSIX/Corresponding Source mapping;
 2. finish push-driven release automation;
 3. continue tracking mssql issue #22819.
 
@@ -3016,7 +3016,7 @@ When a feature requires a new third-party dependency, consider:
 - license
 - notice obligations
 - redistribution implications
-- compatibility with Query Puppy's approved `GPL-3.0-only` distribution model
+- compatibility with Query Puppy's active `GPL-3.0-only` distribution model
 
 A dependency is not free merely because `npm install` is easy.
 

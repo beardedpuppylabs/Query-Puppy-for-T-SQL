@@ -986,7 +986,7 @@ binaries, or redistributable assets:
 
 1. identify the material and authoritative upstream source;
 2. verify the exact license/version/exception terms;
-3. verify compatibility with Query Puppy's approved `GPL-3.0-only` distribution model
+3. verify compatibility with Query Puppy's active `GPL-3.0-only` distribution model
    for the intended use;
 4. determine whether it is bundled, copied, linked, generated into, or otherwise
    redistributed with the VSIX;
