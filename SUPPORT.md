@@ -2,6 +2,8 @@
 
 Use the repository's [bug report form](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues/new?template=bug_report.yml) for reproducible defects and the [feature request form](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues/new?template=feature_request.yml) for proposed improvements.
 
+Support is provided on a best-effort basis through these public project channels. There is no SLA or guaranteed response time, but reproducible reports and community participation are welcome.
+
 Do not report a sensitive vulnerability as an ordinary public issue. Follow the private reporting guidance in [SECURITY.md](SECURITY.md).
 
 ## Bug reports

@@ -11,35 +11,24 @@
   contributor, release, and Marketplace-facing license documentation for the first
   GPL release.
 - Added the Phase E3 conservative heuristic JOIN fallback for an already-selected
-  persistent physical table pair when no declared FK, UserConfirmed,
-  ProjectDefined, or qualifying LearnedFromQuery relationship connects the pair.
-- Kept heuristic inference deliberately bounded and fail-closed: candidates require
-  one complete unfiltered target PK/UQ, known compatible types, exact target-aware
-  naming evidence, a complete unambiguous mapping, and exactly one qualifying
-  direction.
-- Reused the existing canonical Relationship shape and JOIN renderer while keeping
-  HeuristicCandidate/Candidate results outside the canonical database relationship
-  graph, persistence, global table discovery, and related-source ranking.
-- Preserved explicit non-FK presentation, insertion-only/non-confirming completion,
-  and the existing Save JOIN action as the only promotion path to UserConfirmed
-  project knowledge.
-- Added deliberately conservative heuristic JOIN predicate candidates for pairs of
-  physical tables already selected in the active `JOIN ... ON` context. This does not
-  perform table discovery or database-wide relationship inference.
-- Required one complete unfiltered target PK/UQ, known compatible SQL types, an exact
-  target-aware object-name-plus-key-column signal, and an unambiguous full mapping.
-  Same-name context columns may only complete a composite key beside that stronger
-  signal; uncertain and ambiguous shapes fail closed.
-- Added `HeuristicCandidate`/`Candidate` to the explicit trust order below declared
-  FKs, UserConfirmed, ProjectDefined, and LearnedFromQuery relationships. Any stronger
-  relationship for the selected table pair suppresses the heuristic fallback.
-- Added native **Heuristic relationship JOIN** presentation with complete mappings,
-  structured evaluated evidence, Candidate confidence, and explicit non-FK and
-  non-persistence wording.
-- Kept heuristic results transient and JOIN-predicate-only. Accepting one inserts SQL
-  text without changing project relationships or learned evidence; the existing
-  **Save JOIN as Query Puppy relationship** action remains the only promotion path to
-  UserConfirmed project knowledge.
+  persistent physical table pair. Any declared FK, UserConfirmed, ProjectDefined, or
+  qualifying LearnedFromQuery relationship connecting the pair suppresses it; it
+  never performs global table discovery or database-wide relationship inference.
+- Kept heuristic inference bounded and fail-closed: a candidate requires exactly one
+  qualifying direction, one complete unfiltered target PK/UQ, known compatible SQL
+  types, exact target-aware object-name-plus-key-column evidence, and a complete
+  unambiguous mapping. Same-name context columns can complete a composite key only
+  beside that stronger signal; uncertain and ambiguous shapes produce no candidate.
+- Reused the canonical Relationship shape and JOIN renderer with explicit
+  `HeuristicCandidate`/`Candidate` trust below declared FKs, UserConfirmed,
+  ProjectDefined, and LearnedFromQuery. Native **Heuristic relationship JOIN**
+  presentation exposes complete mappings, evaluated evidence, Candidate confidence,
+  and explicit non-FK and non-persistence semantics.
+- Kept heuristic results transient and JOIN-predicate-only, outside the canonical
+  database relationship graph, persistence, global discovery, and related-source
+  ranking. Acceptance inserts SQL without confirming or persisting knowledge; the
+  existing **Save JOIN as Query Puppy relationship** action remains the only promotion
+  path to UserConfirmed project knowledge.
 - Added positive single/composite/UQ tests, mandatory false-positive and ambiguity
   regressions, bounded-source contracts, and activated Extension Host coverage for
   presentation, stronger-source suppression, and explicit promotion.

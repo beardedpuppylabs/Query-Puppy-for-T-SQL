@@ -53,10 +53,11 @@ can suggest:
 o.CustomerId = c.CustomerId
 ```
 
-Typing the whitespace after `ON` can open native completion automatically. When
-there is no actual FK relationship, Query Puppy still offers legal aliases and
-columns for the ON expression, but it does not fabricate a predicate from matching
-names or datatypes.
+Typing the whitespace after `ON` can open native completion automatically. If no
+usable relationship is known, Query Puppy still offers legal aliases and columns
+for the ON expression. It never invents a relationship predicate from name or
+datatype similarity alone; the conservative pair-bounded heuristic policy described
+below requires complete key, type, naming, and ambiguity evidence.
 
 After a completed unaliased INNER, LEFT, RIGHT, or FULL JOIN source, Query Puppy
 offers both the preferred Smart Alias and the `ON` continuation keyword. After a
@@ -125,7 +126,7 @@ DisplayName                nvarchar(200)   NULL
 
 Multiple roles appear compactly, for example `PK·FK`. The row uses fixed 32/8/20-character name, role, and type slots before nullability. A shortened visible name still filters, sorts, and inserts using the complete identifier. Completion documentation wraps long identifiers at approximately 40 characters and retains the complete column name, constraint names, composite columns, FK mappings, referential actions, datatype, and nullability.
 
-## FK-aware JOIN Intelligence
+## Declared-FK JOIN Intelligence
 
 After a joined row source, `ON` can offer a complete predicate from the actual enabled SQL Server foreign key:
 

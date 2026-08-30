@@ -1,7 +1,7 @@
 {
   "name": "query-puppy-for-t-sql",
   "displayName": "Query Puppy for T-SQL",
-  "description": "Context-aware T-SQL IntelliSense for SQL Server with Contains discovery, type-aware completion, relationship-aware JOINs, and persistent schema caching.",
+  "description": "Semantic T-SQL IntelliSense for large SQL Server schemas with Contains search, type-aware completion, relationship-aware JOINs, and persistent metadata caching.",
   "version": "0.12.6",
   "publisher": "BeardedPuppyLabs",
   "author": "Bearded Puppy Labs",
@@ -44,6 +44,11 @@
     "type-aware",
     "signature-help",
     "persistent-cache",
+    "relationships",
+    "relationship-intelligence",
+    "erp",
+    "large-schema",
+    "semantic-sql",
     "vscode",
     "vscodium"
   ],
