@@ -1042,6 +1042,35 @@ async function completion(
   );
 }
 
+async function definition(
+  sql: string,
+  cursor: number,
+): Promise<readonly vscode.Location[]> {
+  const document = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: sql,
+  });
+  const result = await vscode.commands.executeCommand<
+    readonly (vscode.Location | vscode.LocationLink)[]
+  >(
+    "vscode.executeDefinitionProvider",
+    document.uri,
+    document.positionAt(cursor),
+  );
+  return result.flatMap((item) =>
+    "uri" in item
+      ? [item]
+      : item.targetUri.toString() === document.uri.toString()
+        ? [
+            new vscode.Location(
+              item.targetUri,
+              item.targetSelectionRange ?? item.targetRange,
+            ),
+          ]
+        : [],
+  );
+}
+
 type MarkedCompletionItem = vscode.CompletionItem & {
   readonly data?: {
     readonly provider?: string;
@@ -1255,6 +1284,26 @@ export async function run(): Promise<void> {
       activeDatabase: database,
       indexes: new Map([[database.toLowerCase(), index]]),
     },
+  );
+
+  const definitionSql =
+    "WITH CustomerOrders AS (SELECT 1 AS Id) SELECT * FROM CustomerOrders";
+  const definitions = await definition(
+    definitionSql,
+    definitionSql.lastIndexOf("CustomerOrders") + 1,
+  );
+  assert.equal(definitions.length, 1);
+  const firstDefinition = definitions[0];
+  assert.ok(firstDefinition);
+  assert.equal(firstDefinition.uri.toString().startsWith("untitled:"), true);
+  assert.equal(firstDefinition.range.start.line, 0);
+  assert.equal(
+    firstDefinition.range.start.character,
+    definitionSql.indexOf("CustomerOrders"),
+  );
+  assert.equal(
+    firstDefinition.range.end.character,
+    definitionSql.indexOf("CustomerOrders") + "CustomerOrders".length,
   );
 
   for (const expectation of [

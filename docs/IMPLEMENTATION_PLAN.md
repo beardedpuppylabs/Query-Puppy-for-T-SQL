@@ -81,10 +81,22 @@ release requirement for immutable source/tag/artifact traceability.
 - [x] Add focused positive and negative semantic identity/reference contracts.
 
 Projection aliases remain deferred because their current completion representation
-does not retain reliable declaration/reference identity. Go to Definition/Peek, Find
-References, Document Highlights, Document Symbols/Outline, semantic Rename, and
-Diagnostics remain unimplemented Phase G consumers. This internal foundation keeps
-version `0.12.6` and changes no user-facing completion behavior.
+does not retain reliable declaration/reference identity.
+
+## Phase G1 — document-local Go to Definition / Peek Definition
+
+- [x] Register a native Definition Provider for Query Puppy's SQL document selector.
+- [x] Resolve CTE, explicit row-source alias, scalar local-variable, table-variable,
+      and deterministic temporary-table occurrences through the existing
+      `DocumentSemanticSymbolIndex`.
+- [x] Return same-document declaration-token ranges without catalog, filesystem,
+      backend, relationship, or persistence I/O.
+- [x] Return no definition for unresolved, ambiguous, unsupported, physical-database,
+      cross-document, or projection-alias occurrences.
+- [x] Add semantic helper, provider-registration, and Extension Host coverage.
+
+Find References, Document Highlights, Document Symbols/Outline, semantic Rename, and
+Diagnostics remain future Phase G consumers.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 
@@ -418,9 +430,10 @@ deeper general grammar remain deferred.
 
 ## Forward roadmap
 
-The next major planned product area is **Navigation & Code Understanding**.
-Detailed scope will be defined when that milestone begins rather than assigning a
-speculative version now.
+The current major product area is **Navigation & Code Understanding**.
+Document-local Go to Definition / Peek Definition is implemented. Remaining
+navigation and code-understanding slices should continue to be scoped explicitly
+rather than grouped into a speculative version.
 
 Later product areas remain:
 

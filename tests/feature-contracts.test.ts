@@ -335,6 +335,26 @@ test("contract: project relationships use one workspace file and native JSON val
   assert.match(actionSource, /CodeActionKind\.RefactorRewrite/);
 });
 
+test("contract: document-local definition uses native provider and editor-neutral semantic index", async () => {
+  const extensionSource = await readFile("src/extension.ts", "utf8");
+  assert.match(extensionSource, /registerDefinitionProvider/);
+  assert.match(extensionSource, /SqlDefinitionProvider/);
+
+  const providerSource = await readFile(
+    "src/navigation/SqlDefinitionProvider.ts",
+    "utf8",
+  );
+  assert.match(providerSource, /semanticDefinitionAtOffset/);
+  assert.doesNotMatch(providerSource, /resolveQueryScopeRowSource/);
+  assert.doesNotMatch(providerSource, /tokenizeSql/);
+
+  const semanticIndexSource = await readFile(
+    "src/parser/DocumentSemanticSymbols.ts",
+    "utf8",
+  );
+  assert.doesNotMatch(semanticIndexSource, /from "vscode"/);
+});
+
 test("contract: learned JOIN candidates use the local cached evidence policy boundary", async () => {
   const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
     readonly version?: string;
@@ -345,7 +365,7 @@ test("contract: learned JOIN candidates use the local cached evidence policy bou
       };
     };
   };
-  assert.equal(manifest.version, "0.12.6");
+  assert.equal(manifest.version, "0.13.0");
   assert.equal(
     manifest.contributes?.commands?.some(
       (command) =>

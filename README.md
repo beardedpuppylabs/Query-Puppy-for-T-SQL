@@ -1,6 +1,6 @@
 # Query Puppy for T-SQL
 
-Query Puppy for T-SQL is context-aware SQL Server IntelliSense for large and complex databases where memorizing every table, column, function, and relationship is unrealistic. It combines case-insensitive Contains discovery with query-scope analysis, expected types, and real SQL Server schema metadata.
+Query Puppy for T-SQL is context-aware SQL Server IntelliSense for large and complex databases where memorizing every table, column, function, and relationship is unrealistic. It combines case-insensitive Contains discovery with query-scope analysis, expected types, document-local navigation, and real SQL Server schema metadata.
 
 Query Puppy for T-SQL is free and open-source software under the [GNU General Public License version 3 only](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/LICENSE). [Source code, issues, and development](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL) are hosted publicly on GitHub.
 
@@ -15,6 +15,7 @@ In a schema with hundreds or thousands of objects, remembering part of a name sh
 - JOIN predicates based on actual foreign keys, explicit project relationships, user-confirmed JOINs, qualifying learned evidence, and conservative pair-bounded heuristic fallback
 - Local, privacy-conscious acquisition of resolved JOIN evidence on document save
 - Built-in and catalog function completion, typing, and Signature Help
+- Document-local Go to Definition / Peek Definition for supported SQL symbols
 - Smart Alias and Tab-only wildcard productivity features
 - Query-local sources and same-server cross-database completion
 - Persistent per-database metadata for fast warm starts
@@ -493,7 +494,7 @@ The diagnostic commands report connection, cache, scope, visible-row-source, cor
 - Type-aware ranking does not implement SQL Server's complete conversion and datatype-precedence engine. Built-in intelligence is intentionally limited to the documented supported set rather than a complete SQL Server function catalog.
 - Stored-procedure result-set discovery is not performed, so the extension does not fabricate procedure result columns.
 - Heuristic JOIN predicates are deliberately narrow: they apply only after both physical tables are selected, require complete key/type/name evidence, and fail closed for ambiguous or unfamiliar naming. They do not discover or rank tables.
-- Learned candidates require three independently deduplicated eligible occurrences. They remain local StrongEvidence rather than SQL Server FKs or explicit project truth; there is no rejection model, relationship editor, or navigation feature yet.
+- Learned candidates require three independently deduplicated eligible occurrences. They remain local StrongEvidence rather than SQL Server FKs or explicit project truth; there is no rejection model, relationship editor, or relationship-navigation feature yet.
 - Project relationship format version 1 supports same-database tables only and binds by workspace folder plus database name; cross-database project edges and stable cross-server identities are not yet supported.
 - Background refresh replaces a complete snapshot rather than applying incremental schema changes. A recent DDL change may remain absent until refresh completes; run **Query Puppy for T-SQL: Refresh Schema Metadata** when immediate discovery is needed.
 - Completion detail width is controlled by the native Suggest Widget and may be truncated in narrow layouts.

@@ -44,6 +44,7 @@ import {
   WorkspaceLearnedRelationshipEvidence,
 } from "./relationships/WorkspaceLearnedRelationshipEvidence.js";
 import { resolveSqlContext } from "./parser/SqlContextResolver.js";
+import { SqlDefinitionProvider } from "./navigation/SqlDefinitionProvider.js";
 
 const EXTENSION_ID = "BeardedPuppyLabs.query-puppy-for-t-sql";
 let suggestionNoticePending = false;
@@ -112,6 +113,7 @@ export function activate(context: vscode.ExtensionContext): void {
     cache,
     output,
   );
+  const definitionProvider = new SqlDefinitionProvider();
   const automaticSignatureHelp = new PendingSignatureTriggerState();
   let automaticFallbackTimer: ReturnType<typeof setTimeout> | undefined;
   const automaticCompletion = new PendingCompletionTriggerState();
@@ -260,6 +262,10 @@ export function activate(context: vscode.ExtensionContext): void {
       signatureProvider,
       SIGNATURE_HELP_METADATA,
     ),
+    vscode.languages.registerDefinitionProvider(
+      SQL_DOCUMENT_SELECTOR,
+      definitionProvider,
+    ),
     vscode.languages.registerCodeActionsProvider(
       SQL_DOCUMENT_SELECTOR,
       relationshipCodeActions,
@@ -269,6 +275,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.workspace.onDidCloseTextDocument((document) => {
       provider.closeDocument(document.uri);
+      definitionProvider.closeDocument(document.uri);
       relationshipCodeActions.closeDocument(document.uri);
       if (automaticSignatureHelp.current()?.uri === document.uri.toString())
         clearAutomaticTrigger();

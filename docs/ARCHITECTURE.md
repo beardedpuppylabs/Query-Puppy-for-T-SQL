@@ -430,9 +430,10 @@ contains no VS Code API types.
 
 Projection aliases are not yet part of this index: current completion semantics can
 surface them where legal, but do not retain sufficiently reliable declaration and
-reference identity for navigation. Go to Definition/Peek, Find References, Document
-Highlights, Document Symbols/Outline, semantic Rename, and Diagnostics are not yet
-registered consumers of this foundation.
+reference identity for navigation. Document-local Go to Definition/Peek is a
+registered native Definition Provider consumer for the supported symbol kinds above.
+Find References, Document Highlights, Document Symbols/Outline, semantic Rename, and
+Diagnostics are not yet registered consumers of this foundation.
 
 ## Schema Intelligence
 

@@ -50,6 +50,12 @@ export interface DocumentSemanticOccurrence {
   readonly role: "declaration" | "reference";
 }
 
+export interface DocumentSemanticDefinition {
+  readonly symbol: DocumentSemanticSymbol;
+  readonly declaration: DocumentOffsetRange;
+  readonly occurrence: DocumentSemanticOccurrence;
+}
+
 interface BuildInput {
   readonly tokens: readonly SqlToken[];
   readonly documentRange: DocumentOffsetRange;
@@ -264,6 +270,21 @@ export function semanticSymbolAtOffset(
     : undefined;
   return reference && symbol
     ? { symbol, range: reference.range, role: "reference" }
+    : undefined;
+}
+
+/** Resolves a known document-local occurrence to its declaration range. */
+export function semanticDefinitionAtOffset(
+  index: DocumentSemanticSymbolIndex,
+  offset: number,
+): DocumentSemanticDefinition | undefined {
+  const occurrence = semanticSymbolAtOffset(index, offset);
+  return occurrence
+    ? {
+        symbol: occurrence.symbol,
+        declaration: occurrence.symbol.declaration,
+        occurrence,
+      }
     : undefined;
 }
 

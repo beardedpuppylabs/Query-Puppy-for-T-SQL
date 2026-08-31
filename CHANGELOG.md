@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.13.0
+
+- Added document-local Go to Definition / Peek Definition for supported semantic
+  symbols: CTEs, explicit row-source aliases, scalar local variables, table
+  variables, and deterministic temporary tables.
+- Kept definition resolution local to the existing `DocumentSemanticSymbolIndex`.
+  Unresolved, ambiguous, unsupported, physical-database, cross-document, and
+  projection-alias occurrences return no definition.
+
 ## 0.12.6
 
 - Query Puppy for T-SQL is licensed under the GNU General Public License version 3

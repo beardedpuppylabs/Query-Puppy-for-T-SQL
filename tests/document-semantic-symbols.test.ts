@@ -5,6 +5,7 @@ import {
   type DocumentSemanticModel,
 } from "../src/parser/DocumentSemanticAnalyzer.js";
 import {
+  semanticDefinitionAtOffset,
   semanticReferencesForSymbol,
   semanticSymbolAtOffset,
   type DocumentSemanticSymbol,
@@ -35,6 +36,27 @@ const rangeText = (
   sql: string,
   range: { readonly start: number; readonly end: number },
 ): string => sql.slice(range.start, range.end);
+
+const definitionText = (sql: string, offset: number): string | undefined => {
+  const definition = semanticDefinitionAtOffset(
+    analyze(sql, offset).documentLocalSymbols,
+    offset,
+  );
+  return definition ? rangeText(sql, definition.declaration) : undefined;
+};
+
+const occurrenceOffset = (
+  sql: string,
+  text: string,
+  occurrence = 0,
+): number => {
+  let offset = -1;
+  for (let index = 0; index <= occurrence; index++) {
+    offset = sql.indexOf(text, offset + 1);
+    assert.notEqual(offset, -1, `missing occurrence ${occurrence} of ${text}`);
+  }
+  return offset;
+};
 
 test("contract: CTE declarations and consuming references share semantic identity", () => {
   const sql =
@@ -321,6 +343,153 @@ test("unresolved and ambiguous qualifiers do not receive manufactured bindings",
     semanticSymbolAtOffset(
       ambiguousModel.documentLocalSymbols,
       ambiguous.indexOf("x.Id"),
+    ),
+    undefined,
+  );
+});
+
+test("definition lookup resolves CTE references to WITH declaration identifiers", () => {
+  const sql =
+    "WITH CustomerOrders AS (SELECT 1 AS Id) SELECT * FROM CustomerOrders";
+
+  assert.equal(
+    definitionText(sql, occurrenceOffset(sql, "CustomerOrders", 1) + 1),
+    "CustomerOrders",
+  );
+});
+
+test("definition lookup resolves chained CTE references in declaration order", () => {
+  const sql =
+    "WITH FirstCte AS (SELECT 1 AS Id), SecondCte AS (SELECT f.Id FROM FirstCte AS f) SELECT * FROM SecondCte";
+
+  assert.equal(
+    definitionText(sql, occurrenceOffset(sql, "FirstCte", 1) + 1),
+    "FirstCte",
+  );
+  assert.equal(
+    definitionText(sql, occurrenceOffset(sql, "SecondCte", 1) + 1),
+    "SecondCte",
+  );
+});
+
+test("definition lookup resolves aliases, shadowing, correlation, and sibling isolation", () => {
+  const aliasSql = "SELECT o.Id FROM dbo.Orders AS o";
+  assert.equal(definitionText(aliasSql, aliasSql.indexOf("o.Id")), "o");
+
+  const shadowSql =
+    "SELECT x.Id FROM dbo.OuterTable AS x WHERE EXISTS (SELECT x.Id FROM dbo.InnerTable AS x WHERE x.Id > 0) AND x.Id > 0";
+  const shadowModel = analyze(shadowSql, shadowSql.length);
+  const outerShadowAlias = findSymbol(shadowModel, "rowSourceAlias", "x", 0);
+  const innerShadowAlias = findSymbol(shadowModel, "rowSourceAlias", "x", 1);
+  assert.equal(
+    semanticDefinitionAtOffset(
+      analyze(shadowSql, shadowSql.indexOf("x.Id")).documentLocalSymbols,
+      shadowSql.indexOf("x.Id"),
+    )?.declaration.start,
+    outerShadowAlias.declaration.start,
+  );
+  assert.equal(
+    semanticDefinitionAtOffset(
+      analyze(shadowSql, shadowSql.indexOf("x.Id", shadowSql.indexOf("EXISTS")))
+        .documentLocalSymbols,
+      shadowSql.indexOf("x.Id", shadowSql.indexOf("EXISTS")),
+    )?.declaration.start,
+    innerShadowAlias.declaration.start,
+  );
+  assert.equal(
+    semanticDefinitionAtOffset(
+      analyze(shadowSql, shadowSql.lastIndexOf("x.Id")).documentLocalSymbols,
+      shadowSql.lastIndexOf("x.Id"),
+    )?.declaration.start,
+    outerShadowAlias.declaration.start,
+  );
+
+  const correlatedSql =
+    "SELECT c.Id FROM dbo.Customers AS c WHERE EXISTS (SELECT 1 FROM dbo.Orders AS o WHERE o.CustomerId = c.Id)";
+  assert.equal(
+    definitionText(correlatedSql, correlatedSql.lastIndexOf("c.Id")),
+    "c",
+  );
+
+  const siblingSql =
+    "SELECT * FROM dbo.A AS a WHERE EXISTS (SELECT b.Id FROM dbo.B AS b) AND EXISTS (SELECT b.Id FROM dbo.C AS c)";
+  assert.equal(
+    semanticDefinitionAtOffset(
+      analyze(siblingSql, siblingSql.lastIndexOf("b.Id")).documentLocalSymbols,
+      siblingSql.lastIndexOf("b.Id"),
+    ),
+    undefined,
+  );
+});
+
+test("definition lookup resolves variables within batches and fails across GO", () => {
+  const sql = "DECLARE @CustomerId int; SELECT @CustomerId";
+  assert.equal(
+    definitionText(sql, occurrenceOffset(sql, "@CustomerId", 1) + 1),
+    "@CustomerId",
+  );
+
+  const separated = "DECLARE @CustomerId int;\nGO\nSELECT @CustomerId";
+  assert.equal(
+    semanticDefinitionAtOffset(
+      analyze(separated, separated.lastIndexOf("@CustomerId"))
+        .documentLocalSymbols,
+      separated.lastIndexOf("@CustomerId"),
+    ),
+    undefined,
+  );
+});
+
+test("definition lookup resolves table variables and deterministic temporary tables", () => {
+  const tableVariable =
+    "DECLARE @Orders TABLE (Id int); SELECT * FROM @Orders AS o";
+  assert.equal(
+    definitionText(
+      tableVariable,
+      occurrenceOffset(tableVariable, "@Orders", 1) + 1,
+    ),
+    "@Orders",
+  );
+
+  const temporaryTable =
+    "CREATE TABLE #Items (Id int); SELECT i.Id FROM #Items AS i";
+  assert.equal(
+    definitionText(
+      temporaryTable,
+      occurrenceOffset(temporaryTable, "#Items", 1) + 1,
+    ),
+    "#Items",
+  );
+});
+
+test("definition lookup returns declaration self for indexed declaration tokens", () => {
+  const sql = "SELECT o.Id FROM dbo.Orders AS o";
+  const declaration = sql.lastIndexOf("o");
+  const definition = semanticDefinitionAtOffset(
+    analyze(sql, declaration + 1).documentLocalSymbols,
+    declaration,
+  );
+
+  assert.equal(definition?.occurrence.role, "declaration");
+  assert.ok(definition);
+  assert.equal(rangeText(sql, definition.declaration), "o");
+});
+
+test("definition lookup returns no target for unresolved names or physical tables", () => {
+  const unresolved = "SELECT missing.Id FROM dbo.Orders AS o";
+  assert.equal(
+    semanticDefinitionAtOffset(
+      analyze(unresolved, unresolved.indexOf("missing")).documentLocalSymbols,
+      unresolved.indexOf("missing"),
+    ),
+    undefined,
+  );
+
+  const physical = "SELECT * FROM dbo.Orders";
+  assert.equal(
+    semanticDefinitionAtOffset(
+      analyze(physical, physical.indexOf("Orders")).documentLocalSymbols,
+      physical.indexOf("Orders"),
     ),
     undefined,
   );
