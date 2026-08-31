@@ -335,10 +335,12 @@ test("contract: project relationships use one workspace file and native JSON val
   assert.match(actionSource, /CodeActionKind\.RefactorRewrite/);
 });
 
-test("contract: document-local definition uses native provider and editor-neutral semantic index", async () => {
+test("contract: document-local navigation uses native providers and editor-neutral semantic index", async () => {
   const extensionSource = await readFile("src/extension.ts", "utf8");
   assert.match(extensionSource, /registerDefinitionProvider/);
   assert.match(extensionSource, /SqlDefinitionProvider/);
+  assert.match(extensionSource, /registerReferenceProvider/);
+  assert.match(extensionSource, /SqlReferenceProvider/);
 
   const providerSource = await readFile(
     "src/navigation/SqlDefinitionProvider.ts",
@@ -347,6 +349,18 @@ test("contract: document-local definition uses native provider and editor-neutra
   assert.match(providerSource, /semanticDefinitionAtOffset/);
   assert.doesNotMatch(providerSource, /resolveQueryScopeRowSource/);
   assert.doesNotMatch(providerSource, /tokenizeSql/);
+
+  const referenceProviderSource = await readFile(
+    "src/navigation/SqlReferenceProvider.ts",
+    "utf8",
+  );
+  assert.match(referenceProviderSource, /semanticSymbolAtOffset/);
+  assert.match(referenceProviderSource, /semanticReferencesForSymbol/);
+  assert.match(referenceProviderSource, /includeDeclaration/);
+  assert.doesNotMatch(referenceProviderSource, /RegExp|\.match\(|\.search\(/);
+  assert.doesNotMatch(referenceProviderSource, /resolveQueryScopeRowSource/);
+  assert.doesNotMatch(referenceProviderSource, /tokenizeSql/);
+  assert.doesNotMatch(referenceProviderSource, /workspace\.findFiles/);
 
   const semanticIndexSource = await readFile(
     "src/parser/DocumentSemanticSymbols.ts",
@@ -365,7 +379,7 @@ test("contract: learned JOIN candidates use the local cached evidence policy bou
       };
     };
   };
-  assert.equal(manifest.version, "0.13.0");
+  assert.equal(manifest.version, "0.14.0");
   assert.equal(
     manifest.contributes?.commands?.some(
       (command) =>

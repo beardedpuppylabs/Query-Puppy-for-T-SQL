@@ -1,17 +1,7 @@
 import * as vscode from "vscode";
 import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
-import {
-  semanticDefinitionAtOffset,
-  type DocumentSemanticSymbolKind,
-} from "../parser/DocumentSemanticSymbols.js";
-
-const supportedKinds = new Set<DocumentSemanticSymbolKind>([
-  "cte",
-  "rowSourceAlias",
-  "localVariable",
-  "tableVariable",
-  "temporaryTable",
-]);
+import { semanticDefinitionAtOffset } from "../parser/DocumentSemanticSymbols.js";
+import { supportsDocumentSemanticNavigation } from "./DocumentSemanticNavigation.js";
 
 export class SqlDefinitionProvider implements vscode.DefinitionProvider {
   private readonly documentSemantics = new DocumentSemanticCache();
@@ -31,7 +21,11 @@ export class SqlDefinitionProvider implements vscode.DefinitionProvider {
       model.documentLocalSymbols,
       offset,
     );
-    if (!definition || !supportedKinds.has(definition.symbol.kind)) return;
+    if (
+      !definition ||
+      !supportsDocumentSemanticNavigation(definition.symbol.kind)
+    )
+      return;
     return new vscode.Location(
       document.uri,
       new vscode.Range(

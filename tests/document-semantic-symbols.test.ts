@@ -85,6 +85,13 @@ test("contract: CTE declarations and consuming references share semantic identit
     )?.symbol.id,
     cte.id,
   );
+  assert.equal(
+    semanticSymbolAtOffset(
+      model.documentLocalSymbols,
+      sql.indexOf("CustomerOrders") + 1,
+    )?.symbol.id,
+    cte.id,
+  );
 });
 
 test("chained CTE references bind to their declaration in declaration order", () => {
@@ -123,7 +130,8 @@ test("an unaliased CTE qualifier remains the same local CTE symbol", () => {
 });
 
 test("explicit RowSource alias declarations bind qualified references", () => {
-  const sql = "SELECT o.Id FROM dbo.Orders AS o";
+  const sql =
+    "SELECT o.Id, o.Name FROM dbo.Orders AS o WHERE o.CustomerId IS NOT NULL";
   const model = analyze(sql);
   const alias = findSymbol(model, "rowSourceAlias", "o");
   const referenceOffset = sql.indexOf("o.Id");
@@ -133,7 +141,7 @@ test("explicit RowSource alias declarations bind qualified references", () => {
     semanticReferencesForSymbol(model.documentLocalSymbols, alias.id).map(
       (reference) => rangeText(sql, reference.range),
     ),
-    ["o"],
+    ["o", "o", "o"],
   );
   assert.deepEqual(
     semanticSymbolAtOffset(model.documentLocalSymbols, referenceOffset),
@@ -252,7 +260,8 @@ test("sibling query scopes do not leak alias bindings", () => {
 });
 
 test("scalar local declarations and references bind within one batch", () => {
-  const sql = "DECLARE @CustomerId int; SELECT @CustomerId";
+  const sql =
+    "DECLARE @CustomerId int; SELECT @CustomerId; SET @CustomerId = 1";
   const model = analyze(sql);
   const variable = findSymbol(model, "localVariable", "@CustomerId");
 
@@ -261,14 +270,28 @@ test("scalar local declarations and references bind within one batch", () => {
     semanticReferencesForSymbol(model.documentLocalSymbols, variable.id).map(
       (reference) => rangeText(sql, reference.range),
     ),
-    ["@CustomerId"],
+    ["@CustomerId", "@CustomerId"],
   );
 });
 
 test("a real GO boundary prevents variable binding across batches", () => {
   const sql = "DECLARE @CustomerId int;\nGO\nSELECT @CustomerId";
+  const declarationModel = analyze(sql, sql.indexOf("@CustomerId") + 1);
+  const declaration = findSymbol(
+    declarationModel,
+    "localVariable",
+    "@CustomerId",
+  );
   const reference = sql.lastIndexOf("@CustomerId");
   const model = analyze(sql);
+
+  assert.deepEqual(
+    semanticReferencesForSymbol(
+      declarationModel.documentLocalSymbols,
+      declaration.id,
+    ),
+    [],
+  );
 
   assert.equal(
     model.documentLocalSymbols.symbols.some(
@@ -488,6 +511,13 @@ test("definition lookup returns no target for unresolved names or physical table
   const physical = "SELECT * FROM dbo.Orders";
   assert.equal(
     semanticDefinitionAtOffset(
+      analyze(physical, physical.indexOf("Orders")).documentLocalSymbols,
+      physical.indexOf("Orders"),
+    ),
+    undefined,
+  );
+  assert.equal(
+    semanticSymbolAtOffset(
       analyze(physical, physical.indexOf("Orders")).documentLocalSymbols,
       physical.indexOf("Orders"),
     ),

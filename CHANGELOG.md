@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.14.0
+
+- Added document-local Find References through the native VS Code/VSCodium
+  Reference Provider for the same CTE, explicit row-source alias, scalar local
+  variable, table variable, and deterministic temporary-table symbols supported by
+  document-local definition navigation.
+- Reused `DocumentSemanticSymbolIndex` identities and exact ranges, honored native
+  include-declaration behavior, and kept results same-document, deterministic, and
+  free of textual, catalog, workspace, and physical-database fallbacks.
+
 ## 0.13.0
 
 - Added document-local Go to Definition / Peek Definition for supported semantic

@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { DatabaseIndex } from "../../src/metadata/DatabaseIndex.js";
 import type { SqlType } from "../../src/metadata/MetadataModels.js";
 import { BUILTIN_FUNCTIONS } from "../../src/parser/BuiltinFunctionCatalog.js";
+import { SqlReferenceProvider } from "../../src/navigation/SqlReferenceProvider.js";
 import {
   RelationshipConfidence,
   RelationshipProvenance,
@@ -1071,6 +1072,26 @@ async function definition(
   );
 }
 
+async function references(
+  sql: string,
+  cursor: number,
+): Promise<readonly vscode.Location[]> {
+  const document = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: sql,
+  });
+  const result = await vscode.commands.executeCommand<
+    readonly vscode.Location[] | undefined
+  >(
+    "vscode.executeReferenceProvider",
+    document.uri,
+    document.positionAt(cursor),
+  );
+  return (result ?? []).filter(
+    (location) => location.uri.toString() === document.uri.toString(),
+  );
+}
+
 type MarkedCompletionItem = vscode.CompletionItem & {
   readonly data?: {
     readonly provider?: string;
@@ -1304,6 +1325,116 @@ export async function run(): Promise<void> {
   assert.equal(
     firstDefinition.range.end.character,
     definitionSql.indexOf("CustomerOrders") + "CustomerOrders".length,
+  );
+
+  const referenceSql =
+    "WITH CustomerOrders AS (SELECT 1 AS Id) SELECT * FROM CustomerOrders";
+  const registeredReferences = await references(
+    referenceSql,
+    referenceSql.lastIndexOf("CustomerOrders") + 1,
+  );
+  assert.deepEqual(
+    registeredReferences.map((location) => location.range.start.character),
+    [
+      referenceSql.indexOf("CustomerOrders"),
+      referenceSql.lastIndexOf("CustomerOrders"),
+    ],
+    "the registered native Reference Provider must return declaration and use",
+  );
+
+  const directCteReferenceDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: referenceSql,
+  });
+  const directCteReferenceProvider = new SqlReferenceProvider();
+  const cteDeclaration = referenceSql.indexOf("CustomerOrders");
+  const cteUse = referenceSql.lastIndexOf("CustomerOrders");
+  const cteReferencesFromDeclaration =
+    await directCteReferenceProvider.provideReferences(
+      directCteReferenceDocument,
+      directCteReferenceDocument.positionAt(cteDeclaration + 1),
+      { includeDeclaration: true },
+    );
+  const cteReferencesFromUse =
+    await directCteReferenceProvider.provideReferences(
+      directCteReferenceDocument,
+      directCteReferenceDocument.positionAt(cteUse + 1),
+      { includeDeclaration: true },
+    );
+  const cteReferencesWithoutDeclaration =
+    await directCteReferenceProvider.provideReferences(
+      directCteReferenceDocument,
+      directCteReferenceDocument.positionAt(cteDeclaration + 1),
+      { includeDeclaration: false },
+    );
+  assert.deepEqual(
+    cteReferencesFromDeclaration?.map(
+      (location) => location.range.start.character,
+    ),
+    [cteDeclaration, cteUse],
+  );
+  assert.deepEqual(
+    cteReferencesFromUse?.map((location) => location.range.start.character),
+    [cteDeclaration, cteUse],
+  );
+  assert.deepEqual(
+    cteReferencesWithoutDeclaration?.map(
+      (location) => location.range.start.character,
+    ),
+    [cteUse],
+  );
+
+  const providerReferenceSql =
+    "SELECT o.Id, o.Name FROM dbo.Orders AS o WHERE o.CustomerId IS NOT NULL";
+  const providerReferenceDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: providerReferenceSql,
+  });
+  const directReferenceProvider = new SqlReferenceProvider();
+  const aliasDeclaration = providerReferenceSql.lastIndexOf("o WHERE");
+  const aliasUse = providerReferenceSql.indexOf("o.Id");
+  const referencesFromDeclaration =
+    await directReferenceProvider.provideReferences(
+      providerReferenceDocument,
+      providerReferenceDocument.positionAt(aliasDeclaration),
+      { includeDeclaration: true },
+    );
+  const referencesFromUse = await directReferenceProvider.provideReferences(
+    providerReferenceDocument,
+    providerReferenceDocument.positionAt(aliasUse),
+    { includeDeclaration: true },
+  );
+  const referencesWithoutDeclaration =
+    await directReferenceProvider.provideReferences(
+      providerReferenceDocument,
+      providerReferenceDocument.positionAt(aliasUse),
+      { includeDeclaration: false },
+    );
+  assert.deepEqual(
+    referencesFromDeclaration?.map(
+      (location) => location.range.start.character,
+    ),
+    referencesFromUse?.map((location) => location.range.start.character),
+    "declaration and use must resolve the same alias identity",
+  );
+  assert.deepEqual(
+    referencesFromUse?.map((location) => location.range.start.character),
+    [
+      providerReferenceSql.indexOf("o.Id"),
+      providerReferenceSql.indexOf("o.Name"),
+      aliasDeclaration,
+      providerReferenceSql.indexOf("o.CustomerId"),
+    ],
+  );
+  assert.deepEqual(
+    referencesWithoutDeclaration?.map(
+      (location) => location.range.start.character,
+    ),
+    [
+      providerReferenceSql.indexOf("o.Id"),
+      providerReferenceSql.indexOf("o.Name"),
+      providerReferenceSql.indexOf("o.CustomerId"),
+    ],
   );
 
   for (const expectation of [

@@ -1,7 +1,7 @@
 # Query Puppy for T-SQL — Central Development Plan
 
 **Status:** 2026-08-30  
-**Current repository/package version:** 0.13.0  
+**Current repository/package version:** 0.14.0  
 **Project:** Bearded Puppy Labs / Query Puppy for T-SQL  
 **Current project license:** GPL-3.0-only  
 **License/compliance status:** repository compliance baseline complete
@@ -91,7 +91,7 @@ Query Puppy should become particularly useful in exactly these environments.
 
 ## 4. Current baseline
 
-As of repository/package version 0.13.0, Query Puppy already has a substantial semantic engine.
+As of repository/package version 0.14.0, Query Puppy already has a substantial semantic engine.
 
 Do not describe the following as merely future roadmap items unless repository inspection shows otherwise.
 
@@ -141,6 +141,7 @@ Existing capabilities include, among other things:
 - aggregate and window-function intelligence
 - native Signature Help
 - document-local Go to Definition / Peek Definition for supported semantic symbols
+- document-local Find References for the same supported semantic symbols
 - Smart Alias
 - explicit JOIN continuation phases
 - Tab-only wildcard expansion
@@ -1345,7 +1346,7 @@ Prioritize syntax that unlocks reliable semantic consumers.
 
 ## 12. P1 — Relationship Intelligence foundation
 
-**Status:** complete in the current 0.13.0 repository.
+**Status:** complete in the current 0.14.0 repository.
 
 The provenance-aware canonical relationship architecture is established and remains the required foundation for all relationship consumers.
 
@@ -1367,7 +1368,7 @@ while also allowing explicitly non-FK relationship sources with provenance and c
 
 ## 13. P1 — Project-defined relationships
 
-**Status:** complete in the current 0.13.0 repository, including ProjectDefined and explicit UserConfirmed project relationships.
+**Status:** complete in the current 0.14.0 repository, including ProjectDefined and explicit UserConfirmed project relationships.
 
 Explicit logical relationships are supported without being represented as physical SQL Server foreign keys.
 
@@ -1389,7 +1390,7 @@ This provides immediate value on ERP databases without requiring heuristic infer
 
 ## 14. P1 — Learned relationships from queries
 
-**Status:** Phase E1/E2 complete in the current 0.13.0 repository.
+**Status:** Phase E1/E2 complete in the current 0.14.0 repository.
 
 Query Puppy locally observes safely resolved JOIN evidence on save, aggregates bounded privacy-conscious evidence, and promotes qualifying evidence at the fixed product threshold to `LearnedFromQuery` / `StrongEvidence` candidates after revalidation against canonical metadata.
 
@@ -1408,7 +1409,7 @@ Do not automatically convert observation frequency into authoritative truth.
 
 ## 15. P1 — Heuristic relationship candidates
 
-**Status:** Phase E3 complete in the current 0.13.0 repository.
+**Status:** Phase E3 complete in the current 0.14.0 repository.
 
 A deliberately narrow pair-bounded heuristic fallback is implemented only for an already-selected physical table pair when no stronger declared, confirmed, project-defined, or learned relationship exists. It remains a `HeuristicCandidate` / `Candidate`, never an FK, and does not participate in global table discovery, persistence, or the canonical database relationship graph.
 
@@ -1443,7 +1444,7 @@ Target native APIs:
 - Go to Definition — implemented for supported document-local semantic symbols
 - Peek Definition — implemented through the native Definition Provider for the same
   document-local symbols
-- Find References
+- Find References — implemented for supported document-local semantic symbols
 - Document Highlights
 - Document Symbols / Outline
 - navigation to CTE definitions
@@ -2730,7 +2731,8 @@ Query Store / plan cache research comes only after this local pipeline is proven
 
 **Status:** F1 document-local symbol/reference foundation implemented in 0.12.6.
 Document-local Go to Definition / Peek Definition is implemented in 0.13.0.
-References, Highlights, Symbols/Outline, Rename, and Diagnostics remain future work.
+Document-local Find References is implemented in 0.14.0. Highlights,
+Symbols/Outline, Rename, and Diagnostics remain future work.
 
 1. Close high-value language gaps.
 2. Harden reusable symbol/reference information.
@@ -2747,7 +2749,7 @@ Some Phase F work may run in parallel with Relationship Intelligence where depen
 ## 53. Phase G — New semantic consumers
 
 1. Document-local Go to Definition / Peek — implemented in 0.13.0.
-2. References.
+2. Document-local Find References — implemented in 0.14.0.
 3. Highlights.
 4. Symbols.
 5. High-confidence diagnostics.

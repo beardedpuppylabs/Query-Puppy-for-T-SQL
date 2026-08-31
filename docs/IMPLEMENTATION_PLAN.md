@@ -95,8 +95,20 @@ does not retain reliable declaration/reference identity.
       cross-document, or projection-alias occurrences.
 - [x] Add semantic helper, provider-registration, and Extension Host coverage.
 
-Find References, Document Highlights, Document Symbols/Outline, semantic Rename, and
-Diagnostics remain future Phase G consumers.
+## Phase G2 — document-local Find References
+
+- [x] Register a native Reference Provider for Query Puppy's SQL document selector.
+- [x] Resolve declaration and reference invocation through the existing
+      `DocumentSemanticSymbolIndex` identity and reference APIs.
+- [x] Honor `ReferenceContext.includeDeclaration`, preserve document-offset order,
+      and return only same-document locations.
+- [x] Keep unresolved, ambiguous, unsupported, physical-database, cross-document,
+      and projection-alias occurrences outside reference results.
+- [x] Add semantic, provider-contract, direct-provider, and activated Extension Host
+      coverage without a live SQL Server dependency.
+
+Document Highlights, Document Symbols/Outline, semantic Rename, and Diagnostics
+remain future Phase G consumers.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 
@@ -431,9 +443,9 @@ deeper general grammar remain deferred.
 ## Forward roadmap
 
 The current major product area is **Navigation & Code Understanding**.
-Document-local Go to Definition / Peek Definition is implemented. Remaining
-navigation and code-understanding slices should continue to be scoped explicitly
-rather than grouped into a speculative version.
+Document-local Go to Definition / Peek Definition and Find References are
+implemented. Remaining navigation and code-understanding slices should continue to
+be scoped explicitly rather than grouped into a speculative version.
 
 Later product areas remain:
 
