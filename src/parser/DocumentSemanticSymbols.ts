@@ -296,3 +296,30 @@ export function semanticReferencesForSymbol(
     (reference) => reference.symbolId === symbolId,
   );
 }
+
+/** Returns one symbol's known occurrences once each in document order. */
+export function semanticOccurrencesForSymbol(
+  index: DocumentSemanticSymbolIndex,
+  symbolId: string,
+  includeDeclaration = true,
+): readonly DocumentSemanticOccurrence[] {
+  const symbol = index.symbols.find((candidate) => candidate.id === symbolId);
+  if (!symbol) return [];
+
+  const occurrences = new Map<string, DocumentSemanticOccurrence>();
+  const add = (
+    range: DocumentOffsetRange,
+    role: DocumentSemanticOccurrence["role"],
+  ): void => {
+    const key = `${String(range.start)}:${String(range.end)}`;
+    if (!occurrences.has(key)) occurrences.set(key, { symbol, range, role });
+  };
+  if (includeDeclaration) add(symbol.declaration, "declaration");
+  for (const reference of semanticReferencesForSymbol(index, symbolId))
+    add(reference.range, "reference");
+
+  return [...occurrences.values()].sort(
+    (left, right) =>
+      left.range.start - right.range.start || left.range.end - right.range.end,
+  );
+}

@@ -3,21 +3,21 @@ import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
 import { semanticOccurrencesForSymbol } from "../parser/DocumentSemanticSymbols.js";
 import { resolveDocumentSemanticNavigationTarget } from "./DocumentSemanticNavigation.js";
 
-export class SqlReferenceProvider implements vscode.ReferenceProvider {
+export class SqlDocumentHighlightProvider
+  implements vscode.DocumentHighlightProvider
+{
   private readonly documentSemantics = new DocumentSemanticCache();
 
-  provideReferences(
+  provideDocumentHighlights(
     document: vscode.TextDocument,
     position: vscode.Position,
-    context: vscode.ReferenceContext,
-  ): vscode.ProviderResult<vscode.Location[]> {
+  ): vscode.ProviderResult<vscode.DocumentHighlight[]> {
     const offset = document.offsetAt(position);
-    const sql = document.getText();
     const target = resolveDocumentSemanticNavigationTarget(
       this.documentSemantics,
       document.uri.toString(),
       document.version,
-      sql,
+      document.getText(),
       offset,
     );
     if (!target) return;
@@ -25,15 +25,14 @@ export class SqlReferenceProvider implements vscode.ReferenceProvider {
     return semanticOccurrencesForSymbol(
       target.index,
       target.occurrence.symbol.id,
-      context.includeDeclaration,
     ).map(
       (occurrence) =>
-        new vscode.Location(
-          document.uri,
+        new vscode.DocumentHighlight(
           new vscode.Range(
             document.positionAt(occurrence.range.start),
             document.positionAt(occurrence.range.end),
           ),
+          vscode.DocumentHighlightKind.Text,
         ),
     );
   }

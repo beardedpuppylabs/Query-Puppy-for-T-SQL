@@ -1,4 +1,10 @@
-import type { DocumentSemanticSymbolKind } from "../parser/DocumentSemanticSymbols.js";
+import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
+import {
+  semanticSymbolAtOffset,
+  type DocumentSemanticOccurrence,
+  type DocumentSemanticSymbolIndex,
+  type DocumentSemanticSymbolKind,
+} from "../parser/DocumentSemanticSymbols.js";
 
 const supportedKinds = new Set<DocumentSemanticSymbolKind>([
   "cte",
@@ -11,3 +17,28 @@ const supportedKinds = new Set<DocumentSemanticSymbolKind>([
 export const supportsDocumentSemanticNavigation = (
   kind: DocumentSemanticSymbolKind,
 ): boolean => supportedKinds.has(kind);
+
+export interface DocumentSemanticNavigationTarget {
+  readonly index: DocumentSemanticSymbolIndex;
+  readonly occurrence: DocumentSemanticOccurrence;
+}
+
+/** Resolves a supported target through the canonical cached semantic model. */
+export function resolveDocumentSemanticNavigationTarget(
+  cache: DocumentSemanticCache,
+  uri: string,
+  version: number,
+  sql: string,
+  offset: number,
+): DocumentSemanticNavigationTarget | undefined {
+  let model = cache.get(uri, version, sql, offset);
+  let occurrence = semanticSymbolAtOffset(model.documentLocalSymbols, offset);
+  if (!occurrence && offset < sql.length) {
+    model = cache.get(uri, version, sql, sql.length);
+    occurrence = semanticSymbolAtOffset(model.documentLocalSymbols, offset);
+  }
+  return occurrence &&
+    supportsDocumentSemanticNavigation(occurrence.symbol.kind)
+    ? { index: model.documentLocalSymbols, occurrence }
+    : undefined;
+}

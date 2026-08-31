@@ -6,6 +6,7 @@ import {
 } from "../src/parser/DocumentSemanticAnalyzer.js";
 import {
   semanticDefinitionAtOffset,
+  semanticOccurrencesForSymbol,
   semanticReferencesForSymbol,
   semanticSymbolAtOffset,
   type DocumentSemanticSymbol,
@@ -92,6 +93,12 @@ test("contract: CTE declarations and consuming references share semantic identit
     )?.symbol.id,
     cte.id,
   );
+  assert.deepEqual(
+    semanticOccurrencesForSymbol(model.documentLocalSymbols, cte.id).map(
+      (occurrence) => occurrence.range.start,
+    ),
+    [sql.indexOf("CustomerOrders"), sql.lastIndexOf("CustomerOrders")],
+  );
 });
 
 test("chained CTE references bind to their declaration in declaration order", () => {
@@ -150,6 +157,40 @@ test("explicit RowSource alias declarations bind qualified references", () => {
       range: { start: referenceOffset, end: referenceOffset + 1 },
       role: "reference",
     },
+  );
+  const occurrences = semanticOccurrencesForSymbol(
+    model.documentLocalSymbols,
+    alias.id,
+  );
+  assert.deepEqual(
+    occurrences.map((occurrence) => occurrence.range.start),
+    [
+      sql.indexOf("o.Id"),
+      sql.indexOf("o.Name"),
+      alias.declaration.start,
+      sql.indexOf("o.CustomerId"),
+    ],
+  );
+  assert.deepEqual(
+    occurrences.map((occurrence) => occurrence.role),
+    ["reference", "reference", "declaration", "reference"],
+  );
+  assert.equal(
+    new Set(
+      occurrences.map(
+        (occurrence) =>
+          `${String(occurrence.range.start)}:${String(occurrence.range.end)}`,
+      ),
+    ).size,
+    occurrences.length,
+  );
+  assert.deepEqual(
+    semanticOccurrencesForSymbol(
+      model.documentLocalSymbols,
+      alias.id,
+      false,
+    ).map((occurrence) => occurrence.range.start),
+    [sql.indexOf("o.Id"), sql.indexOf("o.Name"), sql.indexOf("o.CustomerId")],
   );
 });
 

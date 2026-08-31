@@ -341,6 +341,8 @@ test("contract: document-local navigation uses native providers and editor-neutr
   assert.match(extensionSource, /SqlDefinitionProvider/);
   assert.match(extensionSource, /registerReferenceProvider/);
   assert.match(extensionSource, /SqlReferenceProvider/);
+  assert.match(extensionSource, /registerDocumentHighlightProvider/);
+  assert.match(extensionSource, /SqlDocumentHighlightProvider/);
 
   const providerSource = await readFile(
     "src/navigation/SqlDefinitionProvider.ts",
@@ -354,13 +356,39 @@ test("contract: document-local navigation uses native providers and editor-neutr
     "src/navigation/SqlReferenceProvider.ts",
     "utf8",
   );
-  assert.match(referenceProviderSource, /semanticSymbolAtOffset/);
-  assert.match(referenceProviderSource, /semanticReferencesForSymbol/);
+  assert.match(referenceProviderSource, /semanticOccurrencesForSymbol/);
+  assert.match(
+    referenceProviderSource,
+    /resolveDocumentSemanticNavigationTarget/,
+  );
   assert.match(referenceProviderSource, /includeDeclaration/);
   assert.doesNotMatch(referenceProviderSource, /RegExp|\.match\(|\.search\(/);
   assert.doesNotMatch(referenceProviderSource, /resolveQueryScopeRowSource/);
   assert.doesNotMatch(referenceProviderSource, /tokenizeSql/);
   assert.doesNotMatch(referenceProviderSource, /workspace\.findFiles/);
+
+  const highlightProviderSource = await readFile(
+    "src/navigation/SqlDocumentHighlightProvider.ts",
+    "utf8",
+  );
+  assert.match(highlightProviderSource, /semanticOccurrencesForSymbol/);
+  assert.match(
+    highlightProviderSource,
+    /resolveDocumentSemanticNavigationTarget/,
+  );
+  assert.match(highlightProviderSource, /DocumentHighlightKind\.Text/);
+  assert.doesNotMatch(highlightProviderSource, /RegExp|\.match\(|\.search\(/);
+  assert.doesNotMatch(highlightProviderSource, /resolveQueryScopeRowSource/);
+  assert.doesNotMatch(highlightProviderSource, /tokenizeSql/);
+  assert.doesNotMatch(highlightProviderSource, /workspace\.findFiles/);
+
+  const navigationSource = await readFile(
+    "src/navigation/DocumentSemanticNavigation.ts",
+    "utf8",
+  );
+  assert.match(navigationSource, /semanticSymbolAtOffset/);
+  assert.doesNotMatch(navigationSource, /tokenizeSql/);
+  assert.doesNotMatch(navigationSource, /from "vscode"/);
 
   const semanticIndexSource = await readFile(
     "src/parser/DocumentSemanticSymbols.ts",
@@ -379,7 +407,7 @@ test("contract: learned JOIN candidates use the local cached evidence policy bou
       };
     };
   };
-  assert.equal(manifest.version, "0.14.0");
+  assert.equal(manifest.version, "0.15.0");
   assert.equal(
     manifest.contributes?.commands?.some(
       (command) =>

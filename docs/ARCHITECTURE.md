@@ -434,8 +434,11 @@ reference identity for navigation. Document-local Go to Definition/Peek is a
 registered native Definition Provider consumer for the supported symbol kinds above.
 Document-local Find References is a registered native Reference Provider consumer
 for the same symbol kinds and returns only occurrences sharing one semantic symbol
-identity. Document Highlights, Document Symbols/Outline, semantic Rename, and
-Diagnostics are not yet registered consumers of this foundation.
+identity. Document-local Document Highlights is a registered native Document
+Highlight Provider consumer for the same identities; it returns each declaration
+and bound reference once in document order using the neutral Text kind. Document
+Symbols/Outline, semantic Rename, and Diagnostics are not yet registered consumers
+of this foundation.
 
 ## Schema Intelligence
 

@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { DatabaseIndex } from "../../src/metadata/DatabaseIndex.js";
 import type { SqlType } from "../../src/metadata/MetadataModels.js";
 import { BUILTIN_FUNCTIONS } from "../../src/parser/BuiltinFunctionCatalog.js";
+import { SqlDocumentHighlightProvider } from "../../src/navigation/SqlDocumentHighlightProvider.js";
 import { SqlReferenceProvider } from "../../src/navigation/SqlReferenceProvider.js";
 import {
   RelationshipConfidence,
@@ -1092,6 +1093,25 @@ async function references(
   );
 }
 
+async function documentHighlights(
+  sql: string,
+  cursor: number,
+): Promise<readonly vscode.DocumentHighlight[]> {
+  const document = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: sql,
+  });
+  return (
+    (await vscode.commands.executeCommand<
+      readonly vscode.DocumentHighlight[] | undefined
+    >(
+      "vscode.executeDocumentHighlights",
+      document.uri,
+      document.positionAt(cursor),
+    )) ?? []
+  );
+}
+
 type MarkedCompletionItem = vscode.CompletionItem & {
   readonly data?: {
     readonly provider?: string;
@@ -1435,6 +1455,62 @@ export async function run(): Promise<void> {
       providerReferenceSql.indexOf("o.Name"),
       providerReferenceSql.indexOf("o.CustomerId"),
     ],
+  );
+
+  const highlightSql =
+    "SELECT o.Id, o.Name FROM dbo.Orders AS o WHERE o.CustomerId IS NOT NULL";
+  const registeredHighlights = await documentHighlights(
+    highlightSql,
+    highlightSql.indexOf("o.Id"),
+  );
+  const aliasHighlightDeclaration = highlightSql.lastIndexOf("o WHERE");
+  assert.deepEqual(
+    registeredHighlights.map((highlight) => highlight.range.start.character),
+    [
+      highlightSql.indexOf("o.Id"),
+      highlightSql.indexOf("o.Name"),
+      aliasHighlightDeclaration,
+      highlightSql.indexOf("o.CustomerId"),
+    ],
+    "the registered native Document Highlight Provider must return one semantic alias set",
+  );
+  assert.equal(
+    registeredHighlights.every(
+      (highlight) => highlight.kind === vscode.DocumentHighlightKind.Text,
+    ),
+    true,
+  );
+
+  const directHighlightDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: referenceSql,
+  });
+  const directHighlightProvider = new SqlDocumentHighlightProvider();
+  const highlightsFromDeclaration =
+    await directHighlightProvider.provideDocumentHighlights(
+      directHighlightDocument,
+      directHighlightDocument.positionAt(cteDeclaration + 1),
+    );
+  const highlightsFromUse =
+    await directHighlightProvider.provideDocumentHighlights(
+      directHighlightDocument,
+      directHighlightDocument.positionAt(cteUse + 1),
+    );
+  assert.deepEqual(
+    highlightsFromDeclaration?.map(
+      (highlight) => highlight.range.start.character,
+    ),
+    [cteDeclaration, cteUse],
+  );
+  assert.deepEqual(
+    highlightsFromUse?.map((highlight) => highlight.range.start.character),
+    [cteDeclaration, cteUse],
+  );
+  assert.equal(
+    highlightsFromUse.every(
+      (highlight) => highlight.kind === vscode.DocumentHighlightKind.Text,
+    ),
+    true,
   );
 
   for (const expectation of [

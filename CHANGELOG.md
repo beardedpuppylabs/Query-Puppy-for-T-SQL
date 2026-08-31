@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.15.0
+
+- Added native document-local Document Highlights for supported CTEs, explicit
+  row-source aliases, scalar local variables, table variables, and deterministic
+  temporary tables.
+- Reused exact `DocumentSemanticSymbolIndex` identities to highlight each declaration
+  and bound reference once in document order. Highlights remain same-document,
+  fail closed for unknown or unsupported occurrences, and use the neutral Text kind
+  because the semantic index does not classify reliable read/write data flow.
+
 ## 0.14.0
 
 - Added document-local Find References through the native VS Code/VSCodium
