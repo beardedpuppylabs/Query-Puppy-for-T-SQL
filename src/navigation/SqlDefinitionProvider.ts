@@ -4,7 +4,9 @@ import { semanticDefinitionAtOffset } from "../parser/DocumentSemanticSymbols.js
 import { supportsDocumentSemanticNavigation } from "./DocumentSemanticNavigation.js";
 
 export class SqlDefinitionProvider implements vscode.DefinitionProvider {
-  private readonly documentSemantics = new DocumentSemanticCache();
+  constructor(
+    private readonly documentSemantics = new DocumentSemanticCache(),
+  ) {}
 
   provideDefinition(
     document: vscode.TextDocument,

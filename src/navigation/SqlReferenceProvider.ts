@@ -4,7 +4,9 @@ import { semanticOccurrencesForSymbol } from "../parser/DocumentSemanticSymbols.
 import { resolveDocumentSemanticNavigationTarget } from "./DocumentSemanticNavigation.js";
 
 export class SqlReferenceProvider implements vscode.ReferenceProvider {
-  private readonly documentSemantics = new DocumentSemanticCache();
+  constructor(
+    private readonly documentSemantics = new DocumentSemanticCache(),
+  ) {}
 
   provideReferences(
     document: vscode.TextDocument,

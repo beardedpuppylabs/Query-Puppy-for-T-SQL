@@ -436,9 +436,11 @@ Document-local Find References is a registered native Reference Provider consume
 for the same symbol kinds and returns only occurrences sharing one semantic symbol
 identity. Document-local Document Highlights is a registered native Document
 Highlight Provider consumer for the same identities; it returns each declaration
-and bound reference once in document order using the neutral Text kind. Document
-Symbols/Outline, semantic Rename, and Diagnostics are not yet registered consumers
-of this foundation.
+and bound reference once in document order using the neutral Text kind. These three
+navigation providers share one cursor-keyed `DocumentSemanticCache`; completion and
+relationship Code Actions retain their separate caches because they have different
+consumer and catalog-context requirements. Document Symbols/Outline, semantic
+Rename, and Diagnostics are not yet registered consumers of this foundation.
 
 ## Schema Intelligence
 

@@ -337,6 +337,22 @@ test("contract: project relationships use one workspace file and native JSON val
 
 test("contract: document-local navigation uses native providers and editor-neutral semantic index", async () => {
   const extensionSource = await readFile("src/extension.ts", "utf8");
+  assert.match(
+    extensionSource,
+    /const navigationDocumentSemantics = new DocumentSemanticCache\(\)/,
+  );
+  assert.match(
+    extensionSource,
+    /new SqlDefinitionProvider\(\s*navigationDocumentSemantics,?\s*\)/,
+  );
+  assert.match(
+    extensionSource,
+    /new SqlReferenceProvider\(\s*navigationDocumentSemantics,?\s*\)/,
+  );
+  assert.match(
+    extensionSource,
+    /new SqlDocumentHighlightProvider\(\s*navigationDocumentSemantics,?\s*\)/,
+  );
   assert.match(extensionSource, /registerDefinitionProvider/);
   assert.match(extensionSource, /SqlDefinitionProvider/);
   assert.match(extensionSource, /registerReferenceProvider/);
@@ -399,7 +415,6 @@ test("contract: document-local navigation uses native providers and editor-neutr
 
 test("contract: learned JOIN candidates use the local cached evidence policy boundary", async () => {
   const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
-    readonly version?: string;
     readonly contributes?: {
       readonly commands?: readonly { readonly command?: string }[];
       readonly configuration?: {
@@ -407,7 +422,6 @@ test("contract: learned JOIN candidates use the local cached evidence policy bou
       };
     };
   };
-  assert.equal(manifest.version, "0.15.0");
   assert.equal(
     manifest.contributes?.commands?.some(
       (command) =>

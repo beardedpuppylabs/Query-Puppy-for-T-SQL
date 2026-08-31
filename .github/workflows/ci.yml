@@ -37,3 +37,24 @@ jobs:
 
       - name: Unit, provider, and contract tests
         run: npm test
+
+  extension-host-and-build:
+    name: Extension Host and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run canonical verification in a virtual display
+        run: xvfb-run -a npm run verify

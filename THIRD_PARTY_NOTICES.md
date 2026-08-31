@@ -1,13 +1,13 @@
 # Third-Party Notices
 
-Query Puppy for T-SQL version 0.12.6 is distributed under the GNU General Public
-License version 3 only (`GPL-3.0-only`). See [LICENSE](LICENSE) for the complete
-license text.
+Query Puppy for T-SQL is distributed under the GNU General Public License version 3
+only (`GPL-3.0-only`). See [LICENSE](LICENSE) for the complete license text.
 
 This inventory records deliberately used direct third-party software and the
 material actually redistributed in the extension package. It is evidence-based on
-the locked dependency tree and the production bundle/package inspection for version
-0.12.6. It does not replace the authoritative upstream license or NOTICE files.
+the committed locked dependency tree and production bundle/package inspection. The
+inventory was last revalidated for package version 0.15.1. It does not replace the
+authoritative upstream license or NOTICE files.
 
 ## Material redistributed in the VSIX
 
@@ -20,8 +20,8 @@ native binary, embedded runtime, font, or copied third-party source.
 Puppy and is not third-party material.
 
 Accordingly, no additional third-party license text or NOTICE file is required for
-the material redistributed in the version 0.12.6 VSIX. This file is nevertheless
-included in the package so the audited boundary remains visible to recipients.
+the material redistributed in the inspected VSIX. This file is nevertheless included
+in the package so the audited boundary remains visible to recipients.
 
 ## External editor dependency
 
@@ -33,8 +33,8 @@ but does not redistribute Microsoft extension source or binaries.
 
 The following packages are direct development, test, research, build, or packaging
 dependencies. Their code is not shipped as an npm dependency tree in the VSIX.
-Versions are the exact versions resolved by `package-lock.json` for the 0.12.6
-release audit.
+Versions are the exact versions resolved by `package-lock.json` when this inventory
+was last revalidated.
 
 | Package                 | Version | License    | Purpose / authoritative upstream                                                                                | Redistributed in VSIX? | VSIX notice/source obligation                                                 |
 | ----------------------- | ------: | ---------- | --------------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------- |

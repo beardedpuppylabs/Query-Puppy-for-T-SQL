@@ -44,6 +44,7 @@ import {
   WorkspaceLearnedRelationshipEvidence,
 } from "./relationships/WorkspaceLearnedRelationshipEvidence.js";
 import { resolveSqlContext } from "./parser/SqlContextResolver.js";
+import { DocumentSemanticCache } from "./parser/DocumentSemanticCache.js";
 import { SqlDefinitionProvider } from "./navigation/SqlDefinitionProvider.js";
 import { SqlDocumentHighlightProvider } from "./navigation/SqlDocumentHighlightProvider.js";
 import { SqlReferenceProvider } from "./navigation/SqlReferenceProvider.js";
@@ -115,9 +116,16 @@ export function activate(context: vscode.ExtensionContext): void {
     cache,
     output,
   );
-  const definitionProvider = new SqlDefinitionProvider();
-  const documentHighlightProvider = new SqlDocumentHighlightProvider();
-  const referenceProvider = new SqlReferenceProvider();
+  const navigationDocumentSemantics = new DocumentSemanticCache();
+  const definitionProvider = new SqlDefinitionProvider(
+    navigationDocumentSemantics,
+  );
+  const documentHighlightProvider = new SqlDocumentHighlightProvider(
+    navigationDocumentSemantics,
+  );
+  const referenceProvider = new SqlReferenceProvider(
+    navigationDocumentSemantics,
+  );
   const automaticSignatureHelp = new PendingSignatureTriggerState();
   let automaticFallbackTimer: ReturnType<typeof setTimeout> | undefined;
   const automaticCompletion = new PendingCompletionTriggerState();

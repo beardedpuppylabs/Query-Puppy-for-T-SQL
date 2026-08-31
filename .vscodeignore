@@ -17,6 +17,7 @@ src/**
 tests/**
 scripts/**
 spike/**
+tmp/**
 *.vsix
 eslint.config.mjs
 package-lock.json

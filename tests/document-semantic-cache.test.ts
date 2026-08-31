@@ -2,6 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DocumentSemanticCache } from "../src/parser/DocumentSemanticCache.js";
 
+test("navigation consumers reuse analysis only when they share one semantic cache", () => {
+  const sql = "WITH Recent AS (SELECT 1 AS Id) SELECT * FROM Recent";
+  const uri = "file:///shared-navigation.sql";
+  const cursor = sql.lastIndexOf("Recent");
+  const shared = new DocumentSemanticCache();
+  const first = shared.get(uri, 1, sql, cursor);
+
+  assert.equal(shared.get(uri, 1, sql, cursor), first);
+  assert.notEqual(new DocumentSemanticCache().get(uri, 1, sql, cursor), first);
+});
+
 test("contract: document semantic cache reuses versions and invalidates edits and closes", () => {
   const cache = new DocumentSemanticCache();
   const first = cache.get("file:///query.sql", 1, "SELECT 1", 8);

@@ -124,17 +124,20 @@ reach the activated extension bundle.
 
 ### Public CI
 
-GitHub Actions runs one deterministic quality job on Node.js 24 LTS for pushes and
-pull requests. It installs the committed lockfile with `npm ci`, then runs
+GitHub Actions runs two jobs on Node.js 24 LTS for pushes and pull requests. The
+deterministic quality job installs the committed lockfile with `npm ci`, then runs
 formatting, ESLint, strict TypeScript, and the complete `npm test` unit/provider
 suite. The full suite already executes every `contract:` sentinel, so CI does not
 repeat the contract-only subset as a second test run.
 
+The separate Extension Host and production-build job runs the canonical `npm run
+verify` flow under `xvfb-run`. Keeping Electron-backed native provider registration
+coverage separate preserves clear failure ownership without weakening the fast
+quality gate. Release verification still reruns the canonical flow from the exact
+release source before packaging.
+
 The default workflow deliberately omits live SQL integration tests because they
-need separately provisioned fixtures and credentials. It also omits Extension Host
-tests because the current `test:extension` script performs a production build and
-launches Electron; those remain explicit local/release verification layers rather
-than making the basic headless pull-request gate fragile.
+need separately provisioned fixtures and credentials.
 
 ### Live SQL integration tests
 

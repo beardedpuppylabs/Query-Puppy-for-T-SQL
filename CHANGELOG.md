@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.15.1
+
+- Reused one document-semantic cache across Definition, References, and Document
+  Highlights to avoid repeated analysis of the same document version and cursor.
+- Added a separate headless CI job for canonical Extension Host and production-build
+  verification.
+- Excluded temporary project-source exports from the VSIX and revalidated the
+  third-party inventory against the locked dependencies, production bundle, and
+  packaged artifact.
+
 ## 0.15.0
 
 - Added native document-local Document Highlights for supported CTEs, explicit

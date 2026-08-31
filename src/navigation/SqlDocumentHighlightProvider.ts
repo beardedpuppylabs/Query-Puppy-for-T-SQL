@@ -6,7 +6,9 @@ import { resolveDocumentSemanticNavigationTarget } from "./DocumentSemanticNavig
 export class SqlDocumentHighlightProvider
   implements vscode.DocumentHighlightProvider
 {
-  private readonly documentSemantics = new DocumentSemanticCache();
+  constructor(
+    private readonly documentSemantics = new DocumentSemanticCache(),
+  ) {}
 
   provideDocumentHighlights(
     document: vscode.TextDocument,
