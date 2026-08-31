@@ -50,8 +50,7 @@ architecture documents describe the intended present-day design.
   complete; bounded fallback applies only to already-selected physical pairs
 - Phase F1 document-local semantic symbol/reference foundation — complete; native
   navigation, symbols, highlights, rename, and diagnostics remain future consumers
-- 0.12.6 GPL-3.0-only relicensing and repository compliance — complete; officially
-  published releases through 0.12.5 retain their original MIT terms
+- 0.12.6 GPL-3.0-only repository compliance — complete
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -63,11 +62,9 @@ Completion acceptance remains non-confirming; the existing explicit save-JOIN ac
 is the only promotion path to UserConfirmed project truth. Navigation & Code
 Understanding remains a larger forward-roadmap area.
 
-The same unreleased 0.12.6 repository state is the first `GPL-3.0-only` release
-target. Its compliance slice established the official GPLv3 license text, package
+The 0.12.6 compliance slice established the official GPLv3 license text, package
 metadata, third-party inventory, bundle/VSIX audit, public documentation, and the
-release requirement for immutable source/tag/artifact traceability. The historical
-MIT notes below remain accurate for their original release milestones.
+release requirement for immutable source/tag/artifact traceability.
 
 ## Phase F1 — document-local semantic symbol/reference foundation
 
@@ -606,13 +603,16 @@ Final release-readiness verification: formatting, ESLint, strict compilation, 40
 
 ## 0.3.1 open-source licensing audit
 
-- [x] Confirm the canonical MIT License and current developer copyright identity.
-- [x] Use the `MIT` SPDX identifier consistently in the manifest and lockfile.
+- [x] Confirm the canonical project license and current developer copyright identity.
+- [x] Use the repository SPDX license identifier consistently in the manifest and lockfile.
 - [x] Document the license in the README, changelog, and publishing checklist.
 - [x] Audit the production bundle and VSIX for third-party runtime code and notice obligations.
 - [x] Rebuild, repackage, and inspect the final licensed VSIX.
 
-The bundle metafile contains only project-owned `src` inputs; `vscode` is external. No npm runtime dependency or mssql source/binary is bundled, so no third-party notices file is required. The nine-file VSIX contains the byte-identical canonical root MIT License and no development dependency tree.
+The bundle metafile contains only project-owned `src` inputs; `vscode` is external.
+No npm runtime dependency or mssql source/binary is bundled, so no third-party
+notices file is required. The nine-file VSIX contains the canonical root license
+and no development dependency tree.
 
 ## 0.4.0 release
 
@@ -645,7 +645,11 @@ The maintained extension identifier is now:
 - [x] Add configuration-resolution tests and preserve all completion behavior.
 - [x] Run both real database integration suites and the complete release verification flow.
 
-Final 0.4.2 verification: formatting, ESLint, strict compilation, 45 unit tests, both live SQL Server integration tests, production bundling, VSIX packaging, and archive inspection pass. The package contains the public README, changelog, MIT License, support guide, extension manifest, bundle, and icon; no runtime dependency tree or credentials are included.
+Final 0.4.2 verification: formatting, ESLint, strict compilation, 45 unit tests,
+both live SQL Server integration tests, production bundling, VSIX packaging, and
+archive inspection pass. The package contains the public README, changelog, root
+license, support guide, extension manifest, bundle, and icon; no runtime dependency
+tree or credentials are included.
 
 ## 0.5.0 document-local SQL semantics
 

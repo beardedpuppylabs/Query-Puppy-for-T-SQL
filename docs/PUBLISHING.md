@@ -64,10 +64,7 @@ developer before publication.
 `package.json` is the authoritative repository source for the current package
 version and manifest publisher field.
 
-The verified current Marketplace release is 0.12.5 under its original MIT terms.
-The repository's 0.12.6 release target is `GPL-3.0-only`; the public Marketplace
-page may continue to describe 0.12.5 as MIT until 0.12.6 is explicitly published.
-Do not rewrite historical Marketplace artifacts or terms.
+Query Puppy for T-SQL is licensed under `GPL-3.0-only`.
 
 Release tags use semantic versions prefixed with `v`:
 
@@ -156,8 +153,6 @@ Also confirm:
 
 - the manifest uses SPDX license `GPL-3.0-only`
 - the root `LICENSE` is byte-for-byte the unmodified official GNU GPL version 3 text
-- officially published releases through 0.12.5 remain described under their original
-  MIT terms; current 0.12.6 release material does not describe itself as MIT
 - `repository`, `bugs`, and `homepage` point to the canonical public GitHub project
 - current Marketplace links use the current publisher identity
 - no obsolete publisher identity remains in maintained package or release metadata

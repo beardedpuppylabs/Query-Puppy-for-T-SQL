@@ -504,11 +504,9 @@ See [CONTRIBUTING.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/
 
 ## Open source
 
-Query Puppy for T-SQL version 0.12.6 and subsequent versions are free and open-source
-software under the GNU General Public License version 3 only (`GPL-3.0-only`). The
-GPL permits use, modification, redistribution, and commercial use subject to its
-terms. Officially published releases through 0.12.5 retain their original MIT
-license terms.
+Query Puppy for T-SQL is free and open-source software under the GNU General
+Public License version 3 only (`GPL-3.0-only`). The GPL permits use,
+modification, redistribution, and commercial use subject to its terms.
 
 All Query Puppy features remain available without paid feature gates, per-seat
 licensing, or a mandatory subscription. Voluntary sponsorship may support

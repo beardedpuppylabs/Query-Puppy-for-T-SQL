@@ -82,12 +82,11 @@ Detailed implementation invariants live in [AGENTS.md](AGENTS.md). Human
 contributors do not need to duplicate that document in a pull request, but changes
 must preserve the contracts relevant to the affected subsystem.
 
-Query Puppy version 0.12.6 and subsequent versions are licensed under
-`GPL-3.0-only`; officially published releases through 0.12.5 retain their original
-MIT terms. Contributions are accepted under the repository license in force for the
-contributed version. This repository does not silently establish a separate CLA or
-DCO requirement; any future contributor-rights process must be introduced as an
-explicit project-governance change.
+Query Puppy for T-SQL is licensed under `GPL-3.0-only`. Contributions are accepted
+under the repository license in force for the contributed version. This repository
+does not silently establish a separate CLA or DCO requirement; any future
+contributor-rights process must be introduced as an explicit project-governance
+change.
 
 ## Pull requests
 

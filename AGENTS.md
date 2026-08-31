@@ -103,7 +103,7 @@ software or redistributable assets:
     read PROJECT_DEVELOPMENT_PLAN.md
 
 Before modifying VSIX release procedures, Marketplace publication, publisher
-identity, publishing authentication, relicensing, or release security checks:
+identity, publishing authentication, licensing, or release security checks:
 
     read PROJECT_DEVELOPMENT_PLAN.md
     read docs/PUBLISHING.md
@@ -976,9 +976,7 @@ results.
 
 ## Licensing and third-party compliance
 
-Query Puppy version 0.12.6 and subsequent versions are licensed under
-`GPL-3.0-only`. Officially published releases through 0.12.5 retain their original
-MIT license terms; do not rewrite historical release licensing.
+Query Puppy for T-SQL is licensed under `GPL-3.0-only`.
 
 GPL compatibility is a mandatory pre-adoption gate. Before adding,
 copying, vendoring, replacing, or materially upgrading third-party software, source,
@@ -1052,8 +1050,8 @@ Do not rewrite Git history.
 
 ## Release safety
 
-`PROJECT_DEVELOPMENT_PLAN.md` is the authoritative source for release-version,
-licensing/compliance, and relicensing policy.
+`PROJECT_DEVELOPMENT_PLAN.md` is the authoritative source for release-version and
+licensing/compliance policy.
 
 Versioning is part of publishable product work, not merely a release-time
 administrative step.
@@ -1107,9 +1105,10 @@ Before any release, verify required third-party attribution and license notices 
 the final artifact according to `PROJECT_DEVELOPMENT_PLAN.md` and the maintained
 notice files.
 
-The 0.12.6 GPL transition established the required ownership/provenance review,
-bundle/VSIX inventory, research-only exclusions, `THIRD_PARTY_NOTICES.md`, exact
-`GPL-3.0-only` package and LICENSE metadata, and synchronized public documentation.
+The 0.12.6 GPL compliance work established the required ownership/provenance
+review, bundle/VSIX inventory, research-only exclusions, `THIRD_PARTY_NOTICES.md`,
+exact `GPL-3.0-only` package and LICENSE metadata, and synchronized public
+documentation.
 Every GPL release must repeat artifact-level compliance verification and establish
 exact release-tag/source/VSIX Corresponding Source traceability before publication.
 

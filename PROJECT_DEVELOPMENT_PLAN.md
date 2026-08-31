@@ -3,9 +3,8 @@
 **Status:** 2026-08-30  
 **Current repository/package version:** 0.12.6  
 **Project:** Bearded Puppy Labs / Query Puppy for T-SQL  
-**Current repository/release-target license:** GPL-3.0-only from 0.12.6  
-**Historical published license:** officially published releases through 0.12.5 retain MIT  
-**Relicensing status:** repository transition complete; the official 0.12.6 release is pending
+**Current project license:** GPL-3.0-only  
+**License/compliance status:** repository compliance baseline complete; the official 0.12.6 release is pending
 
 ---
 
@@ -1290,15 +1289,11 @@ Release infrastructure changes should remain isolated from semantic work.
 
 ---
 
-## 10.1 P0 — GPL-3.0-only relicensing and sustainable FLOSS governance
+## 10.1 P0 — GPL-3.0-only compliance and sustainable FLOSS governance
 
-**Strategic decision:** Query Puppy version 0.12.6 and subsequent versions use `GPL-3.0-only`.
+**Strategic decision:** Query Puppy for T-SQL is licensed under `GPL-3.0-only`.
 
-Officially published releases through 0.12.5 retain their original MIT license terms. Previously granted MIT rights remain attached to those historical releases. Do not rewrite historical release licensing.
-
-Version 0.12.6 was already the current unreleased repository version when the coherent relicensing/compliance slice began, so the transition keeps that never-published version rather than creating an unnecessary additional version.
-
-The 0.12.6 relicensing/compliance slice:
+The 0.12.6 license/compliance slice:
 
 1. confirms project ownership/provenance for code, logo, assets, and other copyrightable project material;
 2. inventories the production bundle using build evidence such as the esbuild metafile;
@@ -1313,9 +1308,9 @@ The 0.12.6 relicensing/compliance slice:
 11. requires the distributed artifact and the exact source revision/tag to be traceable to one another;
 12. requires the Corresponding Source for the distributed GPL artifact to be available for the exact released version.
 
-The repository-side transition is complete. Publication remains blocked until the final committed source, immutable `v0.12.6` tag, GitHub Release source, and exact verified VSIX are mapped to one another.
+The repository-side compliance baseline is complete. Publication remains blocked until the final committed source, immutable `v0.12.6` tag, GitHub Release source, and exact verified VSIX are mapped to one another.
 
-The relicensing goal is strong copyleft, not a non-commercial restriction. Public communication must not describe GPL as prohibiting commercial use, sale, forks, modification, or private/internal modification. GPL obligations must be described accurately in terms of the applicable license conditions, especially when covered work is conveyed or distributed.
+The license goal is strong copyleft, not a non-commercial restriction. Public communication must not describe GPL as prohibiting commercial use, sale, forks, modification, or private/internal modification. GPL obligations must be described accurately in terms of the applicable license conditions, especially when covered work is conveyed or distributed.
 
 ---
 
@@ -2161,19 +2156,17 @@ Relationship learning should default to local processing.
 
 ---
 
-## 40.1 License transition and FLOSS responsibility
+## 40.1 License and FLOSS responsibility
 
 Query Puppy is FLOSS and benefits from the work of other open-source projects.
 
-Query Puppy version 0.12.6 and subsequent versions are licensed under:
+Query Puppy for T-SQL is licensed under:
 
 ```text
 GPL-3.0-only
 ```
 
 Use that exact SPDX identifier. Do not substitute `GPL-3.0-or-later`, deprecated ambiguous shorthand, or language that grants a later-version option.
-
-Officially published releases through 0.12.5 retain their original MIT license terms.
 
 The GPL decision does not prohibit commercial use, sale, modification, or forks. Do not describe Query Puppy as non-commercial software. Do not claim that every modification must always be published or that private/internal modification is prohibited.
 
@@ -2407,9 +2400,9 @@ GPL-3.0-only + DCO + inbound = outbound
 
 but this preference is not yet a repository contribution requirement until the project deliberately adopts and documents it.
 
-A DCO-style model is preferred if Query Puppy prioritizes low-friction provenance and community contributions without granting Bearded Puppy Labs extra relicensing rights.
+A DCO-style model is preferred if Query Puppy prioritizes low-friction provenance and community contributions without granting Bearded Puppy Labs extra licensing rights.
 
-A CLA or copyright-assignment model should be adopted only if the project deliberately decides that future unilateral relicensing or additional licensing rights justify the added contributor burden.
+A CLA or copyright-assignment model should be adopted only if the project deliberately decides that future unilateral licensing changes or additional licensing rights justify the added contributor burden.
 
 Do not silently introduce a CLA, copyright assignment, or DCO requirement as an implementation detail.
 
@@ -2594,7 +2587,7 @@ A version bump is normally not required for:
 
 If a task changes publishable product behavior, the appropriate next version must be determined and applied as part of that task rather than deferred to a later release-preparation pass.
 
-The MIT-to-`GPL-3.0-only` transition was deliberately applied to unreleased version 0.12.6. Do not create another version solely to repeat the completed license transition.
+Do not create another version solely to repeat completed license/compliance work.
 
 ---
 
@@ -2649,8 +2642,8 @@ The same release artifact published to the Marketplace and attached to GitHub sh
 
 ### Completed hygiene and compliance work
 
-1. completed the repository-side GPL-3.0-only relicensing/compliance slice for 0.12.6;
-2. confirmed code/asset ownership and provenance needed for relicensing;
+1. completed the repository-side GPL-3.0-only license/compliance slice for 0.12.6;
+2. confirmed code/asset ownership and provenance needed for the current license;
 3. established and verified `THIRD_PARTY_NOTICES.md`;
 4. inventoried direct third-party libraries and material actually redistributed in the VSIX;
 5. inspected production bundle inputs/output and the final VSIX for third-party material and notice/source obligations;
@@ -2909,7 +2902,7 @@ When generating a Codex prompt:
 32. Update `THIRD_PARTY_NOTICES.md` and other required license/NOTICE material in the same coherent change when third-party material changes.
 33. Do not rely only on package-manager license metadata when redistribution or compatibility is material.
 34. For GPL release work, inspect the actual bundle and VSIX contents and verify the exact Corresponding Source/release-tag mapping.
-35. Preserve the active `GPL-3.0-only` metadata and the historical MIT boundary; do not rewrite historical release licensing.
+35. Preserve the active `GPL-3.0-only` project license and metadata.
 
 Final reports should normally include:
 
@@ -3196,7 +3189,7 @@ Not:
 
 ### 5. Preserve software freedom and sustainable independence
 
-The active release license from version 0.12.6 is `GPL-3.0-only`.
+The active project license is `GPL-3.0-only`.
 
 Keep commercial use permitted while using strong copyleft to preserve the GPL freedoms and source obligations that apply when covered versions are conveyed or distributed.
 
@@ -3267,7 +3260,7 @@ The project should remain freely available for personal and commercial use while
 
 Query Puppy is free and open-source software.
 
-Query Puppy version 0.12.6 and subsequent versions use `GPL-3.0-only`. Officially published releases through 0.12.5 remain available under their original MIT terms.
+Query Puppy for T-SQL uses `GPL-3.0-only`.
 
 The project benefits from the open-source ecosystem and should participate in that ecosystem responsibly.
 
