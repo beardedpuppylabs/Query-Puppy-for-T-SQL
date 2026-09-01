@@ -175,6 +175,26 @@ Completion is only one consumer of the semantic engine.
 
 Future features should increasingly be implemented as additional consumers of the same semantic information rather than by creating parallel analyzers.
 
+Predicate Intelligence is an approved future direction, not a current capability.
+Its intended architecture is a separate semantic-knowledge domain beside
+Relationship Intelligence:
+
+```text
+Document Semantic Model
+        |
+        +-- Relationship Evidence
+        |
+        +-- Predicate Evidence
+        |
+        v
+Local / Project Semantic Knowledge
+```
+
+Predicates and relationships may reuse proven principles such as canonical identities,
+provenance, bounded persistence, deterministic ranking, and explicit confirmation.
+They must not share one universal evidence model merely because those principles are
+similar.
+
 ---
 
 # PART I — FOUNDATION RESILIENCE
@@ -1201,6 +1221,339 @@ Long-term product thesis:
 
 ---
 
+# PART II-A — PREDICATE INTELLIGENCE (APPROVED FUTURE STRATEGY)
+
+## 8A. Predicate Intelligence objective
+
+**Status:** approved future strategy; not implemented and not the next active milestone.
+
+Predicate Intelligence should eventually let Query Puppy understand, explicitly
+store, safely learn, rank, explain, and suggest recurring semantic `WHERE` predicates
+used by a real project.
+
+For example:
+
+```sql
+SELECT ...
+FROM Artikel a
+WHERE a.Mandant = @Mandant
+  AND a.Aktiv = 1
+```
+
+may provide deliberate or recurring knowledge equivalent to:
+
+```text
+Artikel.Mandant = @Mandant
+Artikel.Aktiv = 1
+```
+
+A future completion at:
+
+```sql
+FROM Artikel a
+WHERE |
+```
+
+could offer those patterns when the current semantic context supports them. This is
+project-aware semantic predicate intelligence, not snippet memorization and not an
+unrestricted query-mining engine.
+
+## 8A.1 Separate semantic domain
+
+Predicate Intelligence and Relationship Intelligence are separate domains:
+
+```text
+Predicate Evidence / Definitions
+        ↓
+Canonical Predicate Pattern
+        ↓
+Predicate Intelligence
+        ↓
+Completion
+        ↓ later
+Code Actions
+Diagnostics
+```
+
+Do not:
+
+- add predicates to the canonical `Relationship` model;
+- represent predicates as another relationship provenance;
+- rename Relationship Intelligence into a generic knowledge model;
+- create a universal semantic-evidence abstraction solely for theoretical reuse;
+- change current Relationship Intelligence trust, graph, persistence, or runtime
+  semantics to accommodate future predicates.
+
+Concrete shared infrastructure should be reused only where the responsibility truly
+overlaps, such as workspace ownership, bounded local storage, canonical catalog
+identity, or native editor integration.
+
+## 8A.2 Explicit and learned knowledge sources
+
+Future predicate knowledge should conceptually distinguish:
+
+```text
+ProjectDefined
+UserConfirmed
+LearnedFromQuery
+```
+
+These names describe strategic roles. Exact runtime names, confidence types, and
+persistence representations remain future implementation decisions.
+
+`ProjectDefined` represents deliberate project or team knowledge. For example, a
+project may define that normal `Artikel` queries use both a tenant predicate and an
+active-row predicate. Project-owned storage may naturally live under the established
+`.query-puppy/` boundary, but no filename or format is defined yet.
+
+`UserConfirmed` represents a valid predicate or semantic predicate bundle that a
+developer explicitly saves through future native editor UX. Confirmation must store
+semantic knowledge, not a source alias or arbitrary raw SQL text. Exact Code Action
+titles and command identifiers remain undecided.
+
+`LearnedFromQuery` represents conservatively aggregated evidence from safely resolved
+local `WHERE` predicates. Ordinary editing, accepting completion, or observation
+frequency alone must never silently promote learned evidence into explicit project
+truth.
+
+The strategic trust rule is:
+
+```text
+ProjectDefined / UserConfirmed
+        >
+LearnedFromQuery
+```
+
+Do not copy the exact Relationship Intelligence confidence enum prematurely.
+Predicate confidence may require different semantics when implementation work begins.
+
+## 8A.3 Canonical semantic predicate identity
+
+An alias-specific source string such as:
+
+```sql
+a.Mandant = @Mandant
+```
+
+must not become canonical stored identity merely because it appeared in a query.
+
+A canonical predicate pattern must represent enough resolved semantics to distinguish:
+
+- the physical object;
+- the physical column;
+- the operator;
+- the right-hand-side category;
+- the right-hand-side semantic identity or a safely reusable literal;
+- provenance;
+- relevant observation information for learned evidence.
+
+Conceptually:
+
+```text
+Object: dbo.Artikel
+Column: Mandant
+Operator: =
+RHS kind: Variable
+RHS: @Mandant
+```
+
+or:
+
+```text
+Object: dbo.Artikel
+Column: Aktiv
+Operator: =
+RHS kind: Literal
+Value: 1
+```
+
+When materializing a pattern, Query Puppy must resolve the applicable current
+RowSource and use its current qualifier. If the present query uses
+`dbo.Artikel AS x`, the first pattern becomes `x.Mandant = @Mandant`. An alias from an
+earlier observation must never become permanent semantic identity.
+
+Exact TypeScript interfaces and serialized schemas are deliberately unspecified.
+
+## 8A.4 Predicate bundles
+
+Predicate bundles are a first-class future concept rather than opaque multiline SQL
+snippets.
+
+For example:
+
+```text
+Artikel common filter
+    ├─ Mandant = @Mandant
+    └─ Aktiv = 1
+```
+
+A future completion may offer one semantic bundle and materialize:
+
+```sql
+a.Mandant = @Mandant
+AND a.Aktiv = 1
+```
+
+Individual members may also be suggested independently where appropriate. Bundle
+identity, validation, ranking, and persistence must operate on semantic predicate
+members, not one opaque SQL string. No exact storage format or UI label is defined
+yet.
+
+## 8A.5 Learned predicate evidence
+
+Future learning may observe safely resolved `WHERE` predicates and aggregate evidence
+using information such as:
+
+- resolved object and column identities;
+- operator;
+- right-hand-side category;
+- stable parameter or variable identity;
+- a safely reusable literal where policy permits it;
+- observation count;
+- table/query context;
+- predicate co-occurrence;
+- provenance;
+- recency only if a later concrete design justifies it.
+
+Semantic normalization should be resilient to aliases, formatting, whitespace,
+predicate order, normal identifier quoting, and casing. Complete raw SQL is not the
+learning model. Learning remains bounded, conservative, and explainable rather than
+becoming general query-pattern mining.
+
+## 8A.6 Conservative literal safety
+
+Not every repeated literal is reusable project knowledge.
+
+Conceptually:
+
+```text
+variables / parameters
+    -> generally useful evidence
+
+stable domain literals
+    -> potentially useful with strong evidence
+
+arbitrary business/data identifiers
+    -> generally unsuitable
+
+dates / GUIDs / customer IDs / transaction IDs
+    -> normally unsuitable
+```
+
+`Aktiv = 1` may plausibly become reusable evidence. Repeated
+`KundeID = 4711` must not automatically make `4711` a reusable suggestion. Frequency
+alone is insufficient, and this strategy does not define a simplistic threshold,
+literal whitelist, or admission formula.
+
+## 8A.7 Initial table-local focus and later context
+
+The first implementation should favor bounded table-local knowledge:
+
+```text
+Artikel
+    -> Mandant
+    -> Aktiv
+```
+
+Broader context-sensitive behavior comes later. Potential later inputs include
+participating physical objects, current QueryScope, trusted JOIN relationships,
+predicate co-occurrence, and explicit project knowledge. For example, an
+`Artikel + Preise` context might rank a different additional predicate.
+
+Context-sensitive ranking must remain deterministic, bounded, and explainable. It
+must not become a general query-mining engine.
+
+## 8A.8 Multi-tenant and partition-filter opportunity
+
+Recurring predicates such as:
+
+```sql
+a.Mandant = @Mandant
+```
+
+may be valuable evidence of an important tenant or partition filter in ERP systems.
+Column names alone do not establish that meaning, and repetition alone does not make
+it authoritative.
+
+The certainty required to offer an explicit completion is lower than the certainty
+required to claim that a query is missing a safety-critical filter. Completion comes
+first. Diagnostics come later and require substantially stronger evidence.
+
+## 8A.9 Consumers and explicit insertion
+
+Predicate Intelligence must never silently modify SQL semantics.
+
+Every future insertion or transformation requires explicit user action. Suitable
+native consumers may include:
+
+- `CompletionItem` first;
+- `CodeAction` after the semantic model is proven;
+- `QuickPick` where a real choice requires it;
+- Diagnostics only in a later conservative stage.
+
+Do not automatically add `WHERE`, add predicates, rewrite predicates, or silently
+"fix" a query. Do not introduce a custom completion UI or custom snippet engine.
+
+## 8A.10 Diagnostics boundary
+
+A future conservative diagnostic may communicate that a project normally applies a
+confirmed tenant predicate when querying a particular object. A missing common
+predicate is not automatically a bug.
+
+Predicate diagnostics require:
+
+- explicit confirmation or very high confidence;
+- provenance;
+- deterministic behavior;
+- strong false-positive suppression;
+- an obvious way to express intentionally broad queries without persistent nuisance
+  warnings.
+
+Diagnostics are not part of the first Predicate Intelligence implementation and are
+not implemented now.
+
+## 8A.11 Explainability
+
+Non-explicit learned suggestions must eventually explain their origin. Conceptually:
+
+```text
+Learned predicate
+
+Artikel.Aktiv = 1
+
+Observed in 47 resolved predicates
+```
+
+or:
+
+```text
+Project predicate
+
+Artikel.Mandant = @Mandant
+
+Source: project-defined
+```
+
+Exact wording is future presentation work. The invariant is that learned ranking and
+confidence must not become opaque magic.
+
+## 8A.12 Local-first privacy and persistence
+
+Future Predicate Intelligence must remain local-first:
+
+- do not upload SQL or predicate evidence;
+- persist bounded canonical semantic evidence rather than complete query text;
+- never store credentials;
+- avoid sensitive connection information;
+- retain clear workspace/project ownership;
+- reuse proven persistence infrastructure only where its ownership and lifecycle
+  genuinely match.
+
+Do not create a generic knowledge database before concrete predicate requirements
+justify one.
+
+---
+
 # PART III — IMMEDIATE PRIORITIES
 
 ## 9. P0 — Connection resilience continuation
@@ -1463,6 +1816,10 @@ catalog, database, filesystem, relationship-persistence, or remote access.
 
 Document Symbols / Outline is the next planned semantic/navigation consumer.
 
+Recording Predicate Intelligence as an approved future workstream does not change
+this priority. Continue the active document-local navigation/code-understanding
+sequence before scheduling Predicate Intelligence implementation.
+
 Still future or deliberately deferred:
 
 - projection-alias identity and navigation
@@ -1513,6 +1870,11 @@ Relationship-aware diagnostics may later distinguish:
 - confirmed relationship
 - learned relationship
 - candidate relationship
+
+Predicate-aware diagnostics belong to the final, conservative stage of the future
+Predicate Intelligence workstream. A commonly observed predicate is not enough to
+diagnose a missing filter; explicit or exceptionally strong evidence and a low-noise
+opt-out policy are required.
 
 Every diagnostic must have:
 
@@ -1639,6 +2001,49 @@ Do not introduce hidden AI/fuzzy ranking.
 
 Users should be able to understand why an object is suggested.
 
+## 21.1 Approved future workstream — Predicate Intelligence
+
+Predicate Intelligence is strategically approved but is not the next active
+milestone. Document Symbols / Outline remains the next planned semantic/navigation
+consumer, followed by the existing code-understanding roadmap as prioritized through
+normal planning.
+
+When Predicate Intelligence is scheduled, preserve this progression:
+
+### PI1 — Explicit Predicate Knowledge
+
+- establish a canonical semantic predicate model;
+- support deliberate project-defined and explicitly user-confirmed knowledge;
+- support individual predicates and semantic predicate bundles;
+- make native Completion the first consumer;
+- require explicit insertion.
+
+### PI2 — Learned Predicate Knowledge
+
+- observe only safely resolved local `WHERE` evidence;
+- normalize aliases and superficial syntax to canonical identities;
+- aggregate bounded evidence;
+- handle reusable literals conservatively;
+- expose provenance and explanation with learned suggestions.
+
+### PI3 — Context-sensitive Predicate Intelligence
+
+- consider table combinations and current semantic query context;
+- use predicate co-occurrence where it is reliable;
+- rank individual predicates and bundles deterministically;
+- reuse trusted relationship context without merging the predicate and relationship
+  domains.
+
+### PI4 — Conservative Predicate Diagnostics
+
+- limit diagnostics to explicit or exceptionally high-confidence knowledge;
+- treat tenant/partition-filter opportunities with strong false-positive suppression;
+- provide a durable low-noise way to express intentionally broad queries.
+
+These stage names are strategic labels, not implementation contracts. They do not
+define exact APIs, schemas, filenames, enums, thresholds, ranking formulas, action
+identifiers, or UI text.
+
 ---
 
 # PART V — LOWER-PRIORITY OR CONDITIONAL AREAS
@@ -1720,9 +2125,13 @@ Dynamic SQL based on:
 - schema
 - query scope
 - relationships
+- future canonical predicate patterns
 - metadata
 
 belongs to Query Puppy through completion or Code Actions.
+
+Future predicate bundles remain semantic members materialized for the current query,
+not stored multiline snippets.
 
 ---
 
@@ -2018,6 +2427,11 @@ Avoid:
 - private mssql command interception
 - hidden behavior users cannot understand
 
+Future Predicate Intelligence must use these native surfaces and require an explicit
+acceptance or action before changing SQL. It must never silently add `WHERE`, insert a
+filter, rewrite a predicate, or treat learned evidence as authorization to modify
+query semantics.
+
 ---
 
 # PART IX — ARCHITECTURE AND QUALITY RULES
@@ -2110,6 +2524,30 @@ consumer and does not create a global heuristic graph.
 
 Do not allow declared, learned, project-defined, and heuristic relationships to become unrelated competing graph implementations.
 
+## 36.1 Separate semantic knowledge domains
+
+Future predicate knowledge is not relationship knowledge.
+
+Conceptually:
+
+```text
+Document Semantic Model
+        |
+        +-- Relationship Evidence
+        |       -> canonical Relationship
+        |       -> Relationship Intelligence
+        |
+        +-- Predicate Evidence / Definitions
+                -> canonical Predicate Pattern
+                -> Predicate Intelligence
+```
+
+Both domains may use canonical catalog identities, provenance, bounded local storage,
+deterministic ranking, explicit confirmation, and native consumers. Those similarities
+do not justify extending the Relationship model or inventing a universal knowledge or
+evidence framework. Reuse concrete infrastructure only when the responsibility and
+ownership actually match.
+
 ---
 
 ## 37. Conservative semantics
@@ -2123,6 +2561,9 @@ Do not claim a heuristic relationship is a real FK.
 Do not hide legal completion candidates merely because type information is incomplete.
 
 Do not convert weak evidence into permanent relationship truth without explicit policy.
+
+Do not convert repeated predicates or literals into explicit project truth merely
+because they are frequent.
 
 ---
 
@@ -2153,6 +2594,10 @@ Preserve:
 
 Relationship learning must not turn every keystroke into global-history analysis.
 
+Future predicate learning must likewise avoid per-keystroke persistence, whole-
+workspace mining, or unbounded history analysis. Initial lookup and ranking should be
+table-local and indexable.
+
 Navigation and diagnostics must not multiply full-document or full-catalog analysis unnecessarily.
 
 ---
@@ -2168,10 +2613,15 @@ Do not transmit:
 - credentials
 - learned relationships
 - project relationship maps
+- learned predicate evidence
+- project predicate definitions
 
 to remote services without an explicit future product decision and user consent.
 
 Relationship learning should default to local processing.
+
+Future predicate learning must also default to local processing and bounded canonical
+semantic evidence rather than complete raw queries.
 
 ---
 
@@ -2522,6 +2972,27 @@ JOIN completion is a consumer.
 
 Do not collapse them into one relationship service.
 
+## 44.1 Future Predicate Intelligence complexity
+
+Predicate Intelligence will require its own bounded responsibilities:
+
+```text
+Predicate evidence acquisition / explicit definitions
+    ↓
+Semantic normalization
+    ↓
+Canonical predicate patterns and bundles
+    ↓
+Predicate ranking / explanation
+    ↓
+Completion first, then later consumers
+```
+
+It must reuse the current document semantic and catalog identities rather than create
+another parser or scope engine. It must not be folded into Relationship Intelligence,
+and similar provenance or persistence concepts must not trigger a speculative generic
+knowledge subsystem.
+
 ---
 
 # PART XI — RELEASE POLICY
@@ -2767,11 +3238,15 @@ Some Phase F work may run in parallel with Relationship Intelligence where depen
 1. Document-local Go to Definition / Peek — implemented in 0.13.0.
 2. Document-local Find References — implemented in 0.14.0.
 3. Document-local Highlights — implemented in 0.15.0.
-4. Symbols.
+4. Document Symbols / Outline — next planned semantic/navigation consumer.
 5. High-confidence diagnostics.
 6. Quick Fixes.
 7. Relationship discovery.
 8. Join-path workflows.
+
+The approved future Predicate Intelligence workstream does not displace this active
+sequence. Its explicit-knowledge/completion stage should be scheduled deliberately
+after the current navigation/code-understanding priority is reviewed.
 
 ---
 
@@ -2799,7 +3274,22 @@ Only after evaluating existing native/mssql functionality:
 
 ---
 
-## 55.1 Future dialect work is not currently a roadmap phase
+## 55.1 Future Predicate Intelligence workstream
+
+Predicate Intelligence is approved strategic direction but is not yet an active
+implementation phase.
+
+Its future sequence is:
+
+1. explicit project/user-confirmed predicates and bundles with Completion first;
+2. bounded learned predicate evidence;
+3. context-sensitive ranking and co-occurrence;
+4. conservative diagnostics.
+
+This sequence does not assign an implementation version, define persistence/API
+details, or move Predicate Intelligence ahead of Document Symbols / Outline.
+
+## 55.2 Future dialect work is not currently a roadmap phase
 
 PostgreSQL and MySQL products remain future possibilities rather than active implementation workstreams.
 
@@ -2831,6 +3321,7 @@ The strategy chat owns:
 - external dependency decisions
 - mssql integration strategy
 - Relationship Intelligence strategy
+- Predicate Intelligence strategy
 - dialect strategy
 - FLOSS/dependency policy
 - product boundaries
@@ -3053,7 +3544,8 @@ The former is preferred.
 
 ## 67. Explainability
 
-For semantic ranking, diagnostics, and relationship inference:
+For semantic ranking, diagnostics, relationship inference, and future learned
+predicate suggestions:
 
 Can Query Puppy explain why it produced the result?
 
@@ -3172,6 +3664,25 @@ conservative heuristic candidates
 
 with explicit provenance and confidence.
 
+Separately, establish Predicate Intelligence as an approved future domain:
+
+```text
+Predicate Intelligence
+=
+explicit project knowledge
++
+explicit user confirmation
++
+bounded learned WHERE evidence
+```
+
+Canonical predicate patterns must resolve objects, columns, operators, and safe
+right-hand-side semantics independently of source aliases. Materialization uses the
+current RowSource alias. Predicate bundles remain structured semantic members rather
+than raw SQL snippets. This future domain must not be merged into Relationship
+Intelligence, and it does not displace Document Symbols / Outline as the next planned
+consumer.
+
 ---
 
 ### 3. Exploit the semantic foundation
@@ -3242,6 +3753,7 @@ Build where Query Puppy has structural advantage:
 - real database metadata
 - query-aware understanding
 - relationship intelligence
+- future project-aware predicate intelligence
 - type awareness
 - deterministic behavior
 - explainability
@@ -3264,6 +3776,13 @@ It should distinguish those sources rather than pretending they are equally cert
 For well-designed databases, declared metadata should produce excellent intelligence immediately.
 
 For imperfect ERP and legacy databases, Query Puppy should progressively build an explainable local semantic model that makes the schema easier to understand and use.
+
+That long-term local semantic model may include deliberately provided and safely
+learned recurring predicate knowledge, especially tenant, partition, active-row, and
+other project conventions that SQL Server metadata does not declare. Such knowledge
+must retain provenance, conservative literal policy, explicit insertion, and a clear
+separation from relationships. Completion should prove the model before later Code
+Actions, context-sensitive ranking, or high-confidence diagnostics consume it.
 
 The architecture should also be strong enough that the proven Query Puppy approach can later be applied to additional database dialects without requiring a foundational rewrite.
 
