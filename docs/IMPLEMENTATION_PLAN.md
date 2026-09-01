@@ -48,9 +48,14 @@ architecture documents describe the intended present-day design.
   complete; qualifying local evidence enters the canonical runtime graph
 - Relationship Intelligence Phase E3 conservative heuristic JOIN candidates —
   complete; bounded fallback applies only to already-selected physical pairs
-- Phase F1 document-local semantic symbol/reference foundation — complete; native
-  navigation, symbols, highlights, rename, and diagnostics remain future consumers
 - 0.12.6 GPL-3.0-only repository compliance — complete
+- Phase F1 document-local semantic symbol/reference foundation — complete
+- Phase G1 document-local Go to Definition / Peek Definition — complete in 0.13.0
+- Phase G2 document-local Find References — complete in 0.14.0
+- Phase G3 document-local Document Highlights — complete in 0.15.0
+- 0.15.1 navigation/release hygiene hardening — complete; Definition, References,
+  and Highlights share one document-semantic navigation cache, and CI/package
+  boundaries were hardened
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -59,8 +64,15 @@ an exact target-aware object-plus-key name, a complete unambiguous mapping, and 
 stronger relationship for the pair. It reuses the canonical Relationship and JOIN
 renderer without entering the global graph, persistence, table discovery, or ranking.
 Completion acceptance remains non-confirming; the existing explicit save-JOIN action
-is the only promotion path to UserConfirmed project truth. Navigation & Code
-Understanding remains a larger forward-roadmap area.
+is the only promotion path to UserConfirmed project truth.
+
+Phase G1 through G3 subsequently added native document-local Definition / Peek,
+References, and Highlights for CTEs, explicit RowSource aliases, scalar local
+variables, table variables, and deterministic temporary-table symbols. Version
+0.15.1 consolidated those consumers on one document-semantic navigation cache.
+Document Symbols/Outline is the next semantic/navigation consumer; projection-alias
+navigation, physical/workspace navigation, semantic Rename, and Diagnostics remain
+future work.
 
 The 0.12.6 compliance slice established the official GPLv3 license text, package
 metadata, third-party inventory, bundle/VSIX audit, public documentation, and the

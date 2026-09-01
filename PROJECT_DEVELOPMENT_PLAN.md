@@ -1,6 +1,6 @@
 # Query Puppy for T-SQL — Central Development Plan
 
-**Status:** 2026-08-30  
+**Status:** 2026-08-31  
 **Current repository/package version:** 0.15.1  
 **Project:** Bearded Puppy Labs / Query Puppy for T-SQL  
 **Current project license:** GPL-3.0-only  
@@ -1440,27 +1440,39 @@ False confidence is worse than a missing suggestion.
 
 Navigation remains a major near-term semantic consumer.
 
-Target native APIs:
+Implemented native document-local consumers:
 
-- Go to Definition — implemented for supported document-local semantic symbols
-- Peek Definition — implemented through the native Definition Provider for the same
-  document-local symbols
-- Find References — implemented for supported document-local semantic symbols
-- Document Highlights — implemented for supported document-local semantic symbols
-- Document Symbols / Outline
-- navigation to CTE definitions
-- navigation to aliases
-- navigation to variables
-- navigation to local SQL objects
-- navigation among projection aliases where semantically valid
+- Go to Definition / Peek Definition
+- Find References
+- Document Highlights
 
-Start with document-local constructs.
+These consumers currently resolve the canonical document-local identities for:
+
+- CTEs
+- explicit RowSource aliases
+- scalar local variables
+- table variables
+- deterministic temporary-table symbols
+
+They reuse the editor-neutral document semantic symbol/reference index and one shared
+cursor-keyed navigation semantic cache. They remain same-document and perform no
+catalog, database, filesystem, relationship-persistence, or remote access.
+
+Document Symbols / Outline is the next planned semantic/navigation consumer.
+
+Still future or deliberately deferred:
+
+- projection-alias identity and navigation
+- physical database-object navigation
+- workspace and cross-file navigation
+- semantic Rename
+- semantic Diagnostics
+
+Continue with document-local constructs before broadening navigation scope.
 
 They require less external integration and already exist in the semantic model.
 
 Avoid custom navigation windows.
-
-Relationship-foundation work and navigation may proceed in an order or partial parallelism justified by actual implementation dependencies.
 
 Do not let an older milestone document override this central strategic plan.
 
