@@ -273,6 +273,60 @@ test("contract: multiple FK relationships remain distinct", () => {
   );
 });
 
+test("contract: JOIN continuation offers only unused relationship predicates", () => {
+  const prefix =
+    "SELECT * FROM reltest.Addresses a JOIN reltest.Customers c ON ";
+  assert.deepEqual(
+    joins(`${prefix}c.BillingAddressId = a.AddressId AND `).map(
+      (item) => item.name,
+    ),
+    ["c.PrimaryAddressId = a.AddressId", "c.ShippingAddressId = a.AddressId"],
+  );
+  assert.deepEqual(
+    joins(
+      `${prefix}c.BillingAddressId = a.AddressId AND c.PrimaryAddressId = a.AddressId OR `,
+    ).map((item) => item.name),
+    ["c.ShippingAddressId = a.AddressId"],
+  );
+  assert.deepEqual(
+    joins(
+      `${prefix}c.BillingAddressId = a.AddressId AND c.PrimaryAddressId = a.AddressId AND c.ShippingAddressId = a.AddressId AND `,
+    ),
+    [],
+  );
+});
+
+test("contract: reversed manual JOIN comparisons are treated as used", () => {
+  const result = joins(
+    "SELECT * FROM reltest.Addresses a JOIN reltest.Customers c ON a.AddressId = c.BillingAddressId AND ",
+  );
+  assert.deepEqual(
+    result.map((item) => item.name),
+    ["c.PrimaryAddressId = a.AddressId", "c.ShippingAddressId = a.AddressId"],
+  );
+});
+
+test("contract: the current partial JOIN predicate remains replaceable", () => {
+  for (const sql of [
+    "SELECT * FROM reltest.Addresses a JOIN reltest.Customers c ON c.Billing",
+    "SELECT * FROM reltest.Addresses a JOIN reltest.Customers c ON c.BillingAddressId = a.AddressId AND c.Primary",
+  ]) {
+    const result = joins(sql);
+    assert.equal(result.length, 1, sql);
+    const candidate = result[0]!;
+    assert.equal(
+      candidate.name,
+      sql.endsWith("Billing")
+        ? "c.BillingAddressId = a.AddressId"
+        : "c.PrimaryAddressId = a.AddressId",
+    );
+    assert.equal(
+      sql.slice(candidate.replacementStart),
+      sql.endsWith("Billing") ? "c.Billing" : "c.Primary",
+    );
+  }
+});
+
 test("contract: composite FKs produce one ordinal JOIN predicate", () => {
   assert.deepEqual(
     joins(
@@ -285,6 +339,37 @@ test("contract: composite FKs produce one ordinal JOIN predicate", () => {
       "SELECT * FROM reltest.OrderLines ol JOIN reltest.OrderHeaders oh ON",
     ).map((item) => item.name),
     ["oh.CompanyId = ol.CompanyId AND oh.OrderId = ol.OrderId"],
+  );
+});
+
+test("contract: composite JOIN continuation inserts only missing mappings", () => {
+  const prefix =
+    "SELECT * FROM reltest.OrderHeaders oh JOIN reltest.OrderLines ol ON ";
+  assert.deepEqual(
+    joins(`${prefix}ol.CompanyId = oh.CompanyId AND `).map((item) => [
+      item.name,
+      item.relationship?.mappings.length,
+    ]),
+    [["ol.OrderId = oh.OrderId", 2]],
+  );
+  assert.deepEqual(
+    joins(
+      `${prefix}ol.CompanyId = oh.CompanyId AND ol.OrderId = oh.OrderId AND `,
+    ),
+    [],
+  );
+});
+
+test("contract: unique unqualified JOIN sources preserve relationship identity", () => {
+  assert.deepEqual(
+    joins("SELECT * FROM Addresses a JOIN Customers c ON ").map(
+      (item) => item.name,
+    ),
+    [
+      "c.BillingAddressId = a.AddressId",
+      "c.PrimaryAddressId = a.AddressId",
+      "c.ShippingAddressId = a.AddressId",
+    ],
   );
 });
 

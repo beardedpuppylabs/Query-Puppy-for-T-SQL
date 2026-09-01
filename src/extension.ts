@@ -21,7 +21,10 @@ import {
   SIGNATURE_HELP_METADATA,
   SQL_DOCUMENT_SELECTOR,
 } from "./completion/ProviderRegistration.js";
-import { PendingSignatureTriggerState } from "./completion/AutomaticSignatureHelp.js";
+import {
+  PendingSignatureTriggerState,
+  type PendingSignatureTrigger,
+} from "./completion/AutomaticSignatureHelp.js";
 import { SelectStarExpansionController } from "./commands/ExpandSelectStarCommand.js";
 import {
   PendingCompletionTriggerState,
@@ -39,6 +42,7 @@ import {
   SqlRelationshipCodeActionProvider,
 } from "./relationships/SqlRelationshipCodeActionProvider.js";
 import { FileLearnedRelationshipEvidenceStore } from "./relationships/LearnedRelationshipEvidenceStore.js";
+import { parseProcedureCallSite } from "./parser/DmlCallAnalyzer.js";
 import {
   CLEAR_LEARNED_RELATIONSHIP_EVIDENCE_COMMAND,
   WorkspaceLearnedRelationshipEvidence,
@@ -129,6 +133,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const automaticSignatureHelp = new PendingSignatureTriggerState();
   let automaticFallbackTimer: ReturnType<typeof setTimeout> | undefined;
   const automaticCompletion = new PendingCompletionTriggerState();
+  let automaticSuggestTimer: ReturnType<typeof setTimeout> | undefined;
   let automaticSuggestRunning = false;
   let automaticAliasSuggestInvocations = 0;
   let automaticSemanticSuggestInvocations = 0;
@@ -142,6 +147,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const clearAutomaticSuggestTrigger = (): void => {
     automaticCompletion.clear();
     provider.clearAutomaticCompletionExpectation();
+    if (automaticSuggestTimer) clearTimeout(automaticSuggestTimer);
+    automaticSuggestTimer = undefined;
   };
   const fulfillAutomaticSuggestTrigger = async (
     generation?: number,
@@ -158,6 +165,8 @@ export function activate(context: vscode.ExtensionContext): void {
       generation,
     );
     if (!taken) return;
+    if (automaticSuggestTimer) clearTimeout(automaticSuggestTimer);
+    automaticSuggestTimer = undefined;
     automaticSuggestRunning = true;
     const cancellation = new vscode.CancellationTokenSource();
     try {
@@ -330,8 +339,9 @@ export function activate(context: vscode.ExtensionContext): void {
           .get<boolean>("enabled") ?? true,
       );
       if (pendingSuggest)
-        queueMicrotask(
+        automaticSuggestTimer = setTimeout(
           () => void fulfillAutomaticSuggestTrigger(pendingSuggest.generation),
+          0,
         );
       const pending = automaticSignatureHelp.replace(
         event.document.uri.toString(),
@@ -340,7 +350,7 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       if (!pending) return;
       if (
-        !functionCallAtCursor(
+        !signatureCallAtCursor(
           editor.document.getText(),
           pending.expectedOffset,
           pending.triggerCharacter,
@@ -609,6 +619,10 @@ export function activate(context: vscode.ExtensionContext): void {
         "queryPuppyForTSql.test.takeAutomaticCompletionInvocations",
         () => provider.takeAutomaticCompletionInvocations(),
       ),
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.takeAmbiguityNotifications",
+        () => provider.takeTestAmbiguityNotifications(),
+      ),
     );
   const checkFirstRun = (): void => {
     warnAboutMicrosoftSuggestions(context).catch((error: unknown) =>
@@ -647,20 +661,29 @@ function automaticCandidateMatches(
 ): boolean {
   if (trigger === "smartAlias") return semanticKind === "rowSourceAlias";
   if (trigger === "joinContinuation") return semanticKind === "keyword";
+  if (trigger === "joinOnContinuation") return semanticKind === "joinPredicate";
   return true;
 }
 
-function functionCallAtCursor(
+function signatureCallAtCursor(
   sql: string,
   cursor: number,
-  character: string,
+  character: PendingSignatureTrigger["triggerCharacter"],
 ): boolean {
-  if (character !== "(" && character !== ",") return false;
+  const procedure = parseProcedureCallSite(sql, cursor);
+  if (character === "procedureArgument")
+    return Boolean(
+      procedure &&
+      cursor > procedure.nameEnd &&
+      sql.slice(procedure.nameEnd, cursor).trim().length === 0,
+    );
   const callSite = parseCallSite(sql, cursor);
-  return Boolean(
+  if (
     callSite &&
-    (callSite.nameParts.length >= 2 || resolveBuiltinCallable(callSite)),
-  );
+    (resolveBuiltinCallable(callSite) || callSite.nameParts.length)
+  )
+    return true;
+  return character === "," && procedure?.lastArgumentSeparator === cursor - 1;
 }
 
 function parameterHintStatusLine(document?: vscode.TextDocument): string {

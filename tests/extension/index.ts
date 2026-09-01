@@ -1236,6 +1236,10 @@ const takeAutomaticCompletionInvocations = () =>
   vscode.commands.executeCommand<readonly AutomaticCompletionInvocation[]>(
     "queryPuppyForTSql.test.takeAutomaticCompletionInvocations",
   );
+const takeAmbiguityNotifications = () =>
+  vscode.commands.executeCommand<readonly string[]>(
+    "queryPuppyForTSql.test.takeAmbiguityNotifications",
+  );
 async function waitForAutomaticAliasSuggest(): Promise<number> {
   for (let attempt = 0; attempt < 30; attempt++) {
     const count = await takeAutomaticAliasSuggestInvocations();
@@ -2501,7 +2505,8 @@ ORDER BY staleCustomer.CustomerId`;
     const semanticKinds = items.flatMap((item) =>
       item.data?.semanticKind ? [item.data.semanticKind] : [],
     );
-    assert.ok(labels(items).includes("Customers"));
+    assert.ok(labels(items).includes("dbo.Customers"));
+    assert.ok(labels(items).includes("reltest.Customers"));
     assert.ok(labels(items).includes("GetCustomerAddresses_0001"));
     assert.equal(
       semanticKinds.some((kind) =>
@@ -4074,6 +4079,31 @@ FROM ${database}.dbo.Customers c`;
   ]);
   await vscode.commands.executeCommand("hideSuggestWidget");
 
+  const continuedOnDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: `SELECT * FROM ${database}.reltest.Addresses AS a JOIN ${database}.reltest.Customers AS c ON a.AddressId = c.BillingAddressId AND`,
+  });
+  const continuedOnEditor =
+    await vscode.window.showTextDocument(continuedOnDocument);
+  const continuedOnEnd = continuedOnDocument.positionAt(
+    continuedOnDocument.getText().length,
+  );
+  continuedOnEditor.selection = new vscode.Selection(
+    continuedOnEnd,
+    continuedOnEnd,
+  );
+  await takeAutomaticCompletionInvocations();
+  await vscode.commands.executeCommand("type", { text: " " });
+  const continuedOn = await waitForAutomaticCompletion("joinOnContinuation");
+  assert.ok(continuedOn, "continued JOIN ON did not invoke completion");
+  assert.deepEqual(
+    continuedOn.items
+      .filter((item) => item.semanticKind === "joinPredicate")
+      .map((item) => item.name),
+    ["c.PrimaryAddressId = a.AddressId", "c.ShippingAddressId = a.AddressId"],
+  );
+  await vscode.commands.executeCommand("hideSuggestWidget");
+
   const onTriggerDocument = await vscode.workspace.openTextDocument({
     language: "sql",
     content: `SELECT * FROM ${database}.dbo.Belege AS b JOIN ${database}.dbo.BelegePositionen AS p ON`,
@@ -4554,6 +4584,102 @@ SELECT x. FROM X x`;
     ",",
   );
   assert.equal(builtinNested.activeParameter, 2);
+  const signatureProcedureIndex = new DatabaseIndex({
+    ...index.metadata,
+    objects: [
+      ...index.objects,
+      {
+        schema: "billing",
+        name: "UpdateBillingAddress_0001",
+        normalizedName: "updatebillingaddress_0001",
+        kind: "procedure",
+        columns: [],
+        parameters: [
+          {
+            name: "@CustomerId",
+            type: { name: "bigint" },
+            output: false,
+            ordinal: 1,
+          },
+          {
+            name: "@BillingAddressId",
+            type: { name: "bigint" },
+            output: false,
+            ordinal: 2,
+          },
+          {
+            name: "@RowsAffected",
+            type: { name: "int" },
+            output: true,
+            ordinal: 3,
+          },
+        ],
+      },
+    ],
+  });
+  await vscode.commands.executeCommand(
+    "queryPuppyForTSql.test.setSignatureScope",
+    {
+      activeDatabase: database,
+      indexes: new Map([[database.toLowerCase(), signatureProcedureIndex]]),
+    },
+  );
+  const unqualifiedCatalog = await signature(
+    "SELECT CalculateBillingTotal_0001(",
+    "(",
+  );
+  assert.equal(unqualifiedCatalog.activeParameter, 0);
+  assert.match(
+    unqualifiedCatalog.signatures[0]?.label ?? "",
+    /^billing\.CalculateBillingTotal_0001\(/,
+  );
+
+  const procedure = await signature("EXEC billing.UpdateBillingAddress_0001 ");
+  assert.equal(procedure.activeParameter, 0);
+  assert.match(
+    procedure.signatures[0]?.label ?? "",
+    /^EXEC billing\.UpdateBillingAddress_0001 /,
+  );
+  assert.deepEqual(
+    procedure.signatures[0]?.parameters.map((parameter) => parameter.label),
+    [
+      "@CustomerId bigint",
+      "@BillingAddressId bigint",
+      "@RowsAffected int OUTPUT",
+    ],
+  );
+  const namedProcedure = await signature(
+    "EXEC billing.UpdateBillingAddress_0001 @CustomerId = 1, @BillingAddressId = ",
+  );
+  assert.equal(namedProcedure.activeParameter, 1);
+  const positionalProcedure = await signature(
+    "EXEC billing.UpdateBillingAddress_0001 1, ",
+    ",",
+  );
+  assert.equal(positionalProcedure.activeParameter, 1);
+
+  const automaticProcedure = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: "EXEC billing.UpdateBillingAddress_0001",
+  });
+  const automaticProcedureEditor =
+    await vscode.window.showTextDocument(automaticProcedure);
+  const automaticProcedureEnd = automaticProcedure.positionAt(
+    automaticProcedure.getText().length,
+  );
+  automaticProcedureEditor.selection = new vscode.Selection(
+    automaticProcedureEnd,
+    automaticProcedureEnd,
+  );
+  await takeInvocations();
+  await vscode.commands.executeCommand("type", { text: " " });
+  assert.ok(
+    (await waitForInvocation(undefined, true)).some(
+      (invocation) =>
+        invocation.triggerKind === vscode.SignatureHelpTriggerKind.Invoke,
+    ),
+    "typing procedure-argument whitespace did not invoke Signature Help",
+  );
 
   const automaticBuiltin = await vscode.workspace.openTextDocument({
     language: "sql",
@@ -4670,4 +4796,91 @@ SELECT x. FROM X x`;
     ),
     "arbitrary parenthesis invoked the catalog-aware fallback",
   );
+
+  const duplicateSchemaIndex = new DatabaseIndex({
+    database,
+    schemas: ["qpacc", "billing", "shipping"],
+    loadedAt: 0,
+    objects: [
+      ...["qpacc", "billing", "shipping"].map((schema, ordinal) => ({
+        id: 800 + ordinal,
+        schema,
+        name: "Addresses",
+        normalizedName: "addresses",
+        kind: "table" as const,
+        parameters: [],
+        columns: [
+          {
+            name: `${schema}Only`,
+            normalizedName: `${schema}only`,
+            type: { name: "int" },
+            nullable: false,
+            ordinal: 1,
+          },
+        ],
+      })),
+      {
+        id: 810,
+        schema: "qpacc",
+        name: "UniqueOrders",
+        normalizedName: "uniqueorders",
+        kind: "table" as const,
+        parameters: [],
+        columns: [],
+      },
+    ],
+  });
+  await vscode.commands.executeCommand(
+    "queryPuppyForTSql.test.setCompletionScope",
+    {
+      activeDatabase: database,
+      indexes: new Map([[database.toLowerCase(), duplicateSchemaIndex]]),
+    },
+  );
+  const duplicateItems = (
+    await semanticCompletion("SELECT * FROM Addr")
+  ).filter((item) => item.data?.semanticKind === "table");
+  assert.deepEqual(labels(duplicateItems), [
+    "billing.Addresses",
+    "qpacc.Addresses",
+    "shipping.Addresses",
+  ]);
+  assert.deepEqual(
+    duplicateItems.map((item) => item.insertText),
+    ["billing.Addresses", "qpacc.Addresses", "shipping.Addresses"],
+  );
+  assert.deepEqual(
+    labels(await semanticCompletion("SELECT * FROM qpacc.Addr")),
+    ["Addresses"],
+  );
+  assert.deepEqual(labels(await semanticCompletion("SELECT * FROM Unique")), [
+    "UniqueOrders",
+  ]);
+  await takeAmbiguityNotifications();
+  const ambiguousDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: "SELECT * FROM Addresses AS a WHERE a.",
+  });
+  for (let invocation = 0; invocation < 2; invocation++) {
+    const result = await vscode.commands.executeCommand<
+      vscode.CompletionList | readonly vscode.CompletionItem[]
+    >(
+      "vscode.executeCompletionItemProvider",
+      ambiguousDocument.uri,
+      ambiguousDocument.positionAt(ambiguousDocument.getText().length),
+      ".",
+    );
+    const items =
+      result instanceof vscode.CompletionList ? result.items : result;
+    assert.equal(
+      items.some(
+        (item) =>
+          (item as MarkedCompletionItem).data?.semanticKind === "column",
+      ),
+      false,
+    );
+  }
+  assert.deepEqual(await takeAmbiguityNotifications(), [
+    'Query Puppy: "Addresses" is ambiguous across schemas. Qualify it with a schema to enable semantic suggestions.',
+  ]);
 }

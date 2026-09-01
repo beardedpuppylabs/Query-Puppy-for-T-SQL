@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.15.2
+
+- Disambiguated same-named physical objects across schemas in unqualified completion,
+  including schema-qualified insertion, while preserving concise unique and already-
+  qualified candidates.
+- Made unqualified catalog resolution explicitly unique-or-unresolved and added
+  non-repeating native status feedback when an alias refers to an ambiguous object.
+- Restored repeated relationship predicates after `AND`/`OR` in a JOIN `ON` clause,
+  suppressing completed direct or reversed mappings and inserting only missing
+  composite mappings.
+- Hardened automatic JOIN `ON` suggestion timing and added relationship-aware
+  continuation triggers after logical separators.
+- Expanded native Signature Help coverage for unqualified catalog functions and valid
+  `EXEC`/`EXECUTE` stored-procedure calls, including named/positional active parameters
+  and `OUTPUT` metadata.
+
 ## 0.15.1
 
 - Reused one document-semantic cache across Definition, References, and Document

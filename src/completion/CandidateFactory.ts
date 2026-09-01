@@ -48,6 +48,7 @@ import {
   DATEPART_VALUES,
 } from "../parser/BuiltinFunctionCatalog.js";
 import { resolveCallableAtCursor } from "../parser/CallableAnalyzer.js";
+import { ROW_SOURCE_OBJECT_KINDS } from "../parser/CatalogObjectResolver.js";
 
 export interface CompletionScope extends SemanticCatalog {
   readonly databaseNames?: readonly string[];
@@ -268,15 +269,15 @@ export function createCandidates(
           ),
         );
       candidates.push(
-        ...activeIndex.objects
-          .filter((object) => allowed.has(object.kind))
-          .map((object) => ({
-            ...objectCandidate(object, activeIndex.metadata.database),
+        ...unqualifiedObjectCandidates(activeIndex, allowed).map(
+          (candidate) => ({
+            ...candidate,
             ...(context.kind === "rowSource" || context.kind === "dmlTarget"
               ? { priority: 1 }
               : {}),
             ...(context.kind === "expression" ? { priority: 100 } : {}),
-          })),
+          }),
+        ),
       );
     }
     candidates.push(
@@ -415,18 +416,21 @@ export function createCandidates(
         })),
       );
   }
-  if (
-    clauseContext.join &&
-    scope &&
-    !hasExplicitJoinComparison(context.sql, context.cursor)
-  )
-    candidates.push(
-      ...joinPredicateCandidates(
-        clauseContext.join.currentRightRowSource,
-        clauseContext.join.leftVisibleRowSources,
-        scope,
-      ),
+  if (clauseContext.join && scope) {
+    const predicate = analyzeJoinPredicatePosition(
+      context.sql,
+      clauseContext.join.conditionRange,
     );
+    if (predicate.ready)
+      candidates.push(
+        ...joinPredicateCandidates(
+          clauseContext.join.currentRightRowSource,
+          clauseContext.join.leftVisibleRowSources,
+          scope,
+          predicate,
+        ),
+      );
+  }
   if (
     context.baseKind === "rowSource" &&
     scope &&
@@ -573,20 +577,107 @@ function addRelationshipColumn(
   columns.set(name, Math.min(columns.get(name) ?? rank, rank));
 }
 
-function hasExplicitJoinComparison(sql: string, cursor: number): boolean {
-  const tokens = tokenizeSql(sql).filter((token) => token.start < cursor);
-  let on = -1;
-  for (let index = tokens.length - 1; index >= 0; index--)
-    if (tokens[index]?.normalized === "on") {
-      on = index;
-      break;
-    }
-  return (
-    on >= 0 &&
-    tokens
-      .slice(on + 1)
-      .some((token) => ["=", "<", ">", "!"].includes(token.text))
+interface JoinPredicatePosition {
+  readonly ready: boolean;
+  readonly replacementStart: number;
+  readonly usedComparisons: ReadonlySet<string>;
+}
+
+function analyzeJoinPredicatePosition(
+  sql: string,
+  range: { readonly start: number; readonly end: number },
+): JoinPredicatePosition {
+  const tokens = tokenizeSql(sql).filter(
+    (token) => token.start >= range.start && token.start < range.end,
   );
+  let depth = 0;
+  let between = false;
+  let currentStart = range.start;
+  for (const token of tokens) {
+    if (token.text === "(") {
+      depth++;
+      continue;
+    }
+    if (token.text === ")") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth !== 0) continue;
+    if (token.normalized === "between") {
+      between = true;
+      continue;
+    }
+    if (token.normalized === "and" && between) {
+      between = false;
+      continue;
+    }
+    if (token.normalized === "and" || token.normalized === "or") {
+      currentStart = token.end;
+      between = false;
+    }
+  }
+  const completed = tokens.filter((token) => token.end <= currentStart);
+  const current = tokens.filter((token) => token.start >= currentStart);
+  const reference =
+    current.length === 0 ||
+    (current.length === 1 && current[0]?.kind === "identifier") ||
+    (current.length === 2 &&
+      current[0]?.kind === "identifier" &&
+      current[1]?.text === ".") ||
+    (current.length === 3 &&
+      current[0]?.kind === "identifier" &&
+      current[1]?.text === "." &&
+      current[2]?.kind === "identifier");
+  return {
+    ready: reference,
+    replacementStart: current[0]?.start ?? range.end,
+    usedComparisons: completedJoinComparisons(completed),
+  };
+}
+
+function completedJoinComparisons(
+  tokens: readonly ReturnType<typeof tokenizeSql>[number][],
+): ReadonlySet<string> {
+  const comparisons = new Set<string>();
+  for (let index = 0; index < tokens.length; index++) {
+    if (tokens[index]?.text !== "=") continue;
+    const left = columnReferenceBefore(tokens, index);
+    const right = columnReferenceAfter(tokens, index);
+    if (left && right) comparisons.add(comparisonIdentity(left, right));
+  }
+  return comparisons;
+}
+
+function columnReferenceBefore(
+  tokens: readonly ReturnType<typeof tokenizeSql>[number][],
+  equals: number,
+): string | undefined {
+  const qualifier = tokens[equals - 3];
+  const dot = tokens[equals - 2];
+  const column = tokens[equals - 1];
+  return qualifier?.kind === "identifier" &&
+    dot?.text === "." &&
+    column?.kind === "identifier"
+    ? `${normalizeName(qualifier.text)}.${normalizeName(column.text)}`
+    : undefined;
+}
+
+function columnReferenceAfter(
+  tokens: readonly ReturnType<typeof tokenizeSql>[number][],
+  equals: number,
+): string | undefined {
+  const qualifier = tokens[equals + 1];
+  const dot = tokens[equals + 2];
+  const column = tokens[equals + 3];
+  return qualifier?.kind === "identifier" &&
+    dot?.text === "." &&
+    column?.kind === "identifier"
+    ? `${normalizeName(qualifier.text)}.${normalizeName(column.text)}`
+    : undefined;
+}
+
+function comparisonIdentity(left: string, right: string): string {
+  return left < right ? `${left}=${right}` : `${right}=${left}`;
 }
 
 function applyTypeCompatibility(
@@ -626,10 +717,7 @@ function rebindIdentityLessSource(
   const index = scope.indexes.get(normalizedDatabase(database));
   const object = reference.schema
     ? index?.findObject(reference.schema, reference.name)
-    : index?.objects.find(
-        (candidate) =>
-          candidate.normalizedName === normalizeName(reference.name),
-      );
+    : index?.findUniqueObject(reference.name, ROW_SOURCE_OBJECT_KINDS);
   if (!object) return source;
   return {
     ...source,
@@ -655,9 +743,10 @@ function renderJoinPredicate(
   right: ScopedRowSource,
   left: ScopedRowSource,
   rightObject: DatabaseObject,
+  mappings = relationship.mappings,
 ): string {
   const rightIsSource = rightObject.id === relationship.source.objectId;
-  return relationship.mappings
+  return mappings
     .map((mapping) => {
       const rightColumn = rightIsSource
         ? mapping.sourceColumnName
@@ -674,6 +763,7 @@ function joinPredicateCandidates(
   right: ScopedRowSource | undefined,
   leftSources: readonly ScopedRowSource[],
   scope: CompletionScope,
+  position: JoinPredicatePosition,
 ): CompletionCandidate[] {
   if (!right) return [];
   const resolvedRight = physicalBinding(right, scope);
@@ -697,26 +787,46 @@ function joinPredicateCandidates(
       resolvedRight.object,
       resolvedLeft.object,
     );
-    return [...relationships, ...(heuristic ? [heuristic] : [])].map(
+    return [...relationships, ...(heuristic ? [heuristic] : [])].flatMap(
       (relationship) => {
+        const rightIsSource =
+          resolvedRight.object.id === relationship.source.objectId;
+        const missing = relationship.mappings.filter((mapping) => {
+          const rightColumn = rightIsSource
+            ? mapping.sourceColumnName
+            : mapping.targetColumnName;
+          const leftColumn = rightIsSource
+            ? mapping.targetColumnName
+            : mapping.sourceColumnName;
+          const rightReference = `${normalizeName(right.qualifier)}.${normalizeName(rightColumn)}`;
+          const leftReference = `${normalizeName(left.qualifier)}.${normalizeName(leftColumn)}`;
+          return !position.usedComparisons.has(
+            comparisonIdentity(rightReference, leftReference),
+          );
+        });
+        if (missing.length === 0) return [];
         const predicate = renderJoinPredicate(
           relationship,
           right,
           left,
           resolvedRight.object,
+          missing,
         );
-        return {
-          name: predicate,
-          normalizedName: normalizeName(predicate),
-          searchText: normalizeName(
-            `${predicate} ${relationshipSearchDescription(relationship)} ${relationship.mappings.flatMap((mapping) => [mapping.sourceColumnName, mapping.targetColumnName]).join(" ")}`,
-          ),
-          kind: "joinPredicate" as const,
-          database: relationship.source.database,
-          insertText: predicate,
-          relationship,
-          priority: -100 + (productionRelationshipRank(relationship) ?? 10),
-        };
+        return [
+          {
+            name: predicate,
+            normalizedName: normalizeName(predicate),
+            searchText: normalizeName(
+              `${predicate} ${relationshipSearchDescription(relationship)} ${relationship.mappings.flatMap((mapping) => [mapping.sourceColumnName, mapping.targetColumnName]).join(" ")}`,
+            ),
+            kind: "joinPredicate" as const,
+            database: relationship.source.database,
+            insertText: predicate,
+            replacementStart: position.replacementStart,
+            relationship,
+            priority: -100 + (productionRelationshipRank(relationship) ?? 10),
+          },
+        ];
       },
     );
   });
@@ -873,6 +983,32 @@ function objectsAcrossSchemas(
       normalizedName: object.normalizedName,
       insertText: `${quoteIdentifier(object.schema)}.${quoteIdentifier(object.name)}`,
     }));
+}
+
+function unqualifiedObjectCandidates(
+  index: DatabaseIndex,
+  allowed: ReadonlySet<string>,
+): CompletionCandidate[] {
+  const objects = index.objects.filter((object) => allowed.has(object.kind));
+  const counts = new Map<string, number>();
+  for (const object of objects)
+    counts.set(
+      object.normalizedName,
+      (counts.get(object.normalizedName) ?? 0) + 1,
+    );
+  return objects.map((object) => {
+    const candidate = objectCandidate(object, index.metadata.database);
+    return (counts.get(object.normalizedName) ?? 0) > 1
+      ? {
+          ...candidate,
+          name: `${object.schema}.${object.name}`,
+          searchText: normalizeName(
+            `${object.name} ${object.schema}.${object.name}`,
+          ),
+          insertText: `${quoteIdentifier(object.schema)}.${quoteIdentifier(object.name)}`,
+        }
+      : candidate;
+  });
 }
 
 function objectsInSchema(

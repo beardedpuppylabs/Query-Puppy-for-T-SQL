@@ -41,6 +41,23 @@ test("contract: automatic Signature Help recognizes opening closing and comma ed
     )?.expectedOffset,
     21,
   );
+  assert.deepEqual(
+    signatureTriggerFromEdit(
+      "untitled:test",
+      4,
+      { rangeOffset: 30, text: " " },
+      3,
+      5,
+    ),
+    {
+      uri: "untitled:test",
+      documentVersion: 4,
+      expectedOffset: 31,
+      triggerCharacter: "procedureArgument",
+      generation: 3,
+      createdAt: 5,
+    },
+  );
   assert.equal(
     signatureTriggerFromEdit(
       "untitled:test",

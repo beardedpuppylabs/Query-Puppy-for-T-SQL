@@ -24,12 +24,16 @@ import {
 } from "../parser/CompletionContextClassifier.js";
 import type { WorkspaceProjectRelationships } from "../relationships/WorkspaceProjectRelationships.js";
 import type { WorkspaceLearnedRelationshipEvidence } from "../relationships/WorkspaceLearnedRelationshipEvidence.js";
+import { ROW_SOURCE_OBJECT_KINDS } from "../parser/CatalogObjectResolver.js";
+import { normalizeName } from "../metadata/MetadataModels.js";
 
 export class SqlCompletionProvider implements vscode.CompletionItemProvider {
   private readonly loggedFailures = new Set<string>();
   private readonly scopes: CompletionScopeResolver;
   private readonly documentSemantics = new DocumentSemanticCache();
   private readonly loggedEmptyProjections = new Set<string>();
+  private readonly reportedAmbiguities = new Map<string, string>();
+  private readonly testAmbiguityNotifications: string[] = [];
   private automaticCompletionExpectation:
     | {
         readonly kind: string;
@@ -87,6 +91,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
       ? resolveVisibleRowSource(semantics, qualifier)
       : undefined;
     const candidates = createCandidates(context, scope, semantics);
+    this.reportAmbiguousAlias(document, context, scope, semantics);
     const clause = classifyCompletionContext(
       context.sql,
       context.cursor,
@@ -245,6 +250,7 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
       }
     }
     const candidates = createCandidates(context, scope, semantics);
+    this.reportAmbiguousAlias(document, context, scope, semantics);
     const memberAlias = context.qualifier?.parts[0];
     const memberSource = memberAlias
       ? semantics.aliases.get(memberAlias.toLocaleLowerCase("en-US"))
@@ -265,27 +271,23 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     const types = new Set(candidates.map((candidate) => candidate.kind));
     const start = document.positionAt(context.replacementStart);
     const range = new vscode.Range(start, position);
-    const joinFragment = /\bon\s+([^\s]*)$/i.exec(
-      context.sql.slice(0, context.cursor),
-    )?.[1];
-    const joinRange =
-      joinFragment === undefined
-        ? range
-        : new vscode.Range(
-            document.positionAt(context.cursor - joinFragment.length),
-            position,
-          );
     const materialize = (
       candidate: (typeof candidates)[number],
       rank: number,
     ) =>
       presentCandidate(
         candidate,
-        candidate.kind === "joinPredicate" ? joinRange : range,
+        candidate.replacementStart === undefined
+          ? range
+          : new vscode.Range(
+              document.positionAt(candidate.replacementStart),
+              position,
+            ),
         context.search,
         types.size > 1,
         rank,
         candidate.kind === "joinPredicate" &&
+          candidate.replacementStart === context.replacementStart &&
           context.search.length === 0 &&
           context.replacementStart > 0 &&
           !/\s/.test(context.sql[context.replacementStart - 1] ?? "")
@@ -331,6 +333,11 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
 
   closeDocument(uri: vscode.Uri): void {
     this.documentSemantics.delete(uri.toString());
+    this.reportedAmbiguities.delete(uri.toString());
+  }
+
+  takeTestAmbiguityNotifications(): readonly string[] {
+    return this.testAmbiguityNotifications.splice(0);
   }
 
   expectAutomaticCompletionInvocation(
@@ -416,6 +423,44 @@ export class SqlCompletionProvider implements vscode.CompletionItemProvider {
     if (this.loggedFailures.has(identity)) return;
     this.loggedFailures.add(identity);
     this.output.appendLine(`Metadata unavailable: ${message}`);
+  }
+  private reportAmbiguousAlias(
+    document: vscode.TextDocument,
+    context: ReturnType<typeof resolveSqlContext>,
+    scope: CompletionScope | undefined,
+    semantics: ReturnType<DocumentSemanticCache["get"]>,
+  ): void {
+    const qualifier = context.qualifier?.parts[0] ?? "";
+    const binding = qualifier
+      ? resolveVisibleRowSource(semantics, qualifier)
+      : undefined;
+    const reference = context.aliasSource;
+    const source = binding?.source;
+    if (
+      !scope ||
+      (reference?.schema ?? source?.schema) ||
+      (!reference && (!source?.database || source.sourceObject))
+    )
+      return;
+    const name = reference?.name ?? source?.name ?? "";
+    const alias = reference?.alias ?? qualifier;
+    const database =
+      reference?.database ?? source?.database ?? scope.activeDatabase;
+    const index = scope.indexes.get(normalizeName(database));
+    const matches =
+      index?.findObjectsByName(name, ROW_SOURCE_OBJECT_KINDS) ?? [];
+    if (matches.length <= 1) return;
+    const identity = `${String(document.version)}:${normalizeName(alias)}:${normalizeName(name)}:${matches
+      .map((object) => normalizeName(object.schema))
+      .sort()
+      .join(",")}`;
+    const uri = document.uri.toString();
+    if (this.reportedAmbiguities.get(uri) === identity) return;
+    this.reportedAmbiguities.set(uri, identity);
+    const message = `Query Puppy: "${name}" is ambiguous across schemas. Qualify it with a schema to enable semantic suggestions.`;
+    if (this.observeAutomaticCompletions)
+      this.testAmbiguityNotifications.push(message);
+    vscode.window.setStatusBarMessage(message, 7000);
   }
   private debug(message: string): void {
     if (

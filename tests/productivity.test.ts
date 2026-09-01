@@ -333,11 +333,13 @@ test("contract: Smart Alias starts only after a completed RowSource", () => {
     assert.equal(isPotentialSmartAliasTrigger(sql, sql.length), false);
 });
 
-test("automatic JOIN ON completion trigger is scoped to whitespace after ON", () => {
+test("automatic JOIN ON completion trigger is scoped to new ON predicates", () => {
   for (const sql of [
     "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON ",
     "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON     ",
     "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON\n  ",
+    "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON c.Id = o.Id AND ",
+    "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON c.Id = o.Id OR ",
   ])
     assert.equal(
       isPotentialJoinOnCompletionTrigger(sql, sql.length),
@@ -349,6 +351,8 @@ test("automatic JOIN ON completion trigger is scoped to whitespace after ON", ()
     "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON c.",
     "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o WHERE ",
     "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON 1 ",
+    "SELECT * FROM dbo.Customers c JOIN dbo.CustomerOrders o ON c.Id = o.Id WHERE x = 1 AND ",
+    "SELECT * FROM dbo.Customers c WHERE x = 1 AND ",
   ])
     assert.equal(
       isPotentialJoinOnCompletionTrigger(sql, sql.length),
@@ -374,6 +378,14 @@ test("contract: automatic completion state binds to the post-edit document versi
     state.takeIfCurrent("file:///query.sql", 2, after.length)?.kind,
     "smartAlias",
   );
+
+  const onPrefix =
+    "SELECT * FROM dbo.Customers c JOIN dbo.Orders o ON c.Id = o.Id AND";
+  const continued = state.replace("file:///query.sql", 3, `${onPrefix} `, {
+    rangeOffset: onPrefix.length,
+    text: " ",
+  });
+  assert.equal(continued?.kind, "joinOnContinuation");
 
   for (const sql of ["UPDATE ", "INSERT INTO ", "DELETE FROM "])
     assert.equal(

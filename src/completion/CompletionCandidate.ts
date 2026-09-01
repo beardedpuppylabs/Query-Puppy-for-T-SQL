@@ -40,6 +40,8 @@ export interface CompletionCandidate {
   readonly relatedRelationshipCount?: number;
   readonly baseObjectName?: string;
   readonly insertText?: string;
+  /** Absolute document offset where accepting this candidate starts replacement. */
+  readonly replacementStart?: number;
   /** Continue schema qualification after this candidate is accepted. */
   readonly triggerSuggest?: boolean;
   /** Request alias completion after a row-source object is accepted. */

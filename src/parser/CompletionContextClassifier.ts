@@ -23,6 +23,7 @@ export interface JoinConditionContext {
   readonly outerRowSources: readonly ScopedRowSource[];
   readonly visibleAtCursor: readonly ScopedRowSource[];
   readonly joinRange: { readonly start: number; readonly end: number };
+  readonly conditionRange: { readonly start: number; readonly end: number };
 }
 
 export interface ClauseCompletionContext {
@@ -177,6 +178,10 @@ export function classifyCompletionContext(
       ],
       joinRange: {
         start: currentRightRowSource?.source.origin.start ?? onOffset,
+        end: cursor,
+      },
+      conditionRange: {
+        start: tokens[onToken]?.end ?? onOffset,
         end: cursor,
       },
     };

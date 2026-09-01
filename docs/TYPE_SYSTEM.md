@@ -339,6 +339,16 @@ Do not create a separate argument-index parser only for type ranking.
 Scalar callable return inference consumes the same callable resolution. TVFs remain
 RowSources and do not acquire scalar return types through this abstraction.
 
+## Stored-procedure Signature Help
+
+Procedures are not expression callables and do not use function-parenthesis parsing.
+The DML call analyzer owns `EXEC`/`EXECUTE` name and argument parsing, then resolves the
+procedure through the same kind-aware catalog-object boundary used by DML parameter
+completion. Native Signature Help reuses canonical `ParameterMetadata`, declaration
+order, canonical SQL type formatting, `OUTPUT`, and active named/positional argument
+selection. Procedure arguments do not become a second ExpectedType or callable-return
+system.
+
 ## UPDATE
 
 UPDATE SET assignments are positional.

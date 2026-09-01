@@ -14,6 +14,31 @@ import {
 } from "./CatalogObjectResolver.js";
 
 export type DmlCatalog = CatalogScope;
+export interface ProcedureArgumentRange {
+  readonly start: number;
+  readonly end: number;
+}
+export interface ParsedProcedureCallSite {
+  readonly nameParts: readonly string[];
+  readonly name: string;
+  readonly database?: string;
+  readonly schema?: string;
+  readonly nameStart: number;
+  readonly nameEnd: number;
+  readonly argumentsStart: number;
+  readonly arguments: readonly ProcedureArgumentRange[];
+  readonly activeArgument: number;
+  readonly activeParameterName?: string;
+  readonly lastArgumentSeparator?: number;
+  readonly usedNamedParameters: ReadonlySet<string>;
+  readonly cursor: number;
+}
+export interface ProcedureCallResolution {
+  readonly callSite: ParsedProcedureCallSite;
+  readonly procedure: DatabaseObject;
+  readonly parameters: readonly ParameterMetadata[];
+  readonly activeParameter: number;
+}
 export type DmlCompletion =
   | { readonly kind: "columns"; readonly source: RowSource }
   | {
@@ -44,6 +69,128 @@ const reference = (
   }
   return { parts, end: i };
 };
+
+export function parseProcedureCallSite(
+  sql: string,
+  cursor: number,
+): ParsedProcedureCallSite | undefined {
+  const tokens = statementTokens(sql, cursor).filter(
+    (token) => token.start < cursor,
+  );
+  const exec = tokens.findIndex(
+    (token) => token.normalized === "exec" || token.normalized === "execute",
+  );
+  if (exec < 0) return undefined;
+  let referenceStart = exec + 1;
+  if (
+    tokens[referenceStart]?.kind === "variable" &&
+    tokens[referenceStart + 1]?.text === "="
+  )
+    referenceStart += 2;
+  const procedureReference = reference(tokens, referenceStart);
+  const name = procedureReference.parts.at(-1);
+  const firstName = tokens[referenceStart];
+  const lastName = tokens[procedureReference.end];
+  if (!name || !firstName || !lastName || cursor < lastName.end)
+    return undefined;
+  const argumentTokens = tokens.slice(procedureReference.end + 1);
+  const arguments_: ProcedureArgumentRange[] = [];
+  const usedNamedParameters = new Set<string>();
+  let argumentStart = lastName.end;
+  let currentStart = 0;
+  let depth = 0;
+  let lastArgumentSeparator: number | undefined;
+  for (let index = 0; index < argumentTokens.length; index++) {
+    const token = argumentTokens[index];
+    if (!token) continue;
+    if (token.text === "(") depth++;
+    else if (token.text === ")") depth = Math.max(0, depth - 1);
+    else if (token.text === "," && depth === 0) {
+      lastArgumentSeparator = token.start;
+      arguments_.push({ start: argumentStart, end: token.start });
+      const nameToken = argumentTokens[currentStart];
+      if (
+        nameToken?.kind === "variable" &&
+        argumentTokens[currentStart + 1]?.text === "="
+      )
+        usedNamedParameters.add(normalizeName(nameToken.text));
+      argumentStart = token.end;
+      currentStart = index + 1;
+    }
+  }
+  arguments_.push({ start: argumentStart, end: cursor });
+  const activeName = argumentTokens[currentStart];
+  const activeParameterName =
+    activeName?.kind === "variable" &&
+    argumentTokens[currentStart + 1]?.text === "="
+      ? activeName.text
+      : undefined;
+  const database =
+    procedureReference.parts.length === 3
+      ? procedureReference.parts[0]
+      : undefined;
+  const schema =
+    procedureReference.parts.length >= 2
+      ? procedureReference.parts.at(-2)
+      : undefined;
+  return {
+    nameParts: procedureReference.parts,
+    name,
+    ...(database ? { database } : {}),
+    ...(schema ? { schema } : {}),
+    nameStart: firstName.start,
+    nameEnd: lastName.end,
+    argumentsStart: lastName.end,
+    arguments: arguments_,
+    activeArgument: Math.max(0, arguments_.length - 1),
+    ...(activeParameterName ? { activeParameterName } : {}),
+    ...(lastArgumentSeparator === undefined ? {} : { lastArgumentSeparator }),
+    usedNamedParameters,
+    cursor,
+  };
+}
+
+export function resolveProcedureCallAtCursor(
+  sql: string,
+  cursor: number,
+  catalog: DmlCatalog,
+): ProcedureCallResolution | undefined {
+  const callSite = parseProcedureCallSite(sql, cursor);
+  if (!callSite) return undefined;
+  const procedure = resolveCatalogObject(callSite.nameParts, catalog, [
+    "procedure",
+  ]);
+  if (!procedure) return undefined;
+  const parameters = [...procedure.parameters].sort(
+    (left, right) => left.ordinal - right.ordinal,
+  );
+  const named = callSite.activeParameterName
+    ? parameters.findIndex(
+        (parameter) =>
+          normalizeName(parameter.name) ===
+          normalizeName(callSite.activeParameterName ?? ""),
+      )
+    : -1;
+  let activeParameter = named;
+  if (activeParameter < 0) {
+    const unused = parameters.findIndex(
+      (parameter) =>
+        !callSite.usedNamedParameters.has(normalizeName(parameter.name)),
+    );
+    activeParameter = callSite.usedNamedParameters.size
+      ? unused
+      : callSite.activeArgument;
+  }
+  return {
+    callSite,
+    procedure,
+    parameters,
+    activeParameter: Math.max(
+      0,
+      Math.min(activeParameter, Math.max(0, parameters.length - 1)),
+    ),
+  };
+}
 const usedNames = (
   tokens: readonly SqlToken[],
   start: number,
@@ -196,10 +343,20 @@ export function analyzeDmlCompletion(
     (t) => t.normalized === "exec" || t.normalized === "execute",
   );
   if (exec >= 0) {
-    const ref = reference(tokens, exec + 1);
-    const proc = resolveCatalogObject(ref.parts, catalog, ["procedure"]);
+    const call = parseProcedureCallSite(sql, cursor);
+    const proc = call
+      ? resolveCatalogObject(call.nameParts, catalog, ["procedure"])
+      : undefined;
     if (proc && tokens.at(-1)?.kind === "variable") {
-      const used = usedNames(tokens, ref.end + 1, tokens.length - 1, true);
+      const argumentsStart = tokens.findIndex(
+        (token) => token.start >= (call?.argumentsStart ?? cursor),
+      );
+      const used = usedNames(
+        tokens,
+        argumentsStart < 0 ? tokens.length : argumentsStart,
+        tokens.length - 1,
+        true,
+      );
       return {
         kind: "parameters",
         parameters: proc.parameters.filter(

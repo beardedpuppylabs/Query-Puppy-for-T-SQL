@@ -7,7 +7,7 @@ export interface PendingSignatureTrigger {
   readonly uri: string;
   readonly documentVersion: number;
   readonly expectedOffset: number;
-  readonly triggerCharacter: "(" | ",";
+  readonly triggerCharacter: "(" | "," | "procedureArgument";
   readonly generation: number;
   readonly createdAt: number;
 }
@@ -34,6 +34,15 @@ export function signatureTriggerFromEdit(
       documentVersion,
       expectedOffset: change.rangeOffset + 1,
       triggerCharacter: "(",
+      generation,
+      createdAt: now,
+    };
+  if (/^\s+$/.test(change.text))
+    return {
+      uri,
+      documentVersion,
+      expectedOffset: change.rangeOffset + change.text.length,
+      triggerCharacter: "procedureArgument",
       generation,
       createdAt: now,
     };

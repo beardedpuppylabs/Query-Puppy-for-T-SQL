@@ -396,6 +396,15 @@ project definition as a parallel semantic edge.
 At an empty relevant ON position, a declared-FK, explicit project relationship,
 qualifying learned relationship, or bounded heuristic relationship predicate may
 outrank ordinary column expressions.
+
+The same relationship candidates are available at a new predicate position after a
+top-level `AND` or `OR` in the current ON expression. Completed equality mappings are
+identified from resolved alias/column token pairs in either operand order. A mapping
+already present in source SQL is removed from the candidate; a composite relationship
+therefore inserts only its missing mappings and disappears when all mappings are
+represented. The unfinished current predicate is excluded from used-mapping analysis,
+and accepting a full predicate replaces that current fragment rather than duplicating
+its qualifier.
 Trust order is DeclaredForeignKey/Authoritative, UserConfirmed/Confirmed,
 ProjectDefined/Confirmed, LearnedFromQuery/StrongEvidence, then
 HeuristicCandidate/Candidate. Native
@@ -462,6 +471,15 @@ FROM/JOIN source completion may include context-appropriate:
 - views
 - TVFs
 - local RowSources
+
+At an unqualified physical-object position, same-named compatible objects from
+different schemas remain distinct canonical candidates. Duplicate names display and
+insert `schema.object`; a name that is unique within the current completion domain may
+remain concise. An already schema-qualified context displays and inserts only the
+object member. Downstream unqualified catalog binding is unique-or-unresolved: zero or
+multiple compatible matches never bind to metadata order. When an explicit alias or
+unaliased qualifier refers to such an ambiguous source, completion stays fail-closed
+and a version-deduplicated native status-bar message asks the user to add the schema.
 
 Do not reuse physical-column formatting for mixed object domains.
 
@@ -544,9 +562,24 @@ expression candidates such as aliases and visible columns remain available. The
 trigger does not inspect Microsoft completion items and does not infer
 relationships from matching names or datatypes.
 
+Typing whitespace after a top-level `AND` or `OR` in that same ON expression uses the
+same version-bound trigger lifecycle, but opens Suggest only when an unused
+relationship predicate remains. This does not create a general `AND`/`OR` whitespace
+trigger outside a recognized JOIN condition.
+
 ## Functions and procedures
 
 Functions/procedures use their domain-specific CompletionItem presentation.
+
+Native Signature Help resolves function calls through the shared callable call-site
+model. Stored procedures remain a distinct T-SQL invocation shape: the existing DML
+analyzer parses normal `EXEC`/`EXECUTE` syntax, including optional return-status
+assignment, positional arguments, and named `@parameter =` arguments. The native
+Signature Help provider resolves that call against canonical procedure metadata and
+preserves declaration order, SQL types, `OUTPUT`, active-parameter selection, and the
+`int` return-status contract. A context-aware whitespace fallback is limited to the
+first argument position after a resolved procedure name; normal comma triggering
+handles later top-level arguments.
 
 Supported SQL Server built-ins are static language candidates in expression
 contexts. Scalar, aggregate, window, and expression-like callables use the same

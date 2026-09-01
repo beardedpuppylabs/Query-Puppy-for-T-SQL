@@ -14,6 +14,11 @@ import {
   resolveBuiltinCallable,
   resolveCallableAtCursor,
 } from "../parser/CallableAnalyzer.js";
+import {
+  parseProcedureCallSite,
+  resolveProcedureCallAtCursor,
+  type ProcedureCallResolution,
+} from "../parser/DmlCallAnalyzer.js";
 
 export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
   private testScope: CompletionScope | undefined;
@@ -74,6 +79,9 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     const cursor = document.offsetAt(position);
     const callSite = parseCallSite(sql, cursor);
     const builtin = callSite ? resolveBuiltinCallable(callSite) : undefined;
+    const procedureCallSite = builtin
+      ? undefined
+      : parseProcedureCallSite(sql, cursor);
     let scope = this.testScope;
     if (!scope && !builtin) {
       const active = await this.connections.active();
@@ -91,7 +99,8 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
         () => this.loader.load(active),
       );
       indexes.set(normalizeName(active.database), activeIndex);
-      const database = callableDatabase(callSite);
+      const database =
+        callableDatabase(callSite) ?? procedureCallSite?.database;
       if (
         database &&
         normalizeName(database) !== normalizeName(active.database)
@@ -108,7 +117,11 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     const resolution =
       builtin ??
       (callSite && scope ? resolveCallable(callSite, scope) : undefined);
-    if (!resolution) {
+    const procedure =
+      !resolution && scope
+        ? resolveProcedureCallAtCursor(sql, cursor, scope)
+        : undefined;
+    if (!resolution && !procedure) {
       this.diagnostics.set(
         document.uri.toString(),
         "parsed call: not resolved\nmetadata match: found no\nprovider result: returned no",
@@ -118,6 +131,25 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
       );
       return undefined;
     }
+    if (procedure) {
+      const help = procedureSignatureHelp(procedure);
+      this.lastSuccessfulSignatureHelp = {
+        uri: document.uri.toString(),
+        documentVersion: document.version,
+        offset: cursor,
+        signatureCount: help.signatures.length,
+      };
+      const object = procedure.procedure;
+      this.diagnostics.set(
+        document.uri.toString(),
+        `parsed call:\n  database: ${procedure.callSite.database ?? scope?.activeDatabase ?? "none"}\n  schema: ${object.schema}\n  object: ${object.name}\nmetadata match:\n  found: yes\n  kind: stored procedure\n  parameters: ${String(procedure.parameters.length)}\n  return: status int\nprovider result:\n  returned: yes\n  signatures: 1\n  activeParameter: ${String(procedure.activeParameter)}`,
+      );
+      this.debug(
+        `Signature Help invoked: language=${document.languageId}; triggerKind=${vscode.SignatureHelpTriggerKind[context.triggerKind]}; triggerCharacter=${context.triggerCharacter ?? "none"}; procedure=${object.schema}.${object.name}; resolved=yes; activeParameter=${String(procedure.activeParameter)}.`,
+      );
+      return help;
+    }
+    if (!resolution) return undefined;
     const signatureModel = resolution.signature;
     const parameters = signatureModel.parameters.map(
       (parameter) =>
@@ -166,7 +198,10 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     const parsed = parseCallSite(sql, cursor);
     if (parsed && resolveBuiltinCallable(parsed)) return true;
     if (this.testScope)
-      return Boolean(resolveCallableAtCursor(sql, cursor, this.testScope));
+      return Boolean(
+        resolveCallableAtCursor(sql, cursor, this.testScope) ??
+        resolveProcedureCallAtCursor(sql, cursor, this.testScope),
+      );
     const active = await this.connections.active();
     if (!active) return false;
     const indexes = new Map();
@@ -177,7 +212,8 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     if (!activeIndex) return false;
     indexes.set(normalizeName(active.database), activeIndex);
     const callSite = parseCallSite(sql, cursor);
-    const database = callableDatabase(callSite);
+    const procedureCallSite = parseProcedureCallSite(sql, cursor);
+    const database = callableDatabase(callSite) ?? procedureCallSite?.database;
     if (
       database &&
       normalizeName(database) !== normalizeName(active.database)
@@ -187,8 +223,12 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
       indexes.set(normalizeName(database), index);
     }
     return Boolean(
-      callSite &&
-      resolveCallable(callSite, {
+      (callSite &&
+        resolveCallable(callSite, {
+          activeDatabase: active.database,
+          indexes,
+        })) ??
+      resolveProcedureCallAtCursor(sql, cursor, {
         activeDatabase: active.database,
         indexes,
       }),
@@ -226,4 +266,22 @@ export class SqlSignatureHelpProvider implements vscode.SignatureHelpProvider {
     )
       this.output.appendLine(message);
   }
+}
+
+function procedureSignatureHelp(
+  resolution: ProcedureCallResolution,
+): vscode.SignatureHelp {
+  const parameters = resolution.parameters.map(
+    (parameter) =>
+      new vscode.ParameterInformation(callableParameterLabel(parameter)),
+  );
+  const signature = new vscode.SignatureInformation(
+    `EXEC ${resolution.procedure.schema}.${resolution.procedure.name}${parameters.length ? ` ${parameters.map((parameter) => parameter.label).join(", ")}` : ""} → return status int`,
+  );
+  signature.parameters = parameters;
+  const help = new vscode.SignatureHelp();
+  help.signatures = [signature];
+  help.activeSignature = 0;
+  help.activeParameter = resolution.activeParameter;
+  return help;
 }

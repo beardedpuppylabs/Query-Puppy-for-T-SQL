@@ -61,6 +61,11 @@ for the ON expression. It never invents a relationship predicate from name or
 datatype similarity alone; the conservative pair-bounded heuristic policy described
 below requires complete key, type, naming, and ambiguity evidence.
 
+After an existing ON predicate, typing `AND ` or `OR ` can reopen native completion
+when another known relationship predicate remains. Query Puppy suppresses mappings
+already present in either equality order and inserts only missing mappings from a
+composite relationship.
+
 After a completed unaliased INNER, LEFT, RIGHT, or FULL JOIN source, Query Puppy
 offers both the preferred Smart Alias and the `ON` continuation keyword. After a
 completed alias, only `ON` remains. CROSS JOIN and APPLY keep their own syntax and
@@ -78,6 +83,9 @@ ORDER BY c.
 ```
 
 - `FROM`, `JOIN`, and `APPLY` offer row sources such as tables, views, synonyms, TVFs, and visible local sources.
+- Duplicate physical names from different schemas are displayed and inserted as
+  `schema.object`; unique names stay concise. An ambiguous unqualified source remains
+  unresolved and receives a deduplicated status-bar prompt to add the schema.
 - `UPDATE`, `INSERT INTO`, and `DELETE FROM` target positions offer writable target row sources with the same Contains and qualification behavior.
 - Ctrl+Space works at a blank target position; typing a target fragment participates in normal editor suggestion behavior. Query Puppy does not force the multi-provider Suggest Widget open on the blank keyword-space boundary.
 - `alias.` offers columns projected by that row source.
@@ -376,7 +384,10 @@ Supported SQL Server built-ins participate in function completion, native Signat
 - Aggregate: `AVG`, `COUNT`, `COUNT_BIG`, `MAX`, `MIN`, `STRING_AGG`, `SUM`
 - Window/ranking/value: `DENSE_RANK`, `LAG`, `LEAD`, `NTILE`, `RANK`, `ROW_NUMBER`
 
-Signature Help opens automatically after `(`, follows commas, and can be reopened with the editor's **Trigger Parameter Hints** command.
+Function Signature Help opens automatically after `(`, follows commas, and can be
+reopened with the editor's **Trigger Parameter Hints** command. Stored procedures use
+the same native UI with valid `EXEC`/`EXECUTE` syntax; the first argument position and
+top-level commas track positional or named parameters, SQL types, and `OUTPUT`.
 
 Window expressions understand native `OVER (` grammar, `PARTITION BY`, and window `ORDER BY`, then reuse ordinary QueryScope member completion. Datepart positions in `DATEADD`, `DATEDIFF`, `DATEPART`, and `DATENAME` offer documented canonical datepart tokens without treating them as strings or reading database metadata. `CASE` and `COALESCE` use the shared SQL type-precedence model conservatively; advanced window-frame grammar and a complete SQL Server built-in catalog remain outside the current scope.
 
@@ -389,7 +400,7 @@ Additional context-aware support includes:
 - ExpectedType ranking for explicit-column `INSERT ... VALUES` and `INSERT ... SELECT`
 - statement-correct `inserted` and `deleted` columns in `OUTPUT`
 - named `EXEC` parameters in declaration order, excluding parameters already assigned
-- stored-procedure parameter signatures
+- stored-procedure parameter completion and native Signature Help
 
 Server-maintained identity, computed, generated, and rowversion columns are excluded from writable-column suggestions.
 

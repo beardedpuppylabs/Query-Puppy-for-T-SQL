@@ -229,8 +229,8 @@ promises.
 | Explicit resolved-JOIN save as UserConfirmed, persistence, and reuse                 | Implemented                      | `resolved-join-relationship.test.ts`, `project-relationships.test.ts`, and activated Extension Host contracts |
 | Learned JOIN evidence acquisition and candidate policy                               | Implemented                      | `learned-relationship-candidates.test.ts` and activated Extension Host contracts                              |
 | Conservative pair-bounded heuristic JOIN predicate candidates                        | Implemented                      | `heuristic-relationship-candidates.test.ts`, source contracts, and activated Extension Host contracts         |
-| Same-named objects across schemas/databases                                          | Implemented                      | `schema-intelligence.test.ts` database-index contract                                                         |
-| FK-aware JOIN predicates, multiple FKs, and composite FKs                            | Implemented                      | `join-intelligence.test.ts` FK predicate contracts                                                            |
+| Same-named objects across schemas/databases                                          | Implemented                      | `candidates.test.ts`, `schema-intelligence.test.ts`, and activated Extension Host contracts                   |
+| FK-aware JOIN predicates, used-mapping suppression, and composite FKs                | Implemented                      | `join-intelligence.test.ts` and activated Extension Host contracts                                            |
 | Relationship ranking after Contains                                                  | Implemented                      | `join-intelligence.test.ts` — relationship ranking contract                                                   |
 | No inferred cross-database FK relationships                                          | Implemented                      | `join-intelligence.test.ts` — cross-database negative contract                                                |
 | INSERT writable-column semantics                                                     | Implemented                      | `dml-call.test.ts` — INSERT target contract                                                                   |
@@ -241,7 +241,7 @@ promises.
 | Aggregates, windows/OVER, CASE/COALESCE, and datepart grammar values                 | Implemented                      | `broader-language-intelligence.test.ts` provider and inference contracts                                      |
 | Type normalization, ExpectedType, compatibility ranking, and visibility              | Implemented                      | `type-intelligence.test.ts` ExpectedType and ranking contracts                                                |
 | Canonical physical-column layout and long-name semantic preservation                 | Implemented                      | `presentation.test.ts` physical-column presentation contracts                                                 |
-| Native Signature Help registration                                                   | Implemented                      | `provider-registration.test.ts` — Signature Help contract                                                     |
+| Native function and stored-procedure Signature Help                                  | Implemented                      | `provider-registration.test.ts`, `dml-call.test.ts`, and activated Extension Host contracts                   |
 | Document-local Go to Definition / Peek Definition                                    | Implemented                      | `document-semantic-symbols.test.ts`, `feature-contracts.test.ts`, and activated Extension Host contract       |
 | Document-local Find References                                                       | Implemented                      | semantic, source-contract, and direct/activated Extension Host tests                                          |
 | Document-local Document Highlights                                                   | Implemented                      | semantic, source-contract, and direct/activated Extension Host tests                                          |
@@ -574,6 +574,11 @@ Protect:
 - scalar UDF signatures
 - TVF signatures
 - manual Signature Help fallback
+- unqualified and qualified catalog functions through the registered provider
+- valid `EXEC`/`EXECUTE` procedure syntax without function parentheses
+- positional and named procedure active parameters
+- procedure parameter order, SQL types, and `OUTPUT`
+- context-aware automatic procedure help at the first argument position
 
 ## Callable infrastructure invariant
 
@@ -615,6 +620,10 @@ Protect:
 - current-right alias first
 - multiple FKs between same tables
 - composite FK predicate
+- second and later predicates after `AND`/`OR`
+- suppression of completed direct and reversed manual mappings
+- partial-current-predicate replacement without premature suppression
+- missing-only composite mappings and fully exhausted relationship suppression
 - cross-schema FK
 - disabled FK exclusion
 - unrelated table negative case
@@ -622,6 +631,8 @@ Protect:
   without a fabricated predicate
 - automatic whitespace triggering after `ON` invokes native Suggest only after the
   provider resolves Query Puppy semantic candidates
+- automatic whitespace triggering after ON-clause `AND`/`OR` invokes native Suggest
+  only when an unused relationship predicate remains
 - completed predicate-bearing JOIN sources offer `ON`; CROSS JOIN and APPLY do not
 - completed unaliased JOIN sources expose exactly Smart Alias then `ON`; explicit
   `AS` exposes only the alias; completed aliases expose only `ON`

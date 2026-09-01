@@ -56,6 +56,10 @@ architecture documents describe the intended present-day design.
 - 0.15.1 navigation/release hygiene hardening — complete; Definition, References,
   and Highlights share one document-semantic navigation cache, and CI/package
   boundaries were hardened
+- 0.15.2 completion, JOIN, schema-resolution, and Signature Help stabilization —
+  complete; duplicate physical names are schema-disambiguated, unqualified catalog
+  binding fails closed, JOIN predicates continue without duplicates, and native
+  Signature Help covers functions and stored procedures
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -70,7 +74,9 @@ Phase G1 through G3 subsequently added native document-local Definition / Peek,
 References, and Highlights for CTEs, explicit RowSource aliases, scalar local
 variables, table variables, and deterministic temporary-table symbols. Version
 0.15.1 consolidated those consumers on one document-semantic navigation cache.
-Document Symbols/Outline is the next semantic/navigation consumer; projection-alias
+Version 0.15.2 then stabilized the existing completion and Signature Help surface;
+it did not add a new navigation milestone. Document Symbols/Outline remains the next
+semantic/navigation consumer. Projection-alias
 navigation, physical/workspace navigation, semantic Rename, and Diagnostics remain
 future work.
 

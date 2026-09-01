@@ -1,7 +1,7 @@
 # Query Puppy for T-SQL — Central Development Plan
 
-**Status:** 2026-08-31  
-**Current repository/package version:** 0.15.1  
+**Status:** 2026-09-01  
+**Current repository/package version:** 0.15.2  
 **Project:** Bearded Puppy Labs / Query Puppy for T-SQL  
 **Current project license:** GPL-3.0-only  
 **License/compliance status:** repository compliance baseline complete
@@ -91,7 +91,7 @@ Query Puppy should become particularly useful in exactly these environments.
 
 ## 4. Current baseline
 
-As of repository/package version 0.15.1, Query Puppy already has a substantial semantic engine.
+As of repository/package version 0.15.2, Query Puppy already has a substantial semantic engine.
 
 Do not describe the following as merely future roadmap items unless repository inspection shows otherwise.
 
@@ -104,6 +104,7 @@ Existing capabilities include, among other things:
 - persistent per-database metadata
 - lazy metadata loading
 - same-server cross-database resolution
+- schema-disambiguated physical-object completion and fail-closed unqualified binding
 - CTEs and chained CTEs
 - temp tables and table variables
 - derived tables
@@ -130,6 +131,7 @@ Existing capabilities include, among other things:
 - metadata-revalidated `LearnedFromQuery` / `StrongEvidence` JOIN candidates at the fixed threshold `observationCount >= 3`
 - conservative pair-bounded `HeuristicCandidate` / `Candidate` JOIN fallback outside persistence and the canonical database relationship graph
 - automatic semantic completion after JOIN ... ON whitespace
+- unused relationship-predicate continuation after JOIN ... ON logical separators
 - relationship-aware ranking across admitted relationship provenance
 - normalized SQL type descriptors
 - ExpectedType inference
@@ -140,6 +142,7 @@ Existing capabilities include, among other things:
 - SQL Server built-in function intelligence
 - aggregate and window-function intelligence
 - native Signature Help
+- native stored-procedure Signature Help for `EXEC` / `EXECUTE`
 - document-local Go to Definition / Peek Definition for supported semantic symbols
 - document-local Find References for the same supported semantic symbols
 - document-local Document Highlights for the same supported semantic symbols
@@ -1347,7 +1350,7 @@ Prioritize syntax that unlocks reliable semantic consumers.
 
 ## 12. P1 — Relationship Intelligence foundation
 
-**Status:** complete in the current 0.15.1 repository.
+**Status:** complete in the current 0.15.2 repository.
 
 The provenance-aware canonical relationship architecture is established and remains the required foundation for all relationship consumers.
 
@@ -1369,7 +1372,7 @@ while also allowing explicitly non-FK relationship sources with provenance and c
 
 ## 13. P1 — Project-defined relationships
 
-**Status:** complete in the current 0.15.1 repository, including ProjectDefined and explicit UserConfirmed project relationships.
+**Status:** complete in the current 0.15.2 repository, including ProjectDefined and explicit UserConfirmed project relationships.
 
 Explicit logical relationships are supported without being represented as physical SQL Server foreign keys.
 
@@ -1391,7 +1394,7 @@ This provides immediate value on ERP databases without requiring heuristic infer
 
 ## 14. P1 — Learned relationships from queries
 
-**Status:** Phase E1/E2 complete in the current 0.15.1 repository.
+**Status:** Phase E1/E2 complete in the current 0.15.2 repository.
 
 Query Puppy locally observes safely resolved JOIN evidence on save, aggregates bounded privacy-conscious evidence, and promotes qualifying evidence at the fixed product threshold to `LearnedFromQuery` / `StrongEvidence` candidates after revalidation against canonical metadata.
 
@@ -1410,7 +1413,7 @@ Do not automatically convert observation frequency into authoritative truth.
 
 ## 15. P1 — Heuristic relationship candidates
 
-**Status:** Phase E3 complete in the current 0.15.1 repository.
+**Status:** Phase E3 complete in the current 0.15.2 repository.
 
 A deliberately narrow pair-bounded heuristic fallback is implemented only for an already-selected physical table pair when no stronger declared, confirmed, project-defined, or learned relationship exists. It remains a `HeuristicCandidate` / `Candidate`, never an FK, and does not participate in global table discovery, persistence, or the canonical database relationship graph.
 

@@ -19,6 +19,7 @@ import {
   type DocumentSemanticSymbolIndex,
 } from "./DocumentSemanticSymbols.js";
 import { resolveQueryScopeRowSource } from "./QueryScopeResolver.js";
+import { ROW_SOURCE_OBJECT_KINDS } from "./CatalogObjectResolver.js";
 
 export interface RowSource {
   readonly sourceId: string;
@@ -215,11 +216,13 @@ function catalogColumns(
   const name = parts.at(-1) ?? "";
   const index = catalog.indexes.get(normalizeName(db));
   if (!index) return [];
-  if (schema) return index.findObject(schema, name)?.columns ?? [];
-  const found = index.objects.filter(
-    (o) => normalizeName(o.name) === normalizeName(name),
-  );
-  return found.length === 1 ? (found[0]?.columns ?? []) : [];
+  if (schema) {
+    const object = index.findObject(schema, name);
+    return object && ROW_SOURCE_OBJECT_KINDS.includes(object.kind)
+      ? object.columns
+      : [];
+  }
+  return index.findUniqueObject(name, ROW_SOURCE_OBJECT_KINDS)?.columns ?? [];
 }
 function catalogObject(
   parts: readonly string[],
@@ -234,11 +237,11 @@ function catalogObject(
   const name = parts.at(-1) ?? "";
   const index = catalog.indexes.get(normalizeName(database));
   if (!index) return undefined;
-  if (schema) return index.findObject(schema, name);
-  const matches = index.objects.filter(
-    (object) => normalizeName(object.name) === normalizeName(name),
-  );
-  return matches.length === 1 ? matches[0] : undefined;
+  if (!schema) return index.findUniqueObject(name, ROW_SOURCE_OBJECT_KINDS);
+  const object = index.findObject(schema, name);
+  return object && ROW_SOURCE_OBJECT_KINDS.includes(object.kind)
+    ? object
+    : undefined;
 }
 function definitionColumns(
   tokens: readonly SqlToken[],

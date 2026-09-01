@@ -6,7 +6,7 @@ only (`GPL-3.0-only`). See [LICENSE](LICENSE) for the complete license text.
 This inventory records deliberately used direct third-party software and the
 material actually redistributed in the extension package. It is evidence-based on
 the committed locked dependency tree and production bundle/package inspection. The
-inventory was last revalidated for package version 0.15.1. It does not replace the
+inventory was last revalidated for package version 0.15.2. It does not replace the
 authoritative upstream license or NOTICE files.
 
 ## Material redistributed in the VSIX

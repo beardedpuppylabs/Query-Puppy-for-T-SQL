@@ -9,6 +9,13 @@ export interface CatalogScope {
   readonly indexes: ReadonlyMap<string, DatabaseIndex>;
 }
 
+export const ROW_SOURCE_OBJECT_KINDS: readonly DatabaseObject["kind"][] = [
+  "table",
+  "view",
+  "tableValuedFunction",
+  "synonym",
+];
+
 export function resolveCatalogObject(
   parts: readonly string[],
   catalog: CatalogScope,
@@ -22,13 +29,11 @@ export function resolveCatalogObject(
   const name = parts.at(-1) ?? "";
   const index = catalog.indexes.get(normalizeName(database));
   if (!index) return undefined;
-  const objects = schema
-    ? ([index.findObject(schema, name)].filter(Boolean) as DatabaseObject[])
-    : index.objects.filter(
-        (object) => normalizeName(object.name) === normalizeName(name),
-      );
-  const filtered = kinds
-    ? objects.filter((object) => kinds.includes(object.kind))
-    : objects;
-  return filtered.length === 1 ? filtered[0] : undefined;
+  if (schema) {
+    const object = index.findObject(schema, name);
+    return object && (!kinds || kinds.includes(object.kind))
+      ? object
+      : undefined;
+  }
+  return index.findUniqueObject(name, kinds);
 }

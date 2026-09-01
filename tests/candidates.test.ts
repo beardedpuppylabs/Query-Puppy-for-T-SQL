@@ -109,6 +109,121 @@ test("schema qualification excludes unrelated schemas", () => {
   );
 });
 
+test("contract: duplicate unqualified physical objects show and insert their schemas", () => {
+  const duplicate = new DatabaseIndex({
+    database: "Db",
+    schemas: ["qpacc", "billing", "shipping"],
+    loadedAt: 0,
+    objects: [
+      ...["qpacc", "billing", "shipping"].map((schema, ordinal) => ({
+        id: 100 + ordinal,
+        schema,
+        name: "Addresses",
+        normalizedName: "addresses",
+        kind: "table" as const,
+        parameters: [],
+        columns: [],
+      })),
+      {
+        id: 110,
+        schema: "qpacc",
+        name: "UniqueOrders",
+        normalizedName: "uniqueorders",
+        kind: "table",
+        parameters: [],
+        columns: [],
+      },
+    ],
+  });
+  const ambiguous = createCandidates(
+    resolveSqlContext("SELECT * FROM Addr"),
+    duplicate,
+  );
+  assert.deepEqual(
+    ambiguous.map((candidate) => candidate.name),
+    ["billing.Addresses", "qpacc.Addresses", "shipping.Addresses"],
+  );
+  assert.deepEqual(
+    ambiguous.map((candidate) => candidate.insertText),
+    ["billing.Addresses", "qpacc.Addresses", "shipping.Addresses"],
+  );
+  assert.equal(
+    new Set(ambiguous.map((candidate) => candidate.sourceObject?.schema)).size,
+    3,
+  );
+  assert.deepEqual(
+    createCandidates(resolveSqlContext("SELECT * FROM Unique"), duplicate).map(
+      (candidate) => [candidate.name, candidate.insertText],
+    ),
+    [["UniqueOrders", undefined]],
+  );
+  assert.deepEqual(
+    createCandidates(
+      resolveSqlContext("SELECT * FROM qpacc.Addr"),
+      duplicate,
+    ).map((candidate) => [candidate.name, candidate.insertText]),
+    [["Addresses", undefined]],
+  );
+});
+
+test("duplicate disambiguation follows the active physical-object domain", () => {
+  const duplicate = new DatabaseIndex({
+    database: "Db",
+    schemas: ["billing", "shipping"],
+    loadedAt: 0,
+    objects: [
+      ...["billing", "shipping"].flatMap((schema, ordinal) => [
+        {
+          id: 200 + ordinal,
+          schema,
+          name: "Addresses",
+          normalizedName: "addresses",
+          kind: "table" as const,
+          parameters: [],
+          columns: [],
+        },
+        {
+          schema,
+          name: "SyncAddresses",
+          normalizedName: "syncaddresses",
+          kind: "procedure" as const,
+          parameters: [],
+          columns: [],
+        },
+        {
+          schema,
+          name: "AddressValue",
+          normalizedName: "addressvalue",
+          kind: "scalarFunction" as const,
+          parameters: [],
+          columns: [],
+          returnType: type,
+        },
+      ]),
+    ],
+  });
+  for (const sql of ["UPDATE Addr", "INSERT INTO Addr", "DELETE FROM Addr"])
+    assert.deepEqual(
+      createCandidates(resolveSqlContext(sql), duplicate).map(
+        (candidate) => candidate.name,
+      ),
+      ["billing.Addresses", "shipping.Addresses"],
+      sql,
+    );
+  assert.deepEqual(
+    createCandidates(resolveSqlContext("EXEC Sync"), duplicate).map(
+      (candidate) => candidate.name,
+    ),
+    ["billing.SyncAddresses", "shipping.SyncAddresses"],
+  );
+  assert.deepEqual(
+    createCandidates(resolveSqlContext("SELECT AddressValue"), duplicate)
+      .filter((candidate) => candidate.kind === "scalarFunction")
+      .map((candidate) => candidate.name),
+    ["billing.AddressValue", "shipping.AddressValue"],
+  );
+});
+
 test("an ambiguous unqualified alias source returns no columns", () => {
   const ambiguous = new DatabaseIndex({
     database: "Db",
@@ -139,6 +254,26 @@ test("an ambiguous unqualified alias source returns no columns", () => {
   assert.deepEqual(
     createCandidates(resolveSqlContext(sql, "SELECT c.addr".length), ambiguous),
     [],
+  );
+});
+
+test("contract: a unique unqualified physical source binds canonical columns", () => {
+  const sql = "SELECT c.addr FROM Customers c";
+  const result = createCandidates(
+    resolveSqlContext(sql, "SELECT c.addr".length),
+    index,
+  );
+  assert.deepEqual(
+    result.map((candidate) => candidate.name),
+    ["AddressId", "BillingAddressId", "EmailAddress", "ShippingAddressId"],
+  );
+  assert.equal(
+    result.every(
+      (candidate) =>
+        candidate.sourceObject?.schema === "dbo" &&
+        candidate.sourceObject.name === "Customers",
+    ),
+    true,
   );
 });
 

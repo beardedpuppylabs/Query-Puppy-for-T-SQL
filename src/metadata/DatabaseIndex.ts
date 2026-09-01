@@ -3,6 +3,7 @@ import type {
   DatabaseObject,
   KeyMetadata,
 } from "./MetadataModels.js";
+import { normalizeName } from "./MetadataModels.js";
 import {
   compareRelationships,
   deduplicateRelationships,
@@ -29,6 +30,7 @@ export class DatabaseIndex {
   readonly columnCount: number;
   readonly relationships: readonly Relationship[];
   private readonly qualified = new Map<string, DatabaseObject>();
+  private readonly unqualified = new Map<string, DatabaseObject[]>();
   private readonly byId = new Map<number, DatabaseObject>();
   private readonly schemas = new Set<string>();
   private readonly keysByObject = new Map<number, KeyMetadata[]>();
@@ -55,6 +57,7 @@ export class DatabaseIndex {
       this.schemas.add(schema.toLowerCase());
     for (const object of metadata.objects) {
       this.qualified.set(objectKey(object.schema, object.name), object);
+      append(this.unqualified, object.normalizedName, object);
       if (object.id !== undefined) this.byId.set(object.id, object);
       columnCount += object.columns.length;
     }
@@ -100,6 +103,22 @@ export class DatabaseIndex {
   }
   findObject(schema: string, name: string): DatabaseObject | undefined {
     return this.qualified.get(objectKey(schema, name));
+  }
+  findObjectsByName(
+    name: string,
+    kinds?: readonly DatabaseObject["kind"][],
+  ): readonly DatabaseObject[] {
+    const objects = this.unqualified.get(normalizeName(name)) ?? [];
+    return kinds
+      ? objects.filter((object) => kinds.includes(object.kind))
+      : objects;
+  }
+  findUniqueObject(
+    name: string,
+    kinds?: readonly DatabaseObject["kind"][],
+  ): DatabaseObject | undefined {
+    const objects = this.findObjectsByName(name, kinds);
+    return objects.length === 1 ? objects[0] : undefined;
   }
   findObjectById(id: number): DatabaseObject | undefined {
     return this.byId.get(id);

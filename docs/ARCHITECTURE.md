@@ -295,6 +295,12 @@ as required.
 
 Same-named objects in different schemas are distinct.
 
+`DatabaseIndex` maintains both qualified identity lookup and an in-memory
+unqualified-name bucket. Consumers that accept unqualified physical names request a
+compatible kind set and bind only when exactly one object remains. Multiple schema
+matches are an unresolved semantic state, never implicit metadata-order or `dbo`
+precedence. This lookup is part of the cached hot path and performs no catalog I/O.
+
 ## Cross-database completion
 
 Same-server cross-database completion is supported where implemented.

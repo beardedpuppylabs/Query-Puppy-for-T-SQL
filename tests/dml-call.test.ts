@@ -12,6 +12,10 @@ import {
   resolveCallableAtCursor,
 } from "../src/parser/CallableAnalyzer.js";
 import { resolveSqlContext } from "../src/parser/SqlContextResolver.js";
+import {
+  parseProcedureCallSite,
+  resolveProcedureCallAtCursor,
+} from "../src/parser/DmlCallAnalyzer.js";
 
 const columns = [
   {
@@ -497,6 +501,36 @@ test("contract: EXEC parameters preserve order exclusion OUTPUT and EXECUTE", ()
     ["@MaxRows", "@RowsAffected"],
   );
   assert.equal(result[1]?.parameterOutput, true);
+});
+test("contract: procedure call sites support positional named and return-status syntax", () => {
+  const positional = "EXEC dbo.FindCustomerAddress N'x', ";
+  const first = resolveProcedureCallAtCursor(
+    positional,
+    positional.length,
+    scope,
+  );
+  assert.ok(first);
+  assert.equal(first.procedure.name, "FindCustomerAddress");
+  assert.equal(first.activeParameter, 1);
+  assert.deepEqual(
+    first.parameters.map((parameter) => [
+      parameter.name,
+      parameter.type.name,
+      parameter.output,
+    ]),
+    [
+      ["@Search", "nvarchar", false],
+      ["@MaxRows", "int", false],
+      ["@RowsAffected", "int", true],
+    ],
+  );
+  const named = "EXECUTE @status = dbo.FindCustomerAddress @RowsAffected = ";
+  const namedResult = resolveProcedureCallAtCursor(named, named.length, scope);
+  assert.equal(namedResult?.activeParameter, 2);
+  assert.equal(
+    parseProcedureCallSite(named, named.length)?.name,
+    "FindCustomerAddress",
+  );
 });
 test("contract: catalog signatures track arguments and ignore nested commas", () => {
   const first = resolveCallableAtCursor(
