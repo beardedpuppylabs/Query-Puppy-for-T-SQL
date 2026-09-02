@@ -60,6 +60,7 @@ architecture documents describe the intended present-day design.
   complete; duplicate physical names are schema-disambiguated, unqualified catalog
   binding fails closed, JOIN predicates continue without duplicates, and native
   Signature Help covers functions and stored procedures
+- Phase G4 document-local Document Symbols / Outline — complete in 0.16.0
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -75,10 +76,10 @@ References, and Highlights for CTEs, explicit RowSource aliases, scalar local
 variables, table variables, and deterministic temporary-table symbols. Version
 0.15.1 consolidated those consumers on one document-semantic navigation cache.
 Version 0.15.2 then stabilized the existing completion and Signature Help surface;
-it did not add a new navigation milestone. Document Symbols/Outline remains the next
-semantic/navigation consumer. Projection-alias
-navigation, physical/workspace navigation, semantic Rename, and Diagnostics remain
-future work.
+it did not add a new navigation milestone. Version 0.16.0 adds native Document
+Symbols / Outline from a whole-document aggregation of the same canonical semantic
+declarations. Projection-alias navigation, physical/workspace navigation, semantic
+Rename, and Diagnostics remain future work.
 
 The 0.12.6 compliance slice established the official GPLv3 license text, package
 metadata, third-party inventory, bundle/VSIX audit, public documentation, and the
@@ -138,8 +139,19 @@ does not retain reliable declaration/reference identity.
 - [x] Add semantic, provider-contract, direct-provider, and activated Extension Host
       coverage without a live SQL Server dependency.
 
-Document Symbols/Outline, semantic Rename, and Diagnostics remain future Phase G
-consumers.
+## Phase G4 — document-local Document Symbols / Outline
+
+- [x] Register a native Document Symbol Provider for Query Puppy's SQL document
+      selector.
+- [x] Collect canonical supported declarations across all semantic statements and
+      tokenizer-validated `GO` batches without catalog or workspace access.
+- [x] Return a flat source-ordered Outline with exact identifier ranges, readable
+      details, native SymbolKind mappings, and declaration-identity deduplication.
+- [x] Cache whole-document declarations by URI/version and clear them on close.
+- [x] Add focused semantic, source-contract, direct-provider, and activated Extension
+      Host coverage without a live SQL Server dependency.
+
+Semantic Rename and Diagnostics remain future Phase G consumers.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 
@@ -474,10 +486,10 @@ deeper general grammar remain deferred.
 ## Forward roadmap
 
 The current major product area is **Navigation & Code Understanding**.
-Document-local Go to Definition / Peek Definition, Find References, and Document
-Highlights are implemented. Remaining navigation and code-understanding slices
-should continue to be scoped explicitly rather than grouped into a speculative
-version.
+Document-local Go to Definition / Peek Definition, Find References, Document
+Highlights, and Document Symbols / Outline are implemented. Remaining navigation
+and code-understanding slices should continue to be scoped explicitly rather than
+grouped into a speculative version.
 
 Later product areas remain:
 

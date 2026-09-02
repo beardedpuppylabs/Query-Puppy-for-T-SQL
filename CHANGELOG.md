@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.16.0
+
+- Added native document-local Document Symbols / Outline for canonical CTE,
+  explicit row-source alias, scalar local-variable, table-variable, and temporary-
+  table declarations.
+- Added disconnected whole-document declaration collection across statements and
+  `GO` batches with canonical identity deduplication, source ordering, exact
+  identifier ranges, and a document-version cache.
+
 ## 0.15.2
 
 - Disambiguated same-named physical objects across schemas in unqualified completion,

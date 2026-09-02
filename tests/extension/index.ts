@@ -4,7 +4,9 @@ import * as vscode from "vscode";
 import { DatabaseIndex } from "../../src/metadata/DatabaseIndex.js";
 import type { SqlType } from "../../src/metadata/MetadataModels.js";
 import { BUILTIN_FUNCTIONS } from "../../src/parser/BuiltinFunctionCatalog.js";
+import { collectDocumentSemanticDeclarations } from "../../src/parser/DocumentSemanticAnalyzer.js";
 import { SqlDocumentHighlightProvider } from "../../src/navigation/SqlDocumentHighlightProvider.js";
+import { SqlDocumentSymbolProvider } from "../../src/navigation/SqlDocumentSymbolProvider.js";
 import { SqlReferenceProvider } from "../../src/navigation/SqlReferenceProvider.js";
 import {
   RelationshipConfidence,
@@ -1112,6 +1114,26 @@ async function documentHighlights(
   );
 }
 
+async function documentSymbols(sql: string): Promise<{
+  readonly document: vscode.TextDocument;
+  readonly symbols: readonly vscode.DocumentSymbol[];
+}> {
+  const document = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: sql,
+  });
+  const result =
+    (await vscode.commands.executeCommand<
+      readonly (vscode.DocumentSymbol | vscode.SymbolInformation)[] | undefined
+    >("vscode.executeDocumentSymbolProvider", document.uri)) ?? [];
+  return {
+    document,
+    symbols: result.filter(
+      (symbol): symbol is vscode.DocumentSymbol => "selectionRange" in symbol,
+    ),
+  };
+}
+
 type MarkedCompletionItem = vscode.CompletionItem & {
   readonly data?: {
     readonly provider?: string;
@@ -1516,6 +1538,71 @@ export async function run(): Promise<void> {
     ),
     true,
   );
+
+  const outlineSql = [
+    "DECLARE @First int;",
+    "DECLARE @Rows TABLE (Id int);",
+    "CREATE TABLE #Scratch (Id int);",
+    "GO",
+    "DECLARE @Second bigint;",
+    "WITH Orders AS (",
+    "  SELECT c.Id FROM dbo.Customers AS c",
+    ")",
+    "SELECT o.Id FROM Orders AS o;",
+  ].join("\n");
+  const registeredOutline = await documentSymbols(outlineSql);
+  assert.deepEqual(
+    registeredOutline.symbols.map((symbol) => [
+      symbol.name,
+      symbol.detail,
+      symbol.kind,
+    ]),
+    [
+      ["@First", "Local variable", vscode.SymbolKind.Variable],
+      ["@Rows", "Table variable", vscode.SymbolKind.Variable],
+      ["#Scratch", "Temporary table", vscode.SymbolKind.Object],
+      ["@Second", "Local variable", vscode.SymbolKind.Variable],
+      ["Orders", "CTE", vscode.SymbolKind.Struct],
+      ["c", "Row source alias", vscode.SymbolKind.Variable],
+      ["o", "Row source alias", vscode.SymbolKind.Variable],
+    ],
+    "the registered native Document Symbol Provider must return the whole document in source order",
+  );
+  for (const symbol of registeredOutline.symbols) {
+    assert.equal(
+      registeredOutline.document.getText(symbol.selectionRange),
+      symbol.name,
+    );
+    assert.deepEqual(symbol.range, symbol.selectionRange);
+  }
+  assert.equal(
+    registeredOutline.symbols.some((symbol) =>
+      ["Customers", "Id"].includes(symbol.name),
+    ),
+    false,
+  );
+
+  let outlineCollectionCount = 0;
+  const directOutlineProvider = new SqlDocumentSymbolProvider((sql) => {
+    outlineCollectionCount++;
+    return collectDocumentSemanticDeclarations(sql);
+  });
+  const directOutline = await directOutlineProvider.provideDocumentSymbols(
+    registeredOutline.document,
+  );
+  await directOutlineProvider.provideDocumentSymbols(
+    registeredOutline.document,
+  );
+  assert.deepEqual(
+    directOutline?.map((symbol) => symbol.name),
+    registeredOutline.symbols.map((symbol) => symbol.name),
+  );
+  assert.equal(outlineCollectionCount, 1);
+  directOutlineProvider.closeDocument(registeredOutline.document.uri);
+  await directOutlineProvider.provideDocumentSymbols(
+    registeredOutline.document,
+  );
+  assert.equal(outlineCollectionCount, 2);
 
   for (const expectation of [
     ["SELECT c.customer FROM reltest.Customers c", "CustomerId", "PK"],

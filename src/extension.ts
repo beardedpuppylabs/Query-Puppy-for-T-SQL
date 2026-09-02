@@ -51,6 +51,7 @@ import { resolveSqlContext } from "./parser/SqlContextResolver.js";
 import { DocumentSemanticCache } from "./parser/DocumentSemanticCache.js";
 import { SqlDefinitionProvider } from "./navigation/SqlDefinitionProvider.js";
 import { SqlDocumentHighlightProvider } from "./navigation/SqlDocumentHighlightProvider.js";
+import { SqlDocumentSymbolProvider } from "./navigation/SqlDocumentSymbolProvider.js";
 import { SqlReferenceProvider } from "./navigation/SqlReferenceProvider.js";
 
 const EXTENSION_ID = "BeardedPuppyLabs.query-puppy-for-t-sql";
@@ -127,6 +128,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const documentHighlightProvider = new SqlDocumentHighlightProvider(
     navigationDocumentSemantics,
   );
+  const documentSymbolProvider = new SqlDocumentSymbolProvider();
   const referenceProvider = new SqlReferenceProvider(
     navigationDocumentSemantics,
   );
@@ -295,6 +297,10 @@ export function activate(context: vscode.ExtensionContext): void {
       SQL_DOCUMENT_SELECTOR,
       documentHighlightProvider,
     ),
+    vscode.languages.registerDocumentSymbolProvider(
+      SQL_DOCUMENT_SELECTOR,
+      documentSymbolProvider,
+    ),
     vscode.languages.registerCodeActionsProvider(
       SQL_DOCUMENT_SELECTOR,
       relationshipCodeActions,
@@ -306,6 +312,7 @@ export function activate(context: vscode.ExtensionContext): void {
       provider.closeDocument(document.uri);
       definitionProvider.closeDocument(document.uri);
       documentHighlightProvider.closeDocument(document.uri);
+      documentSymbolProvider.closeDocument(document.uri);
       referenceProvider.closeDocument(document.uri);
       relationshipCodeActions.closeDocument(document.uri);
       if (automaticSignatureHelp.current()?.uri === document.uri.toString())

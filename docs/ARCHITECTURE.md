@@ -445,8 +445,17 @@ Highlight Provider consumer for the same identities; it returns each declaration
 and bound reference once in document order using the neutral Text kind. These three
 navigation providers share one cursor-keyed `DocumentSemanticCache`; completion and
 relationship Code Actions retain their separate caches because they have different
-consumer and catalog-context requirements. Document Symbols/Outline, semantic
-Rename, and Diagnostics are not yet registered consumers of this foundation.
+consumer and catalog-context requirements.
+
+Document Symbols / Outline is a registered native Document Symbol Provider consumer.
+Unlike cursor-targeted navigation, it tokenizes once and enumerates semantic
+statements across the whole document, including tokenizer-validated `GO` batches.
+Each statement is analyzed through the same canonical semantic analyzer, and
+declarations are deduplicated by their declaration-derived symbol identity before
+being returned in source order. The provider keeps a direct URI/version cache and
+clears it on document close. It performs no catalog, backend, relationship,
+filesystem, or workspace work. Semantic Rename and Diagnostics are not yet
+registered consumers of this foundation.
 
 ## Schema Intelligence
 

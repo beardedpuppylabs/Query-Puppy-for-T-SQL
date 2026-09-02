@@ -8,7 +8,10 @@ import {
 } from "../metadata/MetadataModels.js";
 import type { SqlToken } from "./SqlTokenizer.js";
 import { tokenizeSql } from "./SqlTokenizer.js";
-import { statementTokenRangeAtCursor } from "./StatementBoundary.js";
+import {
+  documentStatementTokenRanges,
+  statementTokenRangeAtCursor,
+} from "./StatementBoundary.js";
 import { batchTokenRangeAtCursor } from "./BatchBoundary.js";
 import {
   resolveBatchLocalVariables,
@@ -16,6 +19,7 @@ import {
 } from "./LocalVariableSymbols.js";
 import {
   buildDocumentSemanticSymbolIndex,
+  type DocumentSemanticSymbol,
   type DocumentSemanticSymbolIndex,
 } from "./DocumentSemanticSymbols.js";
 import { resolveQueryScopeRowSource } from "./QueryScopeResolver.js";
@@ -1100,12 +1104,12 @@ export function resolveVisibleRowSource(
       }
     : undefined;
 }
-export function analyzeDocumentSemantics(
+function analyzeTokenizedDocumentSemantics(
   sql: string,
+  tokens: readonly SqlToken[],
   cursor: number,
   catalog?: SemanticCatalog,
 ): DocumentSemanticModel {
-  const tokens = tokenizeSql(sql);
   const before = tokens.filter((t) => t.start < cursor);
   const statement = statementTokenRangeAtCursor(tokens, cursor);
   const batch = statement.start;
@@ -1328,6 +1332,40 @@ export function analyzeDocumentSemantics(
     localVariables,
     documentLocalSymbols,
   };
+}
+
+export function analyzeDocumentSemantics(
+  sql: string,
+  cursor: number,
+  catalog?: SemanticCatalog,
+): DocumentSemanticModel {
+  return analyzeTokenizedDocumentSemantics(
+    sql,
+    tokenizeSql(sql),
+    cursor,
+    catalog,
+  );
+}
+
+/** Collects canonical local declarations across every semantic statement. */
+export function collectDocumentSemanticDeclarations(
+  sql: string,
+): readonly DocumentSemanticSymbol[] {
+  const tokens = tokenizeSql(sql);
+  const declarations = new Map<string, DocumentSemanticSymbol>();
+  for (const statement of documentStatementTokenRanges(tokens)) {
+    const cursor = tokens[statement.end - 1]?.end;
+    if (cursor === undefined) continue;
+    const model = analyzeTokenizedDocumentSemantics(sql, tokens, cursor);
+    for (const symbol of model.documentLocalSymbols.symbols)
+      if (!declarations.has(symbol.id)) declarations.set(symbol.id, symbol);
+  }
+  return [...declarations.values()].sort(
+    (left, right) =>
+      left.declaration.start - right.declaration.start ||
+      left.declaration.end - right.declaration.end ||
+      left.id.localeCompare(right.id),
+  );
 }
 
 /** Resolves only an exact projection wildcard and never performs catalog I/O. */

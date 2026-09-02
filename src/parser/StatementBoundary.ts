@@ -117,6 +117,34 @@ const implicitStatementStarts = (
   return starts;
 };
 
+/** Enumerates semantic statements across every client batch in source order. */
+export function documentStatementTokenRanges(
+  tokens: readonly SqlToken[],
+): readonly StatementTokenRange[] {
+  const ranges: StatementTokenRange[] = [];
+  const appendSegment = (start: number, end: number): void => {
+    if (start >= end) return;
+    const implicitStarts = implicitStatementStarts(tokens, start, end);
+    const starts =
+      implicitStarts[0] === start ? implicitStarts : [start, ...implicitStarts];
+    for (let index = 0; index < starts.length; index++) {
+      const statementStart = starts[index];
+      const statementEnd = starts[index + 1] ?? end;
+      if (statementStart !== undefined && statementStart < statementEnd)
+        ranges.push({ start: statementStart, end: statementEnd });
+    }
+  };
+
+  let segmentStart = 0;
+  for (let index = 0; index <= tokens.length; index++) {
+    const token = tokens[index];
+    if (index < tokens.length && token && !isExplicitBoundary(token)) continue;
+    appendSegment(segmentStart, index);
+    segmentStart = index + 1;
+  }
+  return ranges;
+}
+
 /**
  * Resolves the semantic statement containing the cursor. Besides explicit `;` and
  * tokenizer-validated `GO` boundaries, supported independent top-level query, DML,

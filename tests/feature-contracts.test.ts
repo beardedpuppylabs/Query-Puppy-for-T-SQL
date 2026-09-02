@@ -359,6 +359,8 @@ test("contract: document-local navigation uses native providers and editor-neutr
   assert.match(extensionSource, /SqlReferenceProvider/);
   assert.match(extensionSource, /registerDocumentHighlightProvider/);
   assert.match(extensionSource, /SqlDocumentHighlightProvider/);
+  assert.match(extensionSource, /registerDocumentSymbolProvider/);
+  assert.match(extensionSource, /SqlDocumentSymbolProvider/);
 
   const providerSource = await readFile(
     "src/navigation/SqlDefinitionProvider.ts",
@@ -397,6 +399,33 @@ test("contract: document-local navigation uses native providers and editor-neutr
   assert.doesNotMatch(highlightProviderSource, /resolveQueryScopeRowSource/);
   assert.doesNotMatch(highlightProviderSource, /tokenizeSql/);
   assert.doesNotMatch(highlightProviderSource, /workspace\.findFiles/);
+
+  const documentSymbolProviderSource = await readFile(
+    "src/navigation/SqlDocumentSymbolProvider.ts",
+    "utf8",
+  );
+  assert.match(
+    documentSymbolProviderSource,
+    /collectDocumentSemanticDeclarations/,
+  );
+  assert.match(documentSymbolProviderSource, /document\.version/);
+  assert.match(documentSymbolProviderSource, /vscode\.DocumentSymbol/);
+  assert.doesNotMatch(
+    documentSymbolProviderSource,
+    /RegExp|\.match\(|\.search\(|tokenizeSql|analyzeDocumentSemantics/,
+  );
+  assert.doesNotMatch(
+    documentSymbolProviderSource,
+    /resolveQueryScopeRowSource|workspace\.findFiles/,
+  );
+
+  const analyzerSource = await readFile(
+    "src/parser/DocumentSemanticAnalyzer.ts",
+    "utf8",
+  );
+  assert.match(analyzerSource, /collectDocumentSemanticDeclarations/);
+  assert.match(analyzerSource, /documentStatementTokenRanges/);
+  assert.doesNotMatch(analyzerSource, /from "vscode"/);
 
   const navigationSource = await readFile(
     "src/navigation/DocumentSemanticNavigation.ts",

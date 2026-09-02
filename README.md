@@ -15,8 +15,8 @@ In a schema with hundreds or thousands of objects, remembering part of a name sh
 - JOIN predicates based on actual foreign keys, explicit project relationships, user-confirmed JOINs, qualifying learned evidence, and conservative pair-bounded heuristic fallback
 - Local, privacy-conscious acquisition of resolved JOIN evidence on document save
 - Built-in and catalog function completion, typing, and Signature Help
-- Document-local Go to Definition, Peek Definition, Find References, and Document
-  Highlights for supported SQL symbols
+- Document-local Go to Definition, Peek Definition, Find References, Document
+  Highlights, and Document Symbols / Outline for supported SQL symbols
 - Smart Alias and Tab-only wildcard productivity features
 - Query-local sources and same-server cross-database completion
 - Persistent per-database metadata for fast warm starts
