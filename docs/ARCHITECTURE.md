@@ -454,8 +454,19 @@ Each statement is analyzed through the same canonical semantic analyzer, and
 declarations are deduplicated by their declaration-derived symbol identity before
 being returned in source order. The provider keeps a direct URI/version cache and
 clears it on document close. It performs no catalog, backend, relationship,
-filesystem, or workspace work. Semantic Rename and Diagnostics are not yet
-registered consumers of this foundation.
+filesystem, or workspace work.
+
+High-Confidence Document Diagnostics is a native DiagnosticCollection consumer. Its
+editor-neutral collector tokenizes once and enumerates the existing canonical batch
+and statement boundaries across the whole document. `QP1001` is emitted only when a
+scalar or table-variable reference occurs in a supported query/DML statement, the
+same name has a canonical declaration in an earlier `GO` batch, and the current
+batch has no declaration for that name. Module-definition batches, unresolved
+variables without earlier local evidence, incomplete SQL, and optional broader
+diagnostic categories fail closed. Diagnostics update synchronously for eligible SQL
+documents on activation, open, and edit, and clear on correction or close. This path
+performs no catalog, backend, relationship, filesystem, or workspace work and is not
+a general SQL linter. Semantic Rename remains a future consumer.
 
 ## Schema Intelligence
 

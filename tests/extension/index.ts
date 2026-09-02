@@ -1789,6 +1789,72 @@ export async function run(): Promise<void> {
   );
   assert.equal(outlineCollectionCount, 2);
 
+  const invalidDiagnosticSql =
+    "DECLARE @CustomerId int;\nGO\nSELECT @CustomerId;";
+  const validDiagnosticSql = "DECLARE @CustomerId int;\nSELECT @CustomerId;";
+  const semanticDiagnosticDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: invalidDiagnosticSql,
+  });
+  const queryPuppyDiagnostics = (): readonly vscode.Diagnostic[] =>
+    vscode.languages
+      .getDiagnostics(semanticDiagnosticDocument.uri)
+      .filter((diagnostic) => diagnostic.source === "Query Puppy");
+  assert.equal(queryPuppyDiagnostics().length, 1);
+  const crossBatchDiagnostic = queryPuppyDiagnostics()[0];
+  assert.ok(crossBatchDiagnostic);
+  assert.equal(crossBatchDiagnostic.code, "QP1001");
+  assert.equal(crossBatchDiagnostic.severity, vscode.DiagnosticSeverity.Error);
+  assert.equal(
+    semanticDiagnosticDocument.getText(crossBatchDiagnostic.range),
+    "@CustomerId",
+  );
+
+  const semanticDiagnosticEditor = await vscode.window.showTextDocument(
+    semanticDiagnosticDocument,
+  );
+  assert.equal(
+    await semanticDiagnosticEditor.edit((builder) =>
+      builder.replace(
+        new vscode.Range(
+          semanticDiagnosticDocument.positionAt(0),
+          semanticDiagnosticDocument.positionAt(
+            semanticDiagnosticDocument.getText().length,
+          ),
+        ),
+        validDiagnosticSql,
+      ),
+    ),
+    true,
+  );
+  assert.deepEqual(queryPuppyDiagnostics(), []);
+  assert.equal(
+    await semanticDiagnosticEditor.edit((builder) =>
+      builder.replace(
+        new vscode.Range(
+          semanticDiagnosticDocument.positionAt(0),
+          semanticDiagnosticDocument.positionAt(
+            semanticDiagnosticDocument.getText().length,
+          ),
+        ),
+        invalidDiagnosticSql,
+      ),
+    ),
+    true,
+  );
+  assert.equal(queryPuppyDiagnostics().length, 1);
+  const diagnosticUri = semanticDiagnosticDocument.uri;
+  await vscode.commands.executeCommand(
+    "workbench.action.revertAndCloseActiveEditor",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.deepEqual(
+    vscode.languages
+      .getDiagnostics(diagnosticUri)
+      .filter((diagnostic) => diagnostic.source === "Query Puppy"),
+    [],
+  );
+
   for (const expectation of [
     ["SELECT c.customer FROM reltest.Customers c", "CustomerId", "PK"],
     ["SELECT c.customer FROM reltest.Customers c", "CustomerCode", "UQ"],

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.0
+
+- Added native high-confidence document diagnostics for scalar and table-variable
+  references that cross a validated `GO` batch boundary without a declaration in
+  the current batch.
+- Added immediate diagnostic updates for SQL document activation, opening, editing,
+  correction, and closure without catalog or database access.
+
 ## 0.16.1
 
 - Fixed document-local Definition resolution when invoked directly on supported

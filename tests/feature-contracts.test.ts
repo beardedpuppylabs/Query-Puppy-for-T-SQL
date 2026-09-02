@@ -443,6 +443,39 @@ test("contract: document-local navigation uses native providers and editor-neutr
   assert.doesNotMatch(semanticIndexSource, /from "vscode"/);
 });
 
+test("contract: high-confidence diagnostics use a native collection and editor-neutral issues", async () => {
+  const extensionSource = await readFile("src/extension.ts", "utf8");
+  assert.match(extensionSource, /SqlDocumentDiagnostics/);
+  assert.match(
+    extensionSource,
+    /documentDiagnostics\.update\(event\.document\)/,
+  );
+  assert.match(extensionSource, /documentDiagnostics\.closeDocument/);
+  assert.match(extensionSource, /workspace\.textDocuments/);
+
+  const adapterSource = await readFile(
+    "src/navigation/SqlDocumentDiagnostics.ts",
+    "utf8",
+  );
+  assert.match(adapterSource, /createDiagnosticCollection\("query-puppy"\)/);
+  assert.match(adapterSource, /DiagnosticSeverity\.Error/);
+  assert.match(adapterSource, /collectHighConfidenceDocumentIssues/);
+  assert.doesNotMatch(
+    adapterSource,
+    /tokenizeSql|workspace\.findFiles|setTimeout/,
+  );
+
+  const semanticSource = await readFile(
+    "src/parser/DocumentSemanticDiagnostics.ts",
+    "utf8",
+  );
+  assert.match(semanticSource, /documentBatchTokenRanges/);
+  assert.match(semanticSource, /documentStatementTokenRanges/);
+  assert.match(semanticSource, /resolveBatchLocalVariables/);
+  assert.match(semanticSource, /QP1001/);
+  assert.doesNotMatch(semanticSource, /from "vscode"/);
+});
+
 test("contract: learned JOIN candidates use the local cached evidence policy boundary", async () => {
   const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
     readonly contributes?: {

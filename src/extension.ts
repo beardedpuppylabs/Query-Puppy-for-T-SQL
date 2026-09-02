@@ -51,6 +51,7 @@ import { resolveSqlContext } from "./parser/SqlContextResolver.js";
 import { DocumentSemanticCache } from "./parser/DocumentSemanticCache.js";
 import { SqlDefinitionProvider } from "./navigation/SqlDefinitionProvider.js";
 import { SqlDocumentHighlightProvider } from "./navigation/SqlDocumentHighlightProvider.js";
+import { SqlDocumentDiagnostics } from "./navigation/SqlDocumentDiagnostics.js";
 import { SqlDocumentSymbolProvider } from "./navigation/SqlDocumentSymbolProvider.js";
 import { SqlReferenceProvider } from "./navigation/SqlReferenceProvider.js";
 
@@ -128,6 +129,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const documentHighlightProvider = new SqlDocumentHighlightProvider(
     navigationDocumentSemantics,
   );
+  const documentDiagnostics = new SqlDocumentDiagnostics();
   const documentSymbolProvider = new SqlDocumentSymbolProvider();
   const referenceProvider = new SqlReferenceProvider(
     navigationDocumentSemantics,
@@ -275,6 +277,7 @@ export function activate(context: vscode.ExtensionContext): void {
     learnedRelationshipEvidence,
     relationshipCodeActions,
     starExpansion,
+    documentDiagnostics,
     vscode.languages.registerCompletionItemProvider(
       SQL_DOCUMENT_SELECTOR,
       provider,
@@ -311,6 +314,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidCloseTextDocument((document) => {
       provider.closeDocument(document.uri);
       definitionProvider.closeDocument(document.uri);
+      documentDiagnostics.closeDocument(document.uri);
       documentHighlightProvider.closeDocument(document.uri);
       documentSymbolProvider.closeDocument(document.uri);
       referenceProvider.closeDocument(document.uri);
@@ -320,7 +324,11 @@ export function activate(context: vscode.ExtensionContext): void {
       if (automaticCompletion.current()?.uri === document.uri.toString())
         clearAutomaticSuggestTrigger();
     }),
+    vscode.workspace.onDidOpenTextDocument((document) =>
+      documentDiagnostics.update(document),
+    ),
     vscode.workspace.onDidChangeTextDocument((event) => {
+      documentDiagnostics.update(event.document);
       clearAutomaticTrigger();
       clearAutomaticSuggestTrigger();
       const editor = vscode.window.activeTextEditor;
@@ -512,6 +520,8 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     ),
   );
+  for (const document of vscode.workspace.textDocuments)
+    documentDiagnostics.update(document);
   if (context.extensionMode === vscode.ExtensionMode.Test)
     context.subscriptions.push(
       vscode.commands.registerCommand(

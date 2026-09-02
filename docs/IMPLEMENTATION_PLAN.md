@@ -61,6 +61,8 @@ architecture documents describe the intended present-day design.
   binding fails closed, JOIN predicates continue without duplicates, and native
   Signature Help covers functions and stored procedures
 - Phase G4 document-local Document Symbols / Outline — complete in 0.16.0
+- 0.16.1 declaration-position navigation and changelog hygiene — complete
+- Phase G5 high-confidence document diagnostics — complete in 0.17.0
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -79,7 +81,10 @@ Version 0.15.2 then stabilized the existing completion and Signature Help surfac
 it did not add a new navigation milestone. Version 0.16.0 adds native Document
 Symbols / Outline from a whole-document aggregation of the same canonical semantic
 declarations. Projection-alias navigation, physical/workspace navigation, semantic
-Rename, and Diagnostics remain future work.
+Rename, and broader diagnostics remain future work. Version 0.16.1 aligns
+declaration-position Definition with the shared navigation resolver. Version 0.17.0
+adds the first native high-confidence diagnostic for provable cross-`GO`
+variable-scope violations. Quick Fixes also remain future work.
 
 The 0.12.6 compliance slice established the official GPLv3 license text, package
 metadata, third-party inventory, bundle/VSIX audit, public documentation, and the
@@ -151,7 +156,21 @@ does not retain reliable declaration/reference identity.
 - [x] Add focused semantic, source-contract, direct-provider, and activated Extension
       Host coverage without a live SQL Server dependency.
 
-Semantic Rename and Diagnostics remain future Phase G consumers.
+## Phase G5 — high-confidence document diagnostics
+
+- [x] Own one native DiagnosticCollection for eligible SQL documents and update it
+      on activation, open, and edit while clearing corrected and closed documents.
+- [x] Detect only provable scalar/table-variable references that cross a validated
+      `GO` batch boundary without a current-batch declaration (`QP1001`, Error).
+- [x] Reuse canonical tokenizer, batch, statement, and local-variable semantics in an
+      editor-neutral whole-document collector without catalog or workspace access.
+- [x] Fail closed for module parameters, unresolved variables without earlier local
+      evidence, current-batch redeclarations, and incomplete SQL.
+- [x] Add focused semantic, source-contract, and activated Extension Host lifecycle
+      coverage without a live SQL Server dependency.
+
+Use-before-declaration, alias-scope, aliased-base-name, duplicate-alias, Quick Fix,
+and semantic Rename work remains deferred.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 
@@ -487,13 +506,14 @@ deeper general grammar remain deferred.
 
 The current major product area is **Navigation & Code Understanding**.
 Document-local Go to Definition / Peek Definition, Find References, Document
-Highlights, and Document Symbols / Outline are implemented. Remaining navigation
-and code-understanding slices should continue to be scoped explicitly rather than
-grouped into a speculative version.
+Highlights, Document Symbols / Outline, and the first high-confidence document
+diagnostic are implemented. Remaining navigation and code-understanding slices
+should continue to be scoped explicitly rather than grouped into a speculative
+version.
 
 Later product areas remain:
 
-- diagnostics and Quick Fixes
+- additional diagnostics and Quick Fixes
 - refactoring and Code Actions
 - broader grammar coverage
 - Configurability and a Query Puppy Control Center

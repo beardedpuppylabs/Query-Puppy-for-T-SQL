@@ -17,6 +17,8 @@ In a schema with hundreds or thousands of objects, remembering part of a name sh
 - Built-in and catalog function completion, typing, and Signature Help
 - Document-local Go to Definition, Peek Definition, Find References, Document
   Highlights, and Document Symbols / Outline for supported SQL symbols
+- Conservative native document diagnostics for proven cross-`GO` variable-scope
+  errors
 - Smart Alias and Tab-only wildcard productivity features
 - Query-local sources and same-server cross-database completion
 - Persistent per-database metadata for fast warm starts
