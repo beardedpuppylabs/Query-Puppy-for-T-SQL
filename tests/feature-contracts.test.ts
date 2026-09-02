@@ -366,7 +366,8 @@ test("contract: document-local navigation uses native providers and editor-neutr
     "src/navigation/SqlDefinitionProvider.ts",
     "utf8",
   );
-  assert.match(providerSource, /semanticDefinitionAtOffset/);
+  assert.match(providerSource, /resolveDocumentSemanticNavigationTarget/);
+  assert.doesNotMatch(providerSource, /semanticDefinitionAtOffset/);
   assert.doesNotMatch(providerSource, /resolveQueryScopeRowSource/);
   assert.doesNotMatch(providerSource, /tokenizeSql/);
 

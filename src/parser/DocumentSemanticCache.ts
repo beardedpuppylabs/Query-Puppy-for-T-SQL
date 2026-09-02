@@ -3,6 +3,8 @@ import type {
   DocumentSemanticModel,
 } from "./DocumentSemanticAnalyzer.js";
 import { analyzeDocumentSemantics } from "./DocumentSemanticAnalyzer.js";
+import { tokenizeSql } from "./SqlTokenizer.js";
+import { statementTokenRangeAtCursor } from "./StatementBoundary.js";
 
 interface Entry {
   readonly version: number;
@@ -39,6 +41,20 @@ export class DocumentSemanticCache {
     const model = analyzeDocumentSemantics(sql, cursor, catalog);
     this.entries.set(uri, { version, cursor, catalogIdentity, model });
     return model;
+  }
+
+  getCompletedStatement(
+    uri: string,
+    version: number,
+    sql: string,
+    offset: number,
+  ): DocumentSemanticModel | undefined {
+    const tokens = tokenizeSql(sql);
+    const statement = statementTokenRangeAtCursor(tokens, offset);
+    const statementEnd = tokens[statement.end - 1]?.end;
+    return statementEnd === undefined
+      ? undefined
+      : this.get(uri, version, sql, statementEnd);
   }
 
   delete(uri: string): void {

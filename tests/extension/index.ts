@@ -1114,6 +1114,54 @@ async function documentHighlights(
   );
 }
 
+async function nativeNavigation(
+  sql: string,
+  cursor: number,
+): Promise<{
+  readonly document: vscode.TextDocument;
+  readonly definitions: readonly vscode.Location[];
+  readonly references: readonly vscode.Location[];
+  readonly highlights: readonly vscode.DocumentHighlight[];
+}> {
+  const document = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: sql,
+  });
+  const position = document.positionAt(cursor);
+  const definitionResult =
+    (await vscode.commands.executeCommand<
+      readonly (vscode.Location | vscode.LocationLink)[] | undefined
+    >("vscode.executeDefinitionProvider", document.uri, position)) ?? [];
+  const definitions = definitionResult.flatMap((item) =>
+    "uri" in item
+      ? [item]
+      : item.targetUri.toString() === document.uri.toString()
+        ? [
+            new vscode.Location(
+              item.targetUri,
+              item.targetSelectionRange ?? item.targetRange,
+            ),
+          ]
+        : [],
+  );
+  const referenceResult =
+    (await vscode.commands.executeCommand<
+      readonly vscode.Location[] | undefined
+    >("vscode.executeReferenceProvider", document.uri, position)) ?? [];
+  const highlights =
+    (await vscode.commands.executeCommand<
+      readonly vscode.DocumentHighlight[] | undefined
+    >("vscode.executeDocumentHighlights", document.uri, position)) ?? [];
+  return {
+    document,
+    definitions,
+    references: referenceResult.filter(
+      (location) => location.uri.toString() === document.uri.toString(),
+    ),
+    highlights,
+  };
+}
+
 async function documentSymbols(sql: string): Promise<{
   readonly document: vscode.TextDocument;
   readonly symbols: readonly vscode.DocumentSymbol[];
@@ -1372,6 +1420,143 @@ export async function run(): Promise<void> {
     firstDefinition.range.end.character,
     definitionSql.indexOf("CustomerOrders") + "CustomerOrders".length,
   );
+
+  const variableNavigationSql =
+    "DECLARE @CustomerId int = 42;\nSELECT @CustomerId;";
+  const cteNavigationSql =
+    ";WITH CustomerData AS (SELECT 1 AS Id) SELECT * FROM CustomerData;";
+  const aliasNavigationSql =
+    ";WITH CustomerData AS (SELECT 1 AS Id) SELECT cd.Id FROM CustomerData AS cd WHERE cd.Id = 1;";
+  for (const navigationCase of [
+    {
+      label: "local variable",
+      sql: variableNavigationSql,
+      name: "@CustomerId",
+      declaration: variableNavigationSql.indexOf("@CustomerId"),
+      reference: variableNavigationSql.lastIndexOf("@CustomerId"),
+      occurrences: [
+        variableNavigationSql.indexOf("@CustomerId"),
+        variableNavigationSql.lastIndexOf("@CustomerId"),
+      ],
+    },
+    {
+      label: "CTE",
+      sql: cteNavigationSql,
+      name: "CustomerData",
+      declaration: cteNavigationSql.indexOf("CustomerData"),
+      reference: cteNavigationSql.lastIndexOf("CustomerData"),
+      occurrences: [
+        cteNavigationSql.indexOf("CustomerData"),
+        cteNavigationSql.lastIndexOf("CustomerData"),
+      ],
+    },
+    {
+      label: "explicit alias",
+      sql: aliasNavigationSql,
+      name: "cd",
+      declaration: aliasNavigationSql.indexOf("cd WHERE"),
+      reference: aliasNavigationSql.lastIndexOf("cd.Id"),
+      occurrences: [
+        aliasNavigationSql.indexOf("cd.Id"),
+        aliasNavigationSql.indexOf("cd WHERE"),
+        aliasNavigationSql.lastIndexOf("cd.Id"),
+      ],
+    },
+  ]) {
+    const fromDeclaration = await nativeNavigation(
+      navigationCase.sql,
+      navigationCase.declaration,
+    );
+    const fromReference = await nativeNavigation(
+      navigationCase.sql,
+      navigationCase.reference,
+    );
+    const definitionOffsets = (result: typeof fromDeclaration) =>
+      result.definitions.map((location) => [
+        result.document.offsetAt(location.range.start),
+        result.document.offsetAt(location.range.end),
+      ]);
+    const referenceOffsets = (result: typeof fromDeclaration) =>
+      result.references.map((location) =>
+        result.document.offsetAt(location.range.start),
+      );
+    const highlightOffsets = (result: typeof fromDeclaration) =>
+      result.highlights.map((highlight) =>
+        result.document.offsetAt(highlight.range.start),
+      );
+
+    assert.deepEqual(
+      definitionOffsets(fromDeclaration),
+      [
+        [
+          navigationCase.declaration,
+          navigationCase.declaration + navigationCase.name.length,
+        ],
+      ],
+      `${navigationCase.label} declaration must resolve to itself`,
+    );
+    assert.deepEqual(
+      definitionOffsets(fromReference),
+      definitionOffsets(fromDeclaration),
+      `${navigationCase.label} reference must resolve to the same declaration`,
+    );
+    assert.deepEqual(
+      referenceOffsets(fromDeclaration),
+      navigationCase.occurrences,
+      `${navigationCase.label} declaration must return its semantic references`,
+    );
+    assert.deepEqual(
+      referenceOffsets(fromReference),
+      navigationCase.occurrences,
+      `${navigationCase.label} declaration and reference must return the same references`,
+    );
+    assert.deepEqual(
+      highlightOffsets(fromDeclaration),
+      navigationCase.occurrences,
+      `${navigationCase.label} declaration must return its semantic highlights`,
+    );
+    assert.deepEqual(
+      highlightOffsets(fromReference),
+      navigationCase.occurrences,
+      `${navigationCase.label} declaration and reference must return the same highlights`,
+    );
+  }
+
+  for (const navigationCase of [
+    {
+      label: "table variable",
+      sql: "DECLARE @Rows TABLE (Id int);\nSELECT tv.Id FROM @Rows AS tv;",
+      name: "@Rows",
+    },
+    {
+      label: "temporary table",
+      sql: "CREATE TABLE #Scratch (Id int);\nSELECT t.Id FROM #Scratch AS t;",
+      name: "#Scratch",
+    },
+  ]) {
+    const declaration = navigationCase.sql.indexOf(navigationCase.name);
+    const reference = navigationCase.sql.lastIndexOf(navigationCase.name);
+    const fromDeclaration = await nativeNavigation(
+      navigationCase.sql,
+      declaration,
+    );
+    const fromReference = await nativeNavigation(navigationCase.sql, reference);
+    const definitionOffsets = (result: typeof fromDeclaration) =>
+      result.definitions.map((location) => [
+        result.document.offsetAt(location.range.start),
+        result.document.offsetAt(location.range.end),
+      ]);
+    assert.deepEqual(
+      definitionOffsets(fromDeclaration),
+      [[declaration, declaration + navigationCase.name.length]],
+      `${navigationCase.label} declaration must resolve to itself`,
+    );
+    assert.deepEqual(
+      definitionOffsets(fromReference),
+      definitionOffsets(fromDeclaration),
+      `${navigationCase.label} reference must resolve to the same declaration`,
+    );
+  }
 
   const referenceSql =
     "WITH CustomerOrders AS (SELECT 1 AS Id) SELECT * FROM CustomerOrders";

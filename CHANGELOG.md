@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.16.1
+
+- Fixed document-local Definition resolution when invoked directly on supported
+  declaration identifiers, aligning declaration and reference target resolution
+  across Definition, References, and Document Highlights.
+- Removed the empty `Unreleased` heading from the packaged release changelog.
 
 ## 0.16.0
 

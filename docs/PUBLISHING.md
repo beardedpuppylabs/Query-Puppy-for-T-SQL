@@ -169,6 +169,8 @@ Before a release:
 - confirm the lockfile version is consistent where applicable
 - update `CHANGELOG.md` with an accurate release summary, including maintenance or
   repository-only releases
+- ensure the packaged changelog begins with the latest release and contains no empty
+  `Unreleased` section
 - synchronize affected README, support, security, contribution, architecture,
   testing, development, roadmap, and publishing documentation
 - do not consume a new version for documentation-only, test-only, internal

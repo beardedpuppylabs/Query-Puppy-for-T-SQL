@@ -34,8 +34,11 @@ export function resolveDocumentSemanticNavigationTarget(
   let model = cache.get(uri, version, sql, offset);
   let occurrence = semanticSymbolAtOffset(model.documentLocalSymbols, offset);
   if (!occurrence && offset < sql.length) {
-    model = cache.get(uri, version, sql, sql.length);
-    occurrence = semanticSymbolAtOffset(model.documentLocalSymbols, offset);
+    const completed = cache.getCompletedStatement(uri, version, sql, offset);
+    if (completed) {
+      model = completed;
+      occurrence = semanticSymbolAtOffset(model.documentLocalSymbols, offset);
+    }
   }
   return occurrence &&
     supportsDocumentSemanticNavigation(occurrence.symbol.kind)

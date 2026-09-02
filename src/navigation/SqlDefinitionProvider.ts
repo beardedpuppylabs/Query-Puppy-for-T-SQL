@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
-import { semanticDefinitionAtOffset } from "../parser/DocumentSemanticSymbols.js";
-import { supportsDocumentSemanticNavigation } from "./DocumentSemanticNavigation.js";
+import { resolveDocumentSemanticNavigationTarget } from "./DocumentSemanticNavigation.js";
 
 export class SqlDefinitionProvider implements vscode.DefinitionProvider {
   constructor(
@@ -13,26 +12,20 @@ export class SqlDefinitionProvider implements vscode.DefinitionProvider {
     position: vscode.Position,
   ): vscode.ProviderResult<vscode.Definition> {
     const offset = document.offsetAt(position);
-    const model = this.documentSemantics.get(
+    const target = resolveDocumentSemanticNavigationTarget(
+      this.documentSemantics,
       document.uri.toString(),
       document.version,
       document.getText(),
       offset,
     );
-    const definition = semanticDefinitionAtOffset(
-      model.documentLocalSymbols,
-      offset,
-    );
-    if (
-      !definition ||
-      !supportsDocumentSemanticNavigation(definition.symbol.kind)
-    )
-      return;
+    if (!target) return;
+    const declaration = target.occurrence.symbol.declaration;
     return new vscode.Location(
       document.uri,
       new vscode.Range(
-        document.positionAt(definition.declaration.start),
-        document.positionAt(definition.declaration.end),
+        document.positionAt(declaration.start),
+        document.positionAt(declaration.end),
       ),
     );
   }
