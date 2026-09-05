@@ -7,7 +7,7 @@ import {
 import { semanticSymbolAtOffset } from "../src/parser/DocumentSemanticSymbols.js";
 import {
   localVariableDocumentSymbolDetail,
-  localVariableSemanticDescription,
+  localVariableInitializerPreview,
 } from "../src/navigation/DocumentSymbolPresentation.js";
 
 const combinedSql = [
@@ -32,26 +32,26 @@ const combinedSql = [
   "    @FunctionValue;",
 ].join("\n");
 
-const expectedDescriptions = new Map([
-  ["@IntValue", "local variable @IntValue int = 42"],
-  ["@NegativeValue", "local variable @NegativeValue int = -7"],
-  ["@DecimalValue", "local variable @DecimalValue decimal(10,2) = 12.50"],
-  ["@TextValue", "local variable @TextValue varchar(50) = 'Alice'"],
-  ["@UnicodeValue", "local variable @UnicodeValue nvarchar(50) = N'ÄÖÜ Test'"],
-  ["@NullValue", "local variable @NullValue int = NULL"],
-  ["@ExpressionValue", "local variable @ExpressionValue int"],
-  ["@FunctionValue", "local variable @FunctionValue datetime"],
+const expectedInitializers = new Map<string, string | undefined>([
+  ["@IntValue", "42"],
+  ["@NegativeValue", "-7"],
+  ["@DecimalValue", "12.50"],
+  ["@TextValue", "'Alice'"],
+  ["@UnicodeValue", "N'ÄÖÜ Test'"],
+  ["@NullValue", "NULL"],
+  ["@ExpressionValue", undefined],
+  ["@FunctionValue", undefined],
 ]);
 
 test("contract: combined editor semantics retain canonical initializer metadata at declarations and references", () => {
   const sql = combinedSql;
   const declarations = collectDocumentSemanticDeclarations(sql);
-  assert.equal(declarations.length, expectedDescriptions.size);
+  assert.equal(declarations.length, expectedInitializers.size);
   const model = analyzeDocumentSemantics(sql, sql.length);
 
   for (const declaration of declarations) {
-    const expected = expectedDescriptions.get(declaration.name);
-    assert.ok(expected);
+    assert.ok(expectedInitializers.has(declaration.name));
+    const expected = expectedInitializers.get(declaration.name);
     const declarationOccurrence = semanticSymbolAtOffset(
       model.documentLocalSymbols,
       sql.indexOf(declaration.name) + 1,
@@ -71,11 +71,11 @@ test("contract: combined editor semantics retain canonical initializer metadata 
       declaration.initializer,
     );
     assert.equal(
-      localVariableSemanticDescription(declarationOccurrence.symbol, sql),
+      localVariableInitializerPreview(declarationOccurrence.symbol, sql),
       expected,
     );
     assert.equal(
-      localVariableSemanticDescription(referenceOccurrence.symbol, sql),
+      localVariableInitializerPreview(referenceOccurrence.symbol, sql),
       expected,
     );
   }
@@ -98,7 +98,7 @@ test("contract: combined editor semantics retain canonical initializer metadata 
   );
 });
 
-test("declaration reference and Outline descriptions share one canonical suffix", () => {
+test("declaration reference and Outline share one canonical initializer preview", () => {
   const sql = [
     "DECLARE @CustomerId int = 42;",
     "SET @CustomerId = 99;",
@@ -116,14 +116,8 @@ test("declaration reference and Outline descriptions share one canonical suffix"
   assert.ok(declaration);
   assert.ok(reference);
   assert.equal(declaration.symbol.id, reference.symbol.id);
-  assert.equal(
-    localVariableSemanticDescription(declaration.symbol, sql),
-    "local variable @CustomerId int = 42",
-  );
-  assert.equal(
-    localVariableSemanticDescription(reference.symbol, sql),
-    "local variable @CustomerId int = 42",
-  );
+  assert.equal(localVariableInitializerPreview(declaration.symbol, sql), "42");
+  assert.equal(localVariableInitializerPreview(reference.symbol, sql), "42");
   assert.equal(
     localVariableDocumentSymbolDetail(reference.symbol, sql),
     "Local variable int = 42",

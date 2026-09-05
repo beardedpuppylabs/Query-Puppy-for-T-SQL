@@ -66,6 +66,7 @@ architecture documents describe the intended present-day design.
 - 0.17.1 local-variable initializer preview — complete
 - 0.17.2 editor initializer-preview correction — complete
 - 0.17.3 editor initializer-preview delivery verification — complete
+- 0.17.4 local-variable Hover presentation cleanup — complete
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -93,7 +94,9 @@ evaluation. Version 0.17.2 exposes that same canonical description through nativ
 editor Hover at declaration and reference positions. Version 0.17.3 confirms that
 the exact combined document works through both the direct provider and an extracted
 packaged extension in a fresh native Extension Host, and hardens regression coverage
-around individual Hover contributions. Quick Fixes also remain future work.
+around individual Hover contributions. Version 0.17.4 changes Query Puppy's native
+Hover contribution to plain initializer-only text so independently merged SQL Hover
+content is not redundantly repeated. Quick Fixes also remain future work.
 
 The 0.12.6 compliance slice established the official GPLv3 license text, package
 metadata, third-party inventory, bundle/VSIX audit, public documentation, and the
@@ -221,6 +224,17 @@ and semantic Rename work remains deferred.
       installation/activation state rather than semantic or packaged code.
 - [x] Issue a new 0.17.3 package identity so installation followed by the documented
       editor restart/reload activates the verified implementation.
+
+## 0.17.4 — local-variable Hover presentation cleanup
+
+- [x] Replace Query Puppy's syntax-highlighted full variable description with a plain
+      initializer-only Hover contribution for supported declaration literals.
+- [x] Return no Query Puppy Hover when a variable has no safe initializer preview,
+      avoiding a redundant copy of the base description from existing SQL tooling.
+- [x] Preserve the canonical initializer range, literal policy, bounded preview, and
+      declaration/reference identity shared with Document Symbols / Outline.
+- [x] Verify native multi-provider aggregation with separate Query Puppy and controlled
+      independent base contributions without suppressing or mutating either provider.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 

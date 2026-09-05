@@ -851,9 +851,11 @@ Protect:
 - compound expressions, calls, variable references, and subqueries failing closed
 - declaration/reference reuse of canonical initializer metadata without assignment
   tracking
-- exact combined-document editor descriptions and individual registered Hover
+- exact combined-document initializer previews and individual registered Hover
   contributions at declaration and reference positions, including packaged-runtime
   activation
+- plain initializer-only Query Puppy Hover alongside an independently registered base
+  variable Hover, without SQL code blocks or duplicate full variable descriptions
 - `@` registered trigger and partial Contains matching
 - exact replacement without duplicated `@`
 - same-batch visibility across semicolon and implicit statement boundaries

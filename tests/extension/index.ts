@@ -1558,6 +1558,10 @@ export async function run(): Promise<void> {
             : [],
       )
       .join("\n");
+  const hoverPlainText = (hover: vscode.Hover): string =>
+    hoverText(hover)
+      .replaceAll("&nbsp;", " ")
+      .replace(/\\([\\`*{}[\]()#+\-.!_>])/g, "$1");
   const nativeHoversAt = async (
     offset: number,
   ): Promise<readonly vscode.Hover[]> =>
@@ -1567,46 +1571,89 @@ export async function run(): Promise<void> {
       hoverDocument.positionAt(offset),
     )) ?? [];
   const directHoverProvider = new SqlHoverProvider();
-  const expectedHoverDescriptions = new Map([
-    ["@IntValue", "local variable @IntValue int = 42"],
-    ["@NegativeValue", "local variable @NegativeValue int = -7"],
-    ["@DecimalValue", "local variable @DecimalValue decimal(10,2) = 12.50"],
-    ["@TextValue", "local variable @TextValue varchar(50) = 'Alice'"],
-    [
-      "@UnicodeValue",
-      "local variable @UnicodeValue nvarchar(50) = N'ÄÖÜ Test'",
-    ],
-    ["@NullValue", "local variable @NullValue int = NULL"],
+  const expectedInitializers = new Map<string, string | undefined>([
+    ["@IntValue", "42"],
+    ["@NegativeValue", "-7"],
+    ["@DecimalValue", "12.50"],
+    ["@TextValue", "'Alice'"],
+    ["@UnicodeValue", "N'ÄÖÜ Test'"],
+    ["@NullValue", "NULL"],
+    ["@ExpressionValue", undefined],
+    ["@FunctionValue", undefined],
+  ]);
+  const baseDescriptions = new Map([
+    ["@IntValue", "local variable @IntValue int"],
+    ["@NegativeValue", "local variable @NegativeValue int"],
+    ["@DecimalValue", "local variable @DecimalValue decimal(10,2)"],
+    ["@TextValue", "local variable @TextValue varchar(50)"],
+    ["@UnicodeValue", "local variable @UnicodeValue nvarchar(50)"],
+    ["@NullValue", "local variable @NullValue int"],
     ["@ExpressionValue", "local variable @ExpressionValue int"],
     ["@FunctionValue", "local variable @FunctionValue datetime"],
   ]);
-  for (const [name, description] of expectedHoverDescriptions) {
-    for (const offset of [
-      hoverSql.indexOf(name) + 1,
-      hoverSql.lastIndexOf(name) + 1,
-    ]) {
-      const position = hoverDocument.positionAt(offset);
-      const directHover = await directHoverProvider.provideHover(
-        hoverDocument,
-        position,
-      );
-      assert.ok(directHover instanceof vscode.Hover);
-      assert.ok(
-        hoverText(directHover).includes(description),
-        `${name} direct hover is missing Query Puppy's semantic description`,
-      );
+  const baseHoverRegistration = vscode.languages.registerHoverProvider(
+    { language: "sql" },
+    {
+      provideHover(document, position) {
+        if (document.uri.toString() !== hoverDocument.uri.toString()) return;
+        const range = document.getWordRangeAtPosition(
+          position,
+          /@[A-Za-z_][A-Za-z0-9_]*/,
+        );
+        if (!range) return;
+        const description = baseDescriptions.get(document.getText(range));
+        if (!description) return;
+        return new vscode.Hover(description, range);
+      },
+    },
+  );
+  try {
+    for (const [name, initializer] of expectedInitializers) {
+      const baseDescription = baseDescriptions.get(name);
+      assert.ok(baseDescription);
+      for (const offset of [
+        hoverSql.indexOf(name) + 1,
+        hoverSql.lastIndexOf(name) + 1,
+      ]) {
+        const position = hoverDocument.positionAt(offset);
+        const directHover = await directHoverProvider.provideHover(
+          hoverDocument,
+          position,
+        );
+        const nativeHovers = await nativeHoversAt(offset);
+        const nativeTexts = nativeHovers.map(hoverPlainText);
+        assert.ok(
+          nativeTexts.includes(baseDescription),
+          `${name} native hover is missing the independent base contribution`,
+        );
 
-      const nativeHovers = await nativeHoversAt(offset);
-      const matchingContribution = nativeHovers.find((hover) =>
-        hoverText(hover).includes(description),
-      );
-      assert.ok(
-        matchingContribution,
-        `${name} ${offset === hoverSql.indexOf(name) + 1 ? "declaration" : "reference"} hover is missing Query Puppy's semantic description`,
-      );
-      if (name === "@ExpressionValue" || name === "@FunctionValue")
-        assert.doesNotMatch(hoverText(matchingContribution), /\s=\s/);
+        if (initializer) {
+          const expectedContribution = `Initializer: ${initializer}`;
+          assert.ok(directHover instanceof vscode.Hover);
+          assert.equal(hoverPlainText(directHover), expectedContribution);
+          assert.doesNotMatch(hoverText(directHover), /```|local variable/i);
+          assert.equal(
+            nativeTexts.filter((text) => text === expectedContribution).length,
+            1,
+            `${name} native hover must contain one incremental Query Puppy contribution`,
+          );
+          assert.equal(
+            nativeTexts.filter((text) => text.includes(baseDescription)).length,
+            1,
+            `${name} native hover must not duplicate the full base description`,
+          );
+        } else {
+          assert.equal(directHover, undefined);
+          assert.equal(
+            nativeTexts.some((text) => text.startsWith("Initializer:")),
+            false,
+            `${name} native hover must not claim an unsupported initializer`,
+          );
+        }
+      }
     }
+  } finally {
+    baseHoverRegistration.dispose();
   }
 
   for (const navigationCase of [

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.4
+
+- Simplified scalar local-variable Hover to a plain initializer-only contribution,
+  avoiding a syntax-highlighted duplicate description while preserving safe
+  declaration initializer previews.
+
 ## 0.17.3
 
 - Reissued scalar local-variable initializer Hover with exact combined-document,
