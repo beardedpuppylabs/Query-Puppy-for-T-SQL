@@ -411,6 +411,10 @@ test("contract: document-local navigation uses native providers and editor-neutr
   );
   assert.match(documentSymbolProviderSource, /document\.version/);
   assert.match(documentSymbolProviderSource, /vscode\.DocumentSymbol/);
+  assert.match(
+    documentSymbolProviderSource,
+    /localVariableDocumentSymbolDetail/,
+  );
   assert.doesNotMatch(
     documentSymbolProviderSource,
     /RegExp|\.match\(|\.search\(|tokenizeSql|analyzeDocumentSemantics/,
@@ -418,6 +422,17 @@ test("contract: document-local navigation uses native providers and editor-neutr
   assert.doesNotMatch(
     documentSymbolProviderSource,
     /resolveQueryScopeRowSource|workspace\.findFiles/,
+  );
+
+  const documentSymbolPresentationSource = await readFile(
+    "src/navigation/DocumentSymbolPresentation.ts",
+    "utf8",
+  );
+  assert.match(documentSymbolPresentationSource, /formatSqlType/);
+  assert.match(documentSymbolPresentationSource, /initializer/);
+  assert.doesNotMatch(
+    documentSymbolPresentationSource,
+    /tokenizeSql|analyzeDocumentSemantics|from "vscode"/,
   );
 
   const analyzerSource = await readFile(
@@ -441,6 +456,13 @@ test("contract: document-local navigation uses native providers and editor-neutr
     "utf8",
   );
   assert.doesNotMatch(semanticIndexSource, /from "vscode"/);
+
+  const localVariableSource = await readFile(
+    "src/parser/LocalVariableSymbols.ts",
+    "utf8",
+  );
+  assert.match(localVariableSource, /scalarInitializer/);
+  assert.doesNotMatch(localVariableSource, /from "vscode"/);
 });
 
 test("contract: high-confidence diagnostics use a native collection and editor-neutral issues", async () => {

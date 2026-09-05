@@ -414,8 +414,12 @@ hard-coding physical tables everywhere.
 
 Scalar local variables are typed document symbols rather than RowSources. Their
 declarations are indexed once per semantic document analysis for the current batch,
-and expression completion consumes that canonical list. Table variables keep their
-existing RowSource representation and are excluded from scalar-variable candidates.
+and expression completion consumes that canonical list. A scalar declaration may
+also retain the exact source range of a directly displayable numeric, string,
+Unicode-string, or `NULL` initializer. This is declaration metadata only: compound
+expressions fail closed, and later assignments are not evaluated or tracked. Table
+variables keep their existing RowSource representation and are excluded from
+scalar-variable candidates.
 
 ## Document-local symbol and reference index
 
@@ -454,7 +458,11 @@ Each statement is analyzed through the same canonical semantic analyzer, and
 declarations are deduplicated by their declaration-derived symbol identity before
 being returned in source order. The provider keeps a direct URI/version cache and
 clears it on document close. It performs no catalog, backend, relationship,
-filesystem, or workspace work.
+filesystem, or workspace work. Scalar local-variable details reuse canonical SQL
+type formatting and may append the declaration's source-literal initializer. The
+initializer preview is capped at 80 characters with an ellipsis; unsupported forms,
+including compound expressions and multiline literals, retain the ordinary typed
+detail.
 
 High-Confidence Document Diagnostics is a native DiagnosticCollection consumer. Its
 editor-neutral collector tokenizes once and enumerates the existing canonical batch

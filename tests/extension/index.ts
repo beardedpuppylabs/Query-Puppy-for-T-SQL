@@ -1725,11 +1725,11 @@ export async function run(): Promise<void> {
   );
 
   const outlineSql = [
-    "DECLARE @First int;",
+    "DECLARE @First int = 42;",
     "DECLARE @Rows TABLE (Id int);",
     "CREATE TABLE #Scratch (Id int);",
     "GO",
-    "DECLARE @Second bigint;",
+    "DECLARE @Second bigint = N'Alice';",
     "WITH Orders AS (",
     "  SELECT c.Id FROM dbo.Customers AS c",
     ")",
@@ -1743,10 +1743,14 @@ export async function run(): Promise<void> {
       symbol.kind,
     ]),
     [
-      ["@First", "Local variable", vscode.SymbolKind.Variable],
+      ["@First", "Local variable int = 42", vscode.SymbolKind.Variable],
       ["@Rows", "Table variable", vscode.SymbolKind.Variable],
       ["#Scratch", "Temporary table", vscode.SymbolKind.Object],
-      ["@Second", "Local variable", vscode.SymbolKind.Variable],
+      [
+        "@Second",
+        "Local variable bigint = N'Alice'",
+        vscode.SymbolKind.Variable,
+      ],
       ["Orders", "CTE", vscode.SymbolKind.Struct],
       ["c", "Row source alias", vscode.SymbolKind.Variable],
       ["o", "Row source alias", vscode.SymbolKind.Variable],

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.1
+
+- Show directly declared scalar-variable literal initializers in local semantic
+  information, with bounded previews for long values and no expression evaluation.
+
 ## 0.17.0
 
 - Added native high-confidence document diagnostics for scalar and table-variable

@@ -8,6 +8,7 @@ export interface LocalVariableSymbol {
   readonly normalizedName: string;
   readonly kind: "scalar" | "table";
   readonly type?: SqlType;
+  readonly initializer?: { readonly start: number; readonly end: number };
   readonly declaration: { readonly start: number; readonly end: number };
 }
 
@@ -20,17 +21,23 @@ const matching = (tokens: readonly SqlToken[], open: number): number => {
   return tokens.length - 1;
 };
 
+interface ScalarTypeDeclaration {
+  readonly type: SqlType;
+  readonly end: number;
+}
+
 const scalarType = (
   tokens: readonly SqlToken[],
   typeIndex: number,
-): SqlType | undefined => {
+): ScalarTypeDeclaration | undefined => {
   const name = tokens[typeIndex];
   if (name?.kind !== "identifier") return undefined;
   let type: SqlType = { name: name.text };
-  if (tokens[typeIndex + 1]?.text !== "(") return type;
+  if (tokens[typeIndex + 1]?.text !== "(") return { type, end: typeIndex + 1 };
   const close = matching(tokens, typeIndex + 1);
   const arguments_ = tokens.slice(typeIndex + 2, close);
-  if (arguments_[0]?.normalized === "max") return { ...type, maxLength: -1 };
+  if (arguments_[0]?.normalized === "max")
+    return { type: { ...type, maxLength: -1 }, end: close + 1 };
   const values = arguments_
     .filter((token) => token.kind === "number")
     .map((token) => Number(token.text));
@@ -52,7 +59,84 @@ const scalarType = (
         ? values[0] * 2
         : values[0],
     };
-  return type;
+  return { type, end: close + 1 };
+};
+
+const declaratorEnd = (
+  tokens: readonly SqlToken[],
+  start: number,
+  statementEnd: number,
+): number => {
+  let depth = 0;
+  for (let index = start; index < statementEnd; index++) {
+    const token = tokens[index];
+    if (token?.text === "(") depth++;
+    else if (token?.text === ")") depth = Math.max(0, depth - 1);
+    else if (token?.text === "," && depth === 0) return index;
+  }
+  return statementEnd;
+};
+
+const isCompleteSingleLineString = (token: SqlToken | undefined): boolean =>
+  token?.kind === "string" &&
+  token.text.endsWith("'") &&
+  !token.text.includes("\n") &&
+  !token.text.includes("\r");
+
+const isNumericLiteral = (token: SqlToken | undefined): boolean => {
+  if (token?.kind !== "number") return false;
+  const parts = token.text.split(".");
+  const containsOnlyDigits = (value: string): boolean => {
+    for (const character of value)
+      if (character < "0" || character > "9") return false;
+    return true;
+  };
+  return (
+    parts.length <= 2 &&
+    (parts[0]?.length ?? 0) > 0 &&
+    parts.every(
+      (part, index) =>
+        (index > 0 && part.length === 0) || containsOnlyDigits(part),
+    )
+  );
+};
+
+const scalarInitializer = (
+  tokens: readonly SqlToken[],
+  typeEnd: number,
+  end: number,
+): { readonly start: number; readonly end: number } | undefined => {
+  if (tokens[typeEnd]?.text !== "=") return undefined;
+  const initializer = tokens.slice(typeEnd + 1, end);
+  const first = initializer[0];
+  const second = initializer[1];
+  if (
+    initializer.length === 1 &&
+    (isNumericLiteral(first) ||
+      isCompleteSingleLineString(first) ||
+      (first?.kind === "identifier" &&
+        !first.delimited &&
+        first.normalized === "null"))
+  )
+    return first ? { start: first.start, end: first.end } : undefined;
+  if (
+    initializer.length === 2 &&
+    first?.kind === "identifier" &&
+    !first.delimited &&
+    first.normalized === "n" &&
+    isCompleteSingleLineString(second) &&
+    first.end === second?.start
+  )
+    return { start: first.start, end: second.end };
+  if (
+    initializer.length === 2 &&
+    first?.kind === "symbol" &&
+    (first.text === "+" || first.text === "-") &&
+    isNumericLiteral(second) &&
+    first.end === second?.start
+  )
+    return { start: first.start, end: second.end };
+  return undefined;
 };
 
 /** Returns local variables declared before the cursor in the current client batch. */
@@ -89,12 +173,20 @@ export function resolveBatchLocalVariables(
       }
       if (!expectingVariable || token.kind !== "variable") continue;
       const table = tokens[part + 1]?.normalized === "table";
-      const type = table ? undefined : scalarType(tokens, part + 1);
+      const typeDeclaration = table ? undefined : scalarType(tokens, part + 1);
+      const initializer = typeDeclaration
+        ? scalarInitializer(
+            tokens,
+            typeDeclaration.end,
+            declaratorEnd(tokens, part + 1, statement.end),
+          )
+        : undefined;
       const symbol: LocalVariableSymbol = {
         name: token.text,
         normalizedName: normalizeName(token.text),
         kind: table ? "table" : "scalar",
-        ...(type ? { type } : {}),
+        ...(typeDeclaration ? { type: typeDeclaration.type } : {}),
+        ...(initializer ? { initializer } : {}),
         declaration: { start: token.start, end: token.end },
       };
       if (!variables.has(symbol.normalizedName))

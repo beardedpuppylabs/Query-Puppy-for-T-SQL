@@ -63,6 +63,7 @@ architecture documents describe the intended present-day design.
 - Phase G4 document-local Document Symbols / Outline — complete in 0.16.0
 - 0.16.1 declaration-position navigation and changelog hygiene — complete
 - Phase G5 high-confidence document diagnostics — complete in 0.17.0
+- 0.17.1 local-variable initializer preview — complete
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -84,7 +85,9 @@ declarations. Projection-alias navigation, physical/workspace navigation, semant
 Rename, and broader diagnostics remain future work. Version 0.16.1 aligns
 declaration-position Definition with the shared navigation resolver. Version 0.17.0
 adds the first native high-confidence diagnostic for provable cross-`GO`
-variable-scope violations. Quick Fixes also remain future work.
+variable-scope violations. Version 0.17.1 adds bounded source-literal initializer
+previews to typed scalar-variable Outline details without runtime value or expression
+evaluation. Quick Fixes also remain future work.
 
 The 0.12.6 compliance slice established the official GPLv3 license text, package
 metadata, third-party inventory, bundle/VSIX audit, public documentation, and the
@@ -171,6 +174,21 @@ does not retain reliable declaration/reference identity.
 
 Use-before-declaration, alias-scope, aliased-base-name, duplicate-alias, Quick Fix,
 and semantic Rename work remains deferred.
+
+## 0.17.1 — local-variable initializer preview
+
+- [x] Retain exact source ranges for directly displayable scalar numeric, string,
+      Unicode-string, and `NULL` declaration initializers.
+- [x] Reuse canonical declaration metadata shared by declarations and bound
+      references, and canonical SQL type formatting, in native Document Symbols /
+      Outline details.
+- [x] Cap literal previews at 80 characters, reject multiline literals, and exclude
+      declaration formatting from compact details.
+- [x] Fail closed for compound expressions, calls, variable references, subqueries,
+      module parameters, and table variables without evaluation or assignment
+      tracking.
+- [x] Preserve semantic identities, exact declaration ranges, batch binding,
+      navigation, diagnostics, completion, JOIN intelligence, and Signature Help.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 

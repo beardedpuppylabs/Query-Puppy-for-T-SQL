@@ -1,4 +1,4 @@
-import { normalizeName } from "../metadata/MetadataModels.js";
+import { normalizeName, type SqlType } from "../metadata/MetadataModels.js";
 import type { QueryScope, RowSource } from "./DocumentSemanticAnalyzer.js";
 import type { LocalVariableSymbol } from "./LocalVariableSymbols.js";
 import {
@@ -32,6 +32,8 @@ export interface DocumentSemanticSymbol {
   readonly kind: DocumentSemanticSymbolKind;
   readonly declaration: DocumentOffsetRange;
   readonly scope: DocumentSemanticScope;
+  readonly sqlType?: SqlType;
+  readonly initializer?: DocumentOffsetRange;
 }
 
 export interface DocumentSemanticReference {
@@ -114,6 +116,7 @@ export function buildDocumentSemanticSymbolIndex(
     name: string,
     declaration: DocumentOffsetRange,
     scope: DocumentSemanticScope,
+    metadata?: Pick<DocumentSemanticSymbol, "sqlType" | "initializer">,
   ): DocumentSemanticSymbol => {
     const id = symbolId(kind, declaration);
     const existing = symbolsById.get(id);
@@ -125,6 +128,8 @@ export function buildDocumentSemanticSymbolIndex(
       kind,
       declaration,
       scope,
+      ...(metadata?.sqlType ? { sqlType: metadata.sqlType } : {}),
+      ...(metadata?.initializer ? { initializer: metadata.initializer } : {}),
     };
     symbols.push(symbol);
     symbolsById.set(id, symbol);
@@ -133,11 +138,20 @@ export function buildDocumentSemanticSymbolIndex(
 
   for (const variable of input.localVariables) {
     const kind = variable.kind === "table" ? "tableVariable" : "localVariable";
-    addSymbol(kind, variable.name, variable.declaration, {
-      id: `batch:${String(input.batchRange.start)}:${String(input.batchRange.end)}`,
-      kind: "batch",
-      range: input.batchRange,
-    });
+    addSymbol(
+      kind,
+      variable.name,
+      variable.declaration,
+      {
+        id: `batch:${String(input.batchRange.start)}:${String(input.batchRange.end)}`,
+        kind: "batch",
+        range: input.batchRange,
+      },
+      {
+        ...(variable.type ? { sqlType: variable.type } : {}),
+        ...(variable.initializer ? { initializer: variable.initializer } : {}),
+      },
+    );
   }
 
   for (const source of input.rowSources) {

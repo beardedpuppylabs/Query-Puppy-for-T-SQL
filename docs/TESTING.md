@@ -245,7 +245,7 @@ promises.
 | Document-local Go to Definition / Peek Definition                                    | Implemented                      | `document-semantic-symbols.test.ts`, `feature-contracts.test.ts`, and activated Extension Host contract       |
 | Document-local Find References                                                       | Implemented                      | semantic, source-contract, and direct/activated Extension Host tests                                          |
 | Document-local Document Highlights                                                   | Implemented                      | semantic, source-contract, and direct/activated Extension Host tests                                          |
-| Document-local Document Symbols / Outline                                            | Implemented                      | whole-document semantic, source-contract, and direct/activated Extension Host tests                           |
+| Document-local Document Symbols / Outline                                            | Implemented                      | whole-document semantic, initializer-preview, source-contract, and direct/activated Extension Host tests      |
 | High-confidence document-local semantic diagnostics                                  | Implemented                      | `document-semantic-diagnostics.test.ts`, source contract, and activated Extension Host lifecycle test         |
 | Backend-neutral connection and metadata boundary                                     | Implemented                      | `backend-boundary.test.ts` fake-backend contracts                                                             |
 | Shared mssql connection context without extension-owned credentials                  | Implemented                      | `connection.test.ts` mssql adapter contracts                                                                  |
@@ -846,6 +846,11 @@ Protect:
 
 - one and multiple scalar declarations, including no initializer
 - declared SQL type/facets and native Variable presentation
+- exact source previews for directly declared numeric, string, Unicode-string, and
+  `NULL` literals, including deterministic truncation and multiline rejection
+- compound expressions, calls, variable references, and subqueries failing closed
+- declaration/reference reuse of canonical initializer metadata without assignment
+  tracking
 - `@` registered trigger and partial Contains matching
 - exact replacement without duplicated `@`
 - same-batch visibility across semicolon and implicit statement boundaries

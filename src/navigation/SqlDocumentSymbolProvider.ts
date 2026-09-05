@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { collectDocumentSemanticDeclarations } from "../parser/DocumentSemanticAnalyzer.js";
 import type { DocumentSemanticSymbol } from "../parser/DocumentSemanticSymbols.js";
+import { localVariableDocumentSymbolDetail } from "./DocumentSymbolPresentation.js";
 
 interface CacheEntry {
   readonly version: number;
@@ -45,23 +46,28 @@ export class SqlDocumentSymbolProvider
     document: vscode.TextDocument,
   ): vscode.ProviderResult<vscode.DocumentSymbol[]> {
     const uri = document.uri.toString();
+    const sql = document.getText();
     const existing = this.entries.get(uri);
     const declarations =
       existing?.version === document.version
         ? existing.declarations
-        : this.collectDeclarations(document.getText());
+        : this.collectDeclarations(sql);
     if (existing?.version !== document.version)
       this.entries.set(uri, { version: document.version, declarations });
 
     return declarations.map((declaration) => {
       const display = presentation[declaration.kind];
+      const detail =
+        declaration.kind === "localVariable"
+          ? localVariableDocumentSymbolDetail(declaration, sql)
+          : display.detail;
       const range = new vscode.Range(
         document.positionAt(declaration.declaration.start),
         document.positionAt(declaration.declaration.end),
       );
       return new vscode.DocumentSymbol(
         declaration.name,
-        display.detail,
+        detail,
         display.kind,
         range,
         range,
