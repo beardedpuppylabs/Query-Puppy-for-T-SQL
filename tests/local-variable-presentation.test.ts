@@ -10,69 +10,91 @@ import {
   localVariableSemanticDescription,
 } from "../src/navigation/DocumentSymbolPresentation.js";
 
-test("editor semantic descriptions include every supported literal initializer", () => {
-  const sql = [
-    "DECLARE @IntValue int = 42;",
-    "DECLARE @NegativeValue int = -7;",
-    "DECLARE @DecimalValue decimal(10,2) = 12.50;",
-    "DECLARE @TextValue varchar(50) = 'Alice';",
-    "DECLARE @UnicodeValue nvarchar(50) = N'ÄÖÜ Test';",
-    "DECLARE @NullValue int = NULL;",
-    "SELECT @IntValue, @NegativeValue, @DecimalValue, @TextValue, @UnicodeValue, @NullValue;",
-  ].join("\n");
-  const expected = [
-    "local variable @IntValue int = 42",
-    "local variable @NegativeValue int = -7",
-    "local variable @DecimalValue decimal(10,2) = 12.50",
-    "local variable @TextValue varchar(50) = 'Alice'",
-    "local variable @UnicodeValue nvarchar(50) = N'ÄÖÜ Test'",
-    "local variable @NullValue int = NULL",
-  ];
-  const declarations = collectDocumentSemanticDeclarations(sql);
-  assert.deepEqual(
-    declarations.map((symbol) => localVariableSemanticDescription(symbol, sql)),
-    expected,
-  );
-  const model = analyzeDocumentSemantics(sql, sql.length);
-  assert.deepEqual(
-    declarations.map((symbol) => {
-      const reference = semanticSymbolAtOffset(
-        model.documentLocalSymbols,
-        sql.lastIndexOf(symbol.name),
-      );
-      assert.ok(reference);
-      return localVariableSemanticDescription(reference.symbol, sql);
-    }),
-    expected,
-  );
-});
+const combinedSql = [
+  "DECLARE @IntValue int = 42;",
+  "DECLARE @NegativeValue int = -7;",
+  "DECLARE @DecimalValue decimal(10, 2) = 12.50;",
+  "DECLARE @TextValue varchar(50) = 'Alice';",
+  "DECLARE @UnicodeValue nvarchar(50) = N'ÄÖÜ Test';",
+  "DECLARE @NullValue int = NULL;",
+  "",
+  "DECLARE @ExpressionValue int = 20 + 22;",
+  "DECLARE @FunctionValue datetime = GETDATE();",
+  "",
+  "SELECT",
+  "    @IntValue,",
+  "    @NegativeValue,",
+  "    @DecimalValue,",
+  "    @TextValue,",
+  "    @UnicodeValue,",
+  "    @NullValue,",
+  "    @ExpressionValue,",
+  "    @FunctionValue;",
+].join("\n");
 
-test("editor semantic descriptions omit unsupported expression initializers", () => {
-  const sql = [
-    "DECLARE @ExpressionValue int = 20 + 22;",
-    "DECLARE @FunctionValue datetime = GETDATE();",
-    "SELECT @ExpressionValue, @FunctionValue;",
-  ].join("\n");
-  const expected = [
-    "local variable @ExpressionValue int",
-    "local variable @FunctionValue datetime",
-  ];
+const expectedDescriptions = new Map([
+  ["@IntValue", "local variable @IntValue int = 42"],
+  ["@NegativeValue", "local variable @NegativeValue int = -7"],
+  ["@DecimalValue", "local variable @DecimalValue decimal(10,2) = 12.50"],
+  ["@TextValue", "local variable @TextValue varchar(50) = 'Alice'"],
+  ["@UnicodeValue", "local variable @UnicodeValue nvarchar(50) = N'ÄÖÜ Test'"],
+  ["@NullValue", "local variable @NullValue int = NULL"],
+  ["@ExpressionValue", "local variable @ExpressionValue int"],
+  ["@FunctionValue", "local variable @FunctionValue datetime"],
+]);
+
+test("contract: combined editor semantics retain canonical initializer metadata at declarations and references", () => {
+  const sql = combinedSql;
   const declarations = collectDocumentSemanticDeclarations(sql);
-  assert.deepEqual(
-    declarations.map((symbol) => localVariableSemanticDescription(symbol, sql)),
-    expected,
-  );
+  assert.equal(declarations.length, expectedDescriptions.size);
   const model = analyzeDocumentSemantics(sql, sql.length);
+
+  for (const declaration of declarations) {
+    const expected = expectedDescriptions.get(declaration.name);
+    assert.ok(expected);
+    const declarationOccurrence = semanticSymbolAtOffset(
+      model.documentLocalSymbols,
+      sql.indexOf(declaration.name) + 1,
+    );
+    const referenceOccurrence = semanticSymbolAtOffset(
+      model.documentLocalSymbols,
+      sql.lastIndexOf(declaration.name) + 1,
+    );
+    assert.ok(declarationOccurrence);
+    assert.ok(referenceOccurrence);
+    assert.equal(declarationOccurrence.role, "declaration");
+    assert.equal(referenceOccurrence.role, "reference");
+    assert.equal(declarationOccurrence.symbol.id, declaration.id);
+    assert.equal(referenceOccurrence.symbol.id, declaration.id);
+    assert.deepEqual(
+      referenceOccurrence.symbol.initializer,
+      declaration.initializer,
+    );
+    assert.equal(
+      localVariableSemanticDescription(declarationOccurrence.symbol, sql),
+      expected,
+    );
+    assert.equal(
+      localVariableSemanticDescription(referenceOccurrence.symbol, sql),
+      expected,
+    );
+  }
+
   assert.deepEqual(
-    declarations.map((symbol) => {
-      const reference = semanticSymbolAtOffset(
-        model.documentLocalSymbols,
-        sql.lastIndexOf(symbol.name),
-      );
-      assert.ok(reference);
-      return localVariableSemanticDescription(reference.symbol, sql);
-    }),
-    expected,
+    declarations
+      .filter((symbol) => symbol.initializer)
+      .map((symbol) =>
+        sql.slice(symbol.initializer?.start, symbol.initializer?.end),
+      ),
+    ["42", "-7", "12.50", "'Alice'", "N'ÄÖÜ Test'", "NULL"],
+  );
+  assert.deepEqual(
+    declarations
+      .filter((symbol) =>
+        ["@ExpressionValue", "@FunctionValue"].includes(symbol.name),
+      )
+      .map((symbol) => symbol.initializer),
+    [undefined, undefined],
   );
 });
 

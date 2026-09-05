@@ -2,7 +2,7 @@
   "name": "query-puppy-for-t-sql",
   "displayName": "Query Puppy for T-SQL",
   "description": "Semantic T-SQL IntelliSense for large SQL Server schemas with Contains search, type-aware completion, relationship-aware JOINs, document-local navigation, and persistent metadata caching.",
-  "version": "0.17.2",
+  "version": "0.17.3",
   "publisher": "BeardedPuppyLabs",
   "author": "Bearded Puppy Labs",
   "license": "GPL-3.0-only",
@@ -150,7 +150,7 @@
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
     "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run test:extension && npm run build",
-    "package": "npm run verify && vsce package --no-dependencies --allow-missing-repository --out query-puppy-for-t-sql-0.17.2.vsix",
+    "package": "npm run verify && vsce package --no-dependencies --allow-missing-repository --out query-puppy-for-t-sql-0.17.3.vsix",
     "publish:marketplace": "vsce publish"
   },
   "devDependencies": {

@@ -851,8 +851,9 @@ Protect:
 - compound expressions, calls, variable references, and subqueries failing closed
 - declaration/reference reuse of canonical initializer metadata without assignment
   tracking
-- exact editor semantic descriptions and registered Hover payloads at declaration and
-  reference positions
+- exact combined-document editor descriptions and individual registered Hover
+  contributions at declaration and reference positions, including packaged-runtime
+  activation
 - `@` registered trigger and partial Contains matching
 - exact replacement without duplicated `@`
 - same-batch visibility across semicolon and implicit statement boundaries

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.3
+
+- Reissued scalar local-variable initializer Hover with exact combined-document,
+  individual native-provider, and packaged-runtime regression coverage, with the
+  documented editor restart/reload required after installation.
+
 ## 0.17.2
 
 - Fixed scalar-variable initializer previews so canonical declaration information
