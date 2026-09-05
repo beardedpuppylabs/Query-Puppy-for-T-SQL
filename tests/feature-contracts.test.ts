@@ -361,6 +361,8 @@ test("contract: document-local navigation uses native providers and editor-neutr
   assert.match(extensionSource, /SqlDocumentHighlightProvider/);
   assert.match(extensionSource, /registerDocumentSymbolProvider/);
   assert.match(extensionSource, /SqlDocumentSymbolProvider/);
+  assert.match(extensionSource, /registerHoverProvider/);
+  assert.match(extensionSource, /SqlHoverProvider/);
 
   const providerSource = await readFile(
     "src/navigation/SqlDefinitionProvider.ts",
@@ -422,6 +424,18 @@ test("contract: document-local navigation uses native providers and editor-neutr
   assert.doesNotMatch(
     documentSymbolProviderSource,
     /resolveQueryScopeRowSource|workspace\.findFiles/,
+  );
+
+  const hoverProviderSource = await readFile(
+    "src/navigation/SqlHoverProvider.ts",
+    "utf8",
+  );
+  assert.match(hoverProviderSource, /resolveDocumentSemanticNavigationTarget/);
+  assert.match(hoverProviderSource, /localVariableSemanticDescription/);
+  assert.match(hoverProviderSource, /vscode\.Hover/);
+  assert.doesNotMatch(
+    hoverProviderSource,
+    /tokenizeSql|analyzeDocumentSemantics|resolveQueryScopeRowSource/,
   );
 
   const documentSymbolPresentationSource = await readFile(

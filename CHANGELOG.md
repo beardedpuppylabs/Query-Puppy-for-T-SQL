@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.2
+
+- Fixed scalar-variable initializer previews so canonical declaration information
+  appears in the existing editor hover presentation as well as Document Symbols.
+
 ## 0.17.1
 
 - Show directly declared scalar-variable literal initializers in local semantic

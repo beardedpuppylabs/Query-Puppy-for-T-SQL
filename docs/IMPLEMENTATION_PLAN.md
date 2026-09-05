@@ -64,6 +64,7 @@ architecture documents describe the intended present-day design.
 - 0.16.1 declaration-position navigation and changelog hygiene — complete
 - Phase G5 high-confidence document diagnostics — complete in 0.17.0
 - 0.17.1 local-variable initializer preview — complete
+- 0.17.2 editor initializer-preview correction — complete
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -87,7 +88,9 @@ declaration-position Definition with the shared navigation resolver. Version 0.1
 adds the first native high-confidence diagnostic for provable cross-`GO`
 variable-scope violations. Version 0.17.1 adds bounded source-literal initializer
 previews to typed scalar-variable Outline details without runtime value or expression
-evaluation. Quick Fixes also remain future work.
+evaluation. Version 0.17.2 exposes that same canonical description through native
+editor Hover at declaration and reference positions. Quick Fixes also remain future
+work.
 
 The 0.12.6 compliance slice established the official GPLv3 license text, package
 metadata, third-party inventory, bundle/VSIX audit, public documentation, and the
@@ -189,6 +192,19 @@ and semantic Rename work remains deferred.
       tracking.
 - [x] Preserve semantic identities, exact declaration ranges, batch binding,
       navigation, diagnostics, completion, JOIN intelligence, and Signature Help.
+
+## 0.17.2 — editor initializer-preview correction
+
+- [x] Register a native Hover Provider for local-variable declaration and reference
+      occurrences because Definition locations cannot carry semantic description
+      content.
+- [x] Resolve Hover through the shared document-semantic navigation cache and
+      canonical declaration symbol without provider-local parsing.
+- [x] Centralize typed local-variable description and bounded initializer formatting
+      across editor Hover and Document Symbols / Outline.
+- [x] Add focused supported/unsupported presentation coverage and activated Extension
+      Host `vscode.executeHoverProvider` regressions for declaration and reference
+      positions.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 

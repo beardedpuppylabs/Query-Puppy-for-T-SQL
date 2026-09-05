@@ -53,6 +53,7 @@ import { SqlDefinitionProvider } from "./navigation/SqlDefinitionProvider.js";
 import { SqlDocumentHighlightProvider } from "./navigation/SqlDocumentHighlightProvider.js";
 import { SqlDocumentDiagnostics } from "./navigation/SqlDocumentDiagnostics.js";
 import { SqlDocumentSymbolProvider } from "./navigation/SqlDocumentSymbolProvider.js";
+import { SqlHoverProvider } from "./navigation/SqlHoverProvider.js";
 import { SqlReferenceProvider } from "./navigation/SqlReferenceProvider.js";
 
 const EXTENSION_ID = "BeardedPuppyLabs.query-puppy-for-t-sql";
@@ -131,6 +132,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   const documentDiagnostics = new SqlDocumentDiagnostics();
   const documentSymbolProvider = new SqlDocumentSymbolProvider();
+  const hoverProvider = new SqlHoverProvider(navigationDocumentSemantics);
   const referenceProvider = new SqlReferenceProvider(
     navigationDocumentSemantics,
   );
@@ -303,6 +305,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerDocumentSymbolProvider(
       SQL_DOCUMENT_SELECTOR,
       documentSymbolProvider,
+    ),
+    vscode.languages.registerHoverProvider(
+      SQL_DOCUMENT_SELECTOR,
+      hoverProvider,
     ),
     vscode.languages.registerCodeActionsProvider(
       SQL_DOCUMENT_SELECTOR,

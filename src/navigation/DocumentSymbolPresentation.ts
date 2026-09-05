@@ -13,14 +13,28 @@ const boundedInitializerPreview = (source: string): string | undefined => {
         .join("")}…`;
 };
 
+const localVariableDescriptionSuffix = (
+  symbol: DocumentSemanticSymbol,
+  sql: string,
+): string => {
+  const type = symbol.sqlType ? ` ${formatSqlType(symbol.sqlType)}` : "";
+  if (!symbol.initializer) return type;
+  const initializer = boundedInitializerPreview(
+    sql.slice(symbol.initializer.start, symbol.initializer.end),
+  );
+  return `${type}${initializer ? ` = ${initializer}` : ""}`;
+};
+
+export function localVariableSemanticDescription(
+  symbol: DocumentSemanticSymbol,
+  sql: string,
+): string {
+  return `local variable ${symbol.name}${localVariableDescriptionSuffix(symbol, sql)}`;
+}
+
 export function localVariableDocumentSymbolDetail(
   symbol: DocumentSemanticSymbol,
   sql: string,
 ): string {
-  const detail = `Local variable${symbol.sqlType ? ` ${formatSqlType(symbol.sqlType)}` : ""}`;
-  if (!symbol.initializer) return detail;
-  const initializer = boundedInitializerPreview(
-    sql.slice(symbol.initializer.start, symbol.initializer.end),
-  );
-  return initializer ? `${detail} = ${initializer}` : detail;
+  return `Local variable${localVariableDescriptionSuffix(symbol, sql)}`;
 }

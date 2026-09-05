@@ -1522,6 +1522,43 @@ export async function run(): Promise<void> {
     );
   }
 
+  const hoverSql = [
+    "DECLARE @UnicodeValue nvarchar(50) = N'ÄÖÜ Test';",
+    "SELECT @UnicodeValue;",
+  ].join("\n");
+  const hoverDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: hoverSql,
+  });
+  const hoverTextAt = async (offset: number): Promise<string> => {
+    const hovers =
+      (await vscode.commands.executeCommand<
+        readonly vscode.Hover[] | undefined
+      >(
+        "vscode.executeHoverProvider",
+        hoverDocument.uri,
+        hoverDocument.positionAt(offset),
+      )) ?? [];
+    return hovers
+      .flatMap((hover) => hover.contents)
+      .flatMap((content) =>
+        content instanceof vscode.MarkdownString
+          ? [content.value]
+          : typeof content === "string"
+            ? [content]
+            : [],
+      )
+      .join("\n");
+  };
+  assert.match(
+    await hoverTextAt(hoverSql.indexOf("@UnicodeValue") + 1),
+    /local variable @UnicodeValue nvarchar\(50\) = N'ÄÖÜ Test'/,
+  );
+  assert.match(
+    await hoverTextAt(hoverSql.lastIndexOf("@UnicodeValue") + 1),
+    /local variable @UnicodeValue nvarchar\(50\) = N'ÄÖÜ Test'/,
+  );
+
   for (const navigationCase of [
     {
       label: "table variable",

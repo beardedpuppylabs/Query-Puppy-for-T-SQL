@@ -446,8 +446,12 @@ Document-local Find References is a registered native Reference Provider consume
 for the same symbol kinds and returns only occurrences sharing one semantic symbol
 identity. Document-local Document Highlights is a registered native Document
 Highlight Provider consumer for the same identities; it returns each declaration
-and bound reference once in document order using the neutral Text kind. These three
-navigation providers share one cursor-keyed `DocumentSemanticCache`; completion and
+and bound reference once in document order using the neutral Text kind. Local-variable
+editor presentation is a registered native Hover Provider consumer because Definition
+locations cannot carry descriptive content. It resolves declaration and reference
+positions through the same canonical symbol identity and returns the compact typed
+declaration description, including a supported initializer preview. These four
+cursor-targeted providers share one `DocumentSemanticCache`; completion and
 relationship Code Actions retain their separate caches because they have different
 consumer and catalog-context requirements.
 
@@ -462,7 +466,8 @@ filesystem, or workspace work. Scalar local-variable details reuse canonical SQL
 type formatting and may append the declaration's source-literal initializer. The
 initializer preview is capped at 80 characters with an ellipsis; unsupported forms,
 including compound expressions and multiline literals, retain the ordinary typed
-detail.
+detail. Editor hover and Outline consume the same formatter and initializer range;
+neither reparses a reference or infers a runtime value.
 
 High-Confidence Document Diagnostics is a native DiagnosticCollection consumer. Its
 editor-neutral collector tokenizes once and enumerates the existing canonical batch

@@ -242,7 +242,7 @@ promises.
 | Type normalization, ExpectedType, compatibility ranking, and visibility              | Implemented                      | `type-intelligence.test.ts` ExpectedType and ranking contracts                                                |
 | Canonical physical-column layout and long-name semantic preservation                 | Implemented                      | `presentation.test.ts` physical-column presentation contracts                                                 |
 | Native function and stored-procedure Signature Help                                  | Implemented                      | `provider-registration.test.ts`, `dml-call.test.ts`, and activated Extension Host contracts                   |
-| Document-local Go to Definition / Peek Definition                                    | Implemented                      | `document-semantic-symbols.test.ts`, `feature-contracts.test.ts`, and activated Extension Host contract       |
+| Document-local Go to Definition / Peek Definition and local-variable Hover           | Implemented                      | semantic/presentation tests, source contracts, and activated Extension Host provider commands                 |
 | Document-local Find References                                                       | Implemented                      | semantic, source-contract, and direct/activated Extension Host tests                                          |
 | Document-local Document Highlights                                                   | Implemented                      | semantic, source-contract, and direct/activated Extension Host tests                                          |
 | Document-local Document Symbols / Outline                                            | Implemented                      | whole-document semantic, initializer-preview, source-contract, and direct/activated Extension Host tests      |
@@ -851,6 +851,8 @@ Protect:
 - compound expressions, calls, variable references, and subqueries failing closed
 - declaration/reference reuse of canonical initializer metadata without assignment
   tracking
+- exact editor semantic descriptions and registered Hover payloads at declaration and
+  reference positions
 - `@` registered trigger and partial Contains matching
 - exact replacement without duplicated `@`
 - same-batch visibility across semicolon and implicit statement boundaries

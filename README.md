@@ -18,6 +18,7 @@ In a schema with hundreds or thousands of objects, remembering part of a name sh
 - Document-local Go to Definition, Peek Definition, Find References, Document
   Highlights, and Document Symbols / Outline for supported SQL symbols, including
   bounded source-literal initializer previews for scalar local variables
+- Editor hover details for typed local variables and their declaration initializers
 - Conservative native document diagnostics for proven cross-`GO` variable-scope
   errors
 - Smart Alias and Tab-only wildcard productivity features
