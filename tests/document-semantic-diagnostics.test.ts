@@ -96,11 +96,78 @@ test("module parameters, unresolved variables, and incomplete SQL fail closed", 
   );
 });
 
-test("use before a same-batch declaration remains deferred", () => {
+test("a later current-batch declaration does not suppress cross-GO evidence", () => {
+  const sql = "DECLARE @Value int;\nGO\nSELECT @Value;\nDECLARE @Value int;";
+  const invalid = sql.indexOf("@Value", sql.indexOf("GO"));
+
+  assert.deepEqual(collectHighConfidenceDocumentIssues(sql), [
+    {
+      code: "QP1001",
+      severity: "error",
+      message: "Local variable '@Value' is not available in this GO batch.",
+      range: { start: invalid, end: invalid + "@Value".length },
+    },
+  ]);
+});
+
+test("table-variable declarations become available only at their position", () => {
+  const invalidSql = [
+    "DECLARE @Rows TABLE (Id int);",
+    "GO",
+    "SELECT * FROM @Rows;",
+    "DECLARE @Rows TABLE (Id int);",
+  ].join("\n");
+  const invalid = invalidSql.indexOf("@Rows", invalidSql.indexOf("GO"));
+  assert.deepEqual(collectHighConfidenceDocumentIssues(invalidSql), [
+    {
+      code: "QP1001",
+      severity: "error",
+      message: "Local variable '@Rows' is not available in this GO batch.",
+      range: { start: invalid, end: invalid + "@Rows".length },
+    },
+  ]);
+
   assert.deepEqual(
     collectHighConfidenceDocumentIssues(
-      "DECLARE @Value int;\nGO\nSELECT @Value;\nDECLARE @Value int;",
+      [
+        "DECLARE @Rows TABLE (Id int);",
+        "GO",
+        "DECLARE @Rows TABLE (Id int);",
+        "SELECT * FROM @Rows;",
+      ].join("\n"),
     ),
+    [],
+  );
+});
+
+test("multiple declarations suppress only references at or after their positions", () => {
+  const sql = [
+    "DECLARE @First int, @Second int;",
+    "GO",
+    "SELECT @Second, @First;",
+    "DECLARE @First int, @Second int;",
+    "SELECT @Second, @First;",
+  ].join("\n");
+  const secondBatch = sql.indexOf("GO");
+  const firstReference = sql.indexOf("@Second", secondBatch);
+  const secondReference = sql.indexOf("@First", firstReference);
+
+  assert.deepEqual(
+    collectHighConfidenceDocumentIssues(sql).map((issue) => ({
+      code: issue.code,
+      text: sql.slice(issue.range.start, issue.range.end),
+      start: issue.range.start,
+    })),
+    [
+      { code: "QP1001", text: "@Second", start: firstReference },
+      { code: "QP1001", text: "@First", start: secondReference },
+    ],
+  );
+});
+
+test("same-batch use before declaration without earlier GO evidence remains deferred", () => {
+  assert.deepEqual(
+    collectHighConfidenceDocumentIssues("SELECT @Value;\nDECLARE @Value int;"),
     [],
   );
 });

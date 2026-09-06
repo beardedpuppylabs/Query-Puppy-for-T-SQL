@@ -844,7 +844,9 @@ unchanged.
 
 Protect editor-neutral and activated native behavior for:
 
-- `QP1001` cross-`GO` scalar/table-variable evidence and existing fail-closed cases
+- `QP1001` cross-`GO` scalar/table-variable evidence, declaration-position
+  availability, deterministic multiple-declaration behavior, and existing fail-closed
+  cases without generic same-batch use-before-declaration linting
 - `QP1002` only when a qualified reference has exactly one matching RowSource binding
   in its semantic statement, that binding is explicitly aliased, and it is outside
   the canonical QueryScope visibility chain

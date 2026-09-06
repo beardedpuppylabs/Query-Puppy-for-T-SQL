@@ -133,8 +133,11 @@ export function collectHighConfidenceDocumentIssues(
     const batchEnd = tokens[batch.end - 1]?.end;
     if (batchEnd === undefined) continue;
     const declarations = resolveBatchLocalVariables(tokens, batchEnd);
-    const currentNames = new Set(
-      declarations.map((declaration) => declaration.normalizedName),
+    const declarationStartByName = new Map(
+      declarations.map((declaration) => [
+        declaration.normalizedName,
+        declaration.declaration.start,
+      ]),
     );
     const declarationRanges = new Set(
       declarations.map(
@@ -159,7 +162,11 @@ export function collectHighConfidenceDocumentIssues(
         )
           continue;
         const name = normalizeName(token.text);
-        if (currentNames.has(name) || !declarationsFromEarlierBatches.has(name))
+        const declarationStart = declarationStartByName.get(name);
+        if (
+          (declarationStart !== undefined && declarationStart <= token.start) ||
+          !declarationsFromEarlierBatches.has(name)
+        )
           continue;
         issues.push({
           code: "QP1001",

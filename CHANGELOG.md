@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.1
+
+- Fixed `QP1001` so a local-variable declaration later in a `GO` batch no longer
+  suppresses an invalid earlier reference in that batch.
+
 ## 0.18.0
 
 - Added a conservative native diagnostic for explicit row-source aliases that are

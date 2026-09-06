@@ -2082,9 +2082,18 @@ export async function run(): Promise<void> {
   );
   assert.equal(outlineCollectionCount, 2);
 
-  const invalidDiagnosticSql =
-    "DECLARE @CustomerId int;\nGO\nSELECT @CustomerId;";
-  const validDiagnosticSql = "DECLARE @CustomerId int;\nSELECT @CustomerId;";
+  const invalidDiagnosticSql = [
+    "DECLARE @CustomerId int;",
+    "GO",
+    "SELECT @CustomerId;",
+    "DECLARE @CustomerId int;",
+  ].join("\n");
+  const validDiagnosticSql = [
+    "DECLARE @CustomerId int;",
+    "GO",
+    "DECLARE @CustomerId int;",
+    "SELECT @CustomerId;",
+  ].join("\n");
   const semanticDiagnosticDocument = await vscode.workspace.openTextDocument({
     language: "sql",
     content: invalidDiagnosticSql,
@@ -2096,11 +2105,29 @@ export async function run(): Promise<void> {
   assert.equal(queryPuppyDiagnostics().length, 1);
   const crossBatchDiagnostic = queryPuppyDiagnostics()[0];
   assert.ok(crossBatchDiagnostic);
+  assert.equal(crossBatchDiagnostic.source, "Query Puppy");
   assert.equal(crossBatchDiagnostic.code, "QP1001");
   assert.equal(crossBatchDiagnostic.severity, vscode.DiagnosticSeverity.Error);
   assert.equal(
+    crossBatchDiagnostic.message,
+    "Local variable '@CustomerId' is not available in this GO batch.",
+  );
+  assert.equal(
     semanticDiagnosticDocument.getText(crossBatchDiagnostic.range),
     "@CustomerId",
+  );
+  const invalidVariableOffset = invalidDiagnosticSql.indexOf(
+    "@CustomerId",
+    invalidDiagnosticSql.indexOf("GO"),
+  );
+  assert.deepEqual(
+    crossBatchDiagnostic.range,
+    new vscode.Range(
+      semanticDiagnosticDocument.positionAt(invalidVariableOffset),
+      semanticDiagnosticDocument.positionAt(
+        invalidVariableOffset + "@CustomerId".length,
+      ),
+    ),
   );
 
   const semanticDiagnosticEditor = await vscode.window.showTextDocument(

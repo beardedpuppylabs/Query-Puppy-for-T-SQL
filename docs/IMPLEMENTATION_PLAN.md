@@ -70,6 +70,7 @@ architecture documents describe the intended present-day design.
 - 0.17.5 full plain local-variable Hover restoration — complete
 - 0.17.6 Microsoft Quick Info coexistence — complete
 - 0.18.0 high-confidence row-source alias visibility diagnostic — complete
+- 0.18.1 QP1001 declaration-position correction — complete
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -106,6 +107,8 @@ Quick Info configuration handling so users can opt out of duplicate mssql Hover
 descriptions without changing other Microsoft SQL features.
 Version 0.18.0 adds `QP1002` only for uniquely provable references to explicit
 RowSource aliases outside their canonical QueryScope visibility.
+Version 0.18.1 corrects `QP1001` so only current-batch declarations available at or
+before a reference suppress an otherwise proven cross-`GO` scope error.
 Quick Fixes also remain future work.
 
 The 0.12.6 compliance slice established the official GPLv3 license text, package
@@ -281,6 +284,15 @@ duplicate-alias, Quick Fix, and semantic Rename work remains deferred.
 - [x] Preserve `QP1001` and add focused editor-neutral plus activated Extension Host
       coverage for exact code, message, severity, range, lifecycle, and negative
       correlation behavior.
+
+## 0.18.1 — QP1001 declaration-position correction
+
+- [x] Use canonical local-variable declaration positions so a later current-batch
+      declaration cannot suppress an earlier reference backed by cross-`GO` evidence.
+- [x] Preserve fail-closed behavior when no earlier-batch declaration exists and keep
+      module, parameter, and tokenizer-validated `GO` boundaries unchanged.
+- [x] Cover scalar variables, table variables, multiple declarations, exact native
+      diagnostics, and the unchanged `QP1002` boundary.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 
