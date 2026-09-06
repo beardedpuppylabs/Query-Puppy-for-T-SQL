@@ -32,6 +32,13 @@ const localVariableDescriptionSuffix = (
   return `${type}${initializer ? ` = ${initializer}` : ""}`;
 };
 
+export function localVariableSemanticDescription(
+  symbol: DocumentSemanticSymbol,
+  sql: string,
+): string {
+  return `local variable ${symbol.name}${localVariableDescriptionSuffix(symbol, sql)}`;
+}
+
 export function localVariableDocumentSymbolDetail(
   symbol: DocumentSemanticSymbol,
   sql: string,

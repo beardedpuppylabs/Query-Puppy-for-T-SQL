@@ -67,6 +67,7 @@ architecture documents describe the intended present-day design.
 - 0.17.2 editor initializer-preview correction — complete
 - 0.17.3 editor initializer-preview delivery verification — complete
 - 0.17.4 local-variable Hover presentation cleanup — complete
+- 0.17.5 full plain local-variable Hover restoration — complete
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -96,7 +97,9 @@ the exact combined document works through both the direct provider and an extrac
 packaged extension in a fresh native Extension Host, and hardens regression coverage
 around individual Hover contributions. Version 0.17.4 changes Query Puppy's native
 Hover contribution to plain initializer-only text so independently merged SQL Hover
-content is not redundantly repeated. Quick Fixes also remain future work.
+content is not redundantly repeated. Version 0.17.5 restores Query Puppy's complete
+semantic variable description while retaining the plain styling introduced in 0.17.4.
+Quick Fixes also remain future work.
 
 The 0.12.6 compliance slice established the official GPLv3 license text, package
 metadata, third-party inventory, bundle/VSIX audit, public documentation, and the
@@ -235,6 +238,17 @@ and semantic Rename work remains deferred.
       declaration/reference identity shared with Document Symbols / Outline.
 - [x] Verify native multi-provider aggregation with separate Query Puppy and controlled
       independent base contributions without suppressing or mutating either provider.
+
+## 0.17.5 — full plain local-variable Hover restoration
+
+- [x] Restore one complete Query Puppy variable description containing name, canonical
+      SQL type, and the safe declaration initializer where available.
+- [x] Preserve plain Markdown text and keep the SQL syntax-highlighted code block
+      removed.
+- [x] Return full typed Hovers for variables whose expression or call initializers fail
+      closed, without claiming an initializer value.
+- [x] Retain canonical declaration/reference identity and independent native provider
+      aggregation coverage.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 

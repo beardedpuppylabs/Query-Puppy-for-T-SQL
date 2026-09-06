@@ -854,8 +854,8 @@ Protect:
 - exact combined-document initializer previews and individual registered Hover
   contributions at declaration and reference positions, including packaged-runtime
   activation
-- plain initializer-only Query Puppy Hover alongside an independently registered base
-  variable Hover, without SQL code blocks or duplicate full variable descriptions
+- one complete plain Query Puppy variable Hover alongside an independently registered
+  base variable Hover, without SQL code blocks or separate Query Puppy fragments
 - `@` registered trigger and partial Contains matching
 - exact replacement without duplicated `@`
 - same-batch visibility across semicolon and implicit statement boundaries

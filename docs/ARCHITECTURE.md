@@ -449,11 +449,10 @@ Highlight Provider consumer for the same identities; it returns each declaration
 and bound reference once in document order using the neutral Text kind. Local-variable
 editor presentation is a registered native Hover Provider consumer because Definition
 locations cannot carry descriptive content. It resolves declaration and reference
-positions through the same canonical symbol identity. For a supported initializer it
-returns only a plain incremental `Initializer: <preview>` contribution; otherwise it
-returns no Hover. VS Code/VSCodium merges independent Hover providers, and its public
-API does not let one provider replace or mutate another provider's contribution, so
-the base variable description remains owned by the existing SQL tooling. These four
+positions through the same canonical symbol identity and returns one plain full
+description containing the variable name, canonical SQL type, and supported initializer
+preview. VS Code/VSCodium merges independent Hover providers, and its public API does
+not let one provider replace or mutate another provider's contribution. These four
 cursor-targeted providers share one `DocumentSemanticCache`; completion and relationship
 Code Actions retain their separate caches because they have different consumer and
 catalog-context requirements.
@@ -470,8 +469,8 @@ type formatting and may append the declaration's source-literal initializer. The
 initializer preview is capped at 80 characters with an ellipsis; unsupported forms,
 including compound expressions and multiline literals, retain the ordinary typed
 detail. Editor Hover and Outline consume the same bounded preview and initializer
-range; the Hover does not repeat Outline's typed variable description. Neither
-reparses a reference or infers a runtime value.
+range while applying their respective plain full-description and compact-detail
+labels. Neither reparses a reference or infers a runtime value.
 
 High-Confidence Document Diagnostics is a native DiagnosticCollection consumer. Its
 editor-neutral collector tokenizes once and enumerates the existing canonical batch

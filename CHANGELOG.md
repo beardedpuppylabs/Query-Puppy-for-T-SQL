@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.5
+
+- Restored complete scalar local-variable Hover descriptions in plain styling while
+  preserving safe declaration initializer previews.
+
 ## 0.17.4
 
 - Simplified scalar local-variable Hover to a plain initializer-only contribution,

@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { DocumentSemanticCache } from "../parser/DocumentSemanticCache.js";
 import { resolveDocumentSemanticNavigationTarget } from "./DocumentSemanticNavigation.js";
-import { localVariableInitializerPreview } from "./DocumentSymbolPresentation.js";
+import { localVariableSemanticDescription } from "./DocumentSymbolPresentation.js";
 
 export class SqlHoverProvider implements vscode.HoverProvider {
   constructor(
@@ -22,14 +22,10 @@ export class SqlHoverProvider implements vscode.HoverProvider {
     );
     if (target?.occurrence.symbol.kind !== "localVariable") return;
 
-    const initializer = localVariableInitializerPreview(
-      target.occurrence.symbol,
-      sql,
-    );
-    if (!initializer) return;
-
     const contents = new vscode.MarkdownString();
-    contents.appendText(`Initializer: ${initializer}`);
+    contents.appendText(
+      localVariableSemanticDescription(target.occurrence.symbol, sql),
+    );
     const occurrence = target.occurrence.range;
     return new vscode.Hover(
       contents,

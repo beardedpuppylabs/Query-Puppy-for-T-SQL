@@ -431,7 +431,7 @@ test("contract: document-local navigation uses native providers and editor-neutr
     "utf8",
   );
   assert.match(hoverProviderSource, /resolveDocumentSemanticNavigationTarget/);
-  assert.match(hoverProviderSource, /localVariableInitializerPreview/);
+  assert.match(hoverProviderSource, /localVariableSemanticDescription/);
   assert.match(hoverProviderSource, /appendText/);
   assert.doesNotMatch(hoverProviderSource, /appendCodeblock/);
   assert.match(hoverProviderSource, /vscode\.Hover/);

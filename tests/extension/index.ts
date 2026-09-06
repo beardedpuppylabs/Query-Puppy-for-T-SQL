@@ -1581,6 +1581,19 @@ export async function run(): Promise<void> {
     ["@ExpressionValue", undefined],
     ["@FunctionValue", undefined],
   ]);
+  const expectedDescriptions = new Map([
+    ["@IntValue", "local variable @IntValue int = 42"],
+    ["@NegativeValue", "local variable @NegativeValue int = -7"],
+    ["@DecimalValue", "local variable @DecimalValue decimal(10,2) = 12.50"],
+    ["@TextValue", "local variable @TextValue varchar(50) = 'Alice'"],
+    [
+      "@UnicodeValue",
+      "local variable @UnicodeValue nvarchar(50) = N'ÄÖÜ Test'",
+    ],
+    ["@NullValue", "local variable @NullValue int = NULL"],
+    ["@ExpressionValue", "local variable @ExpressionValue int"],
+    ["@FunctionValue", "local variable @FunctionValue datetime"],
+  ]);
   const baseDescriptions = new Map([
     ["@IntValue", "local variable @IntValue int"],
     ["@NegativeValue", "local variable @NegativeValue int"],
@@ -1610,7 +1623,9 @@ export async function run(): Promise<void> {
   try {
     for (const [name, initializer] of expectedInitializers) {
       const baseDescription = baseDescriptions.get(name);
+      const expectedDescription = expectedDescriptions.get(name);
       assert.ok(baseDescription);
+      assert.ok(expectedDescription);
       for (const offset of [
         hoverSql.indexOf(name) + 1,
         hoverSql.lastIndexOf(name) + 1,
@@ -1627,27 +1642,30 @@ export async function run(): Promise<void> {
           `${name} native hover is missing the independent base contribution`,
         );
 
+        assert.ok(directHover instanceof vscode.Hover);
+        assert.equal(hoverPlainText(directHover), expectedDescription);
+        assert.doesNotMatch(hoverText(directHover), /```|Initializer:/i);
+        assert.ok(
+          nativeTexts.includes(expectedDescription),
+          `${name} native hover is missing Query Puppy's full contribution`,
+        );
+
         if (initializer) {
-          const expectedContribution = `Initializer: ${initializer}`;
-          assert.ok(directHover instanceof vscode.Hover);
-          assert.equal(hoverPlainText(directHover), expectedContribution);
-          assert.doesNotMatch(hoverText(directHover), /```|local variable/i);
-          assert.equal(
-            nativeTexts.filter((text) => text === expectedContribution).length,
-            1,
-            `${name} native hover must contain one incremental Query Puppy contribution`,
-          );
           assert.equal(
             nativeTexts.filter((text) => text.includes(baseDescription)).length,
-            1,
-            `${name} native hover must not duplicate the full base description`,
+            2,
+            `${name} native hover must retain the base and full Query Puppy contributions`,
           );
         } else {
-          assert.equal(directHover, undefined);
+          assert.doesNotMatch(
+            hoverPlainText(directHover),
+            /\s=\s/,
+            `${name} Query Puppy hover must not claim an unsupported initializer`,
+          );
           assert.equal(
-            nativeTexts.some((text) => text.startsWith("Initializer:")),
-            false,
-            `${name} native hover must not claim an unsupported initializer`,
+            nativeTexts.filter((text) => text === expectedDescription).length,
+            2,
+            `${name} native hover must retain both complete plain contributions`,
           );
         }
       }
