@@ -254,7 +254,7 @@ promises.
 | Document-local semantic symbol/reference foundation                                  | Implemented, internal foundation | `document-semantic-symbols.test.ts` — identity, range, scope, shadowing, and isolation contracts              |
 | Concurrent in-memory catalog load coalescing                                         | Implemented                      | `metadata-cache.test.ts` — catalog coalescing contract                                                        |
 | Persistent hydration, stale-while-revalidate, isolation, allow-listing, and recovery | Implemented                      | all `contract:` tests in `persistent-metadata.test.ts`                                                        |
-| Microsoft suggestion first-run coexistence                                           | Implemented                      | `microsoft-suggestions.test.ts` — explicit scoped setup contract                                              |
+| Microsoft suggestion and Quick Info coexistence                                      | Implemented                      | focused scoped configuration tests plus activated Extension Host setting contracts                            |
 | Real SQL Server catalog/relationship metadata                                        | Implemented, opt-in verification | `tests/integration/intellisense-lab.test.ts` and separately provisioned SQL fixtures                          |
 | Native Suggest Widget layout and installed-editor interaction                        | Implemented, manual verification | `tests/extension/index.ts` plus installed-editor acceptance                                                   |
 | Linked Servers and arbitrary four-part cross-server intelligence                     | Deferred                         | No sentinel; outside the same-server database contract                                                        |
@@ -854,8 +854,12 @@ Protect:
 - exact combined-document initializer previews and individual registered Hover
   contributions at declaration and reference positions, including packaged-runtime
   activation
-- one complete plain Query Puppy variable Hover alongside an independently registered
-  base variable Hover, without SQL code blocks or separate Query Puppy fragments
+- one complete plain Query Puppy variable Hover without SQL code blocks or separate
+  Query Puppy fragments, both directly and through native registration
+- Microsoft Quick Info effective-scope resolution, explicit setting writes, one-time
+  notice state, concise status, and no changes to suggestions or error checking
+- independent native Hover-provider aggregation without attributing the controlled
+  provider to the mssql Extension Host stub
 - `@` registered trigger and partial Contains matching
 - exact replacement without duplicated `@`
 - same-batch visibility across semicolon and implicit statement boundaries

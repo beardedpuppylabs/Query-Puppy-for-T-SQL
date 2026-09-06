@@ -457,7 +457,7 @@ After that first-session refresh attempt, the 15-minute freshness threshold is e
 
 [Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql) is a required dependency because it owns SQL Server connections. Query Puppy for T-SQL uses its connection-sharing integration to identify the active connection/database, list same-server databases, and run read-only catalog queries. It does not request separate SQL credentials or open its own independently configured connection.
 
-Query Puppy for T-SQL does not consume, scrape, or filter Microsoft's completion output; it registers its own completion provider. Running both providers can produce duplicate suggestions. On first use, Query Puppy for T-SQL can offer to disable `mssql.intelliSense.enableSuggestions` globally, or you can run **Query Puppy for T-SQL: Disable Microsoft SQL Suggestions**. It never changes that setting silently. Other `mssql` services, including connection handling, remain available.
+Query Puppy for T-SQL does not consume, scrape, or filter Microsoft's completion output; it registers its own completion and Hover providers. Running both completion providers can produce duplicate suggestions, while Microsoft Quick Info can duplicate local-variable Hover descriptions. On first use, Query Puppy for T-SQL can offer to disable `mssql.intelliSense.enableSuggestions` and `mssql.intelliSense.enableQuickInfo` globally. The dedicated Microsoft Suggestions and Microsoft Quick Info commands resolve explicit workspace overrides. Query Puppy never changes either setting silently. Other `mssql` services, including error checking and connection handling, remain available.
 
 ## Privacy and database permissions
 
@@ -475,7 +475,7 @@ The connected login still needs permission to read the relevant SQL Server catal
 1. Install [Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql).
 2. Install [Query Puppy for T-SQL from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=BeardedPuppyLabs.query-puppy-for-t-sql), or install a release VSIX in VSCodium.
 3. Open a SQL document and connect it with `mssql`.
-4. If duplicate completion lists appear, disable Microsoft SQL suggestions when prompted or with the provided command.
+4. If duplicate completion lists or local-variable Hover descriptions appear, disable the corresponding Microsoft SQL feature when prompted or with the provided command.
 
 Requires VS Code 1.105 or a compatible VSCodium release.
 
@@ -488,6 +488,7 @@ Requires VS Code 1.105 or a compatible VSCodium release.
 - **Query Puppy for T-SQL: Clear Learned Relationship Evidence**
 - **Query Puppy for T-SQL: Show Status**
 - **Query Puppy for T-SQL: Disable Microsoft SQL Suggestions**
+- **Query Puppy for T-SQL: Disable Microsoft SQL Quick Info**
 - **Query Puppy for T-SQL: Diagnose Signature Help**
 - **Query Puppy for T-SQL: Diagnose Query Scope**
 

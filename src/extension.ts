@@ -31,9 +31,13 @@ import {
   type AutomaticCompletionTriggerKind,
 } from "./parser/AutomaticCompletionTrigger.js";
 import {
+  disableMicrosoftQuickInfoAtEffectiveScope,
+  microsoftQuickInfoStatusLines,
   microsoftSuggestionStatusLines,
+  resolveMicrosoftQuickInfoState,
   resolveMicrosoftSuggestionState,
   type MicrosoftSuggestionInspection,
+  type QuickInfoConfigurationScope,
   type SuggestionConfigurationScope,
 } from "./config/MicrosoftSuggestions.js";
 import { WorkspaceProjectRelationships } from "./relationships/WorkspaceProjectRelationships.js";
@@ -57,7 +61,10 @@ import { SqlHoverProvider } from "./navigation/SqlHoverProvider.js";
 import { SqlReferenceProvider } from "./navigation/SqlReferenceProvider.js";
 
 const EXTENSION_ID = "BeardedPuppyLabs.query-puppy-for-t-sql";
+const MICROSOFT_QUICK_INFO_NOTICE_KEY = "mssqlQuickInfoNoticeShown";
 let suggestionNoticePending = false;
+let quickInfoNoticePending = false;
+let quickInfoNoticePromptCount = 0;
 
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel("Query Puppy for T-SQL");
@@ -433,6 +440,9 @@ export function activate(context: vscode.ExtensionContext): void {
           const suggestionStatus = microsoftSuggestionStatusLines(
             inspectMicrosoftSuggestions(),
           ).join("\n");
+          const quickInfoStatus = microsoftQuickInfoStatusLines(
+            inspectMicrosoftQuickInfo(),
+          ).join("\n");
           const parameterHintStatus = parameterHintStatusLine(
             vscode.window.activeTextEditor?.document,
           );
@@ -440,13 +450,13 @@ export function activate(context: vscode.ExtensionContext): void {
           const active = await mssqlBackend.active();
           if (!installed) {
             await vscode.window.showInformationMessage(
-              `Query Puppy for T-SQL — mssql API unavailable; disconnected; metadata not loaded.\n${suggestionStatus}\n${parameterHintStatus}`,
+              `Query Puppy for T-SQL — mssql API unavailable; disconnected; metadata not loaded.\n${suggestionStatus}\n${quickInfoStatus}\n${parameterHintStatus}`,
             );
             return;
           }
           if (!active) {
             await vscode.window.showInformationMessage(
-              `Query Puppy for T-SQL — mssql API available; disconnected; metadata not loaded.\n${suggestionStatus}\n${parameterHintStatus}`,
+              `Query Puppy for T-SQL — mssql API available; disconnected; metadata not loaded.\n${suggestionStatus}\n${quickInfoStatus}\n${parameterHintStatus}`,
             );
             return;
           }
@@ -461,7 +471,7 @@ export function activate(context: vscode.ExtensionContext): void {
                   )
                   .join("; ");
           await vscode.window.showInformationMessage(
-            `Query Puppy for T-SQL — mssql API available; connected; active database: ${active.database}; cached databases: ${summary}.\n${suggestionStatus}\n${parameterHintStatus}`,
+            `Query Puppy for T-SQL — mssql API available; connected; active database: ${active.database}; cached databases: ${summary}.\n${suggestionStatus}\n${quickInfoStatus}\n${parameterHintStatus}`,
           );
         } catch (error) {
           await vscode.window.showInformationMessage(
@@ -473,6 +483,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "queryPuppyForTSql.disableMicrosoftSuggestions",
       () => disableMicrosoftSuggestions(),
+    ),
+    vscode.commands.registerCommand(
+      "queryPuppyForTSql.disableMicrosoftQuickInfo",
+      () => disableMicrosoftQuickInfo(),
     ),
     vscode.commands.registerCommand(
       "queryPuppyForTSql.diagnoseSignatureHelp",
@@ -646,13 +660,44 @@ export function activate(context: vscode.ExtensionContext): void {
         "queryPuppyForTSql.test.takeAmbiguityNotifications",
         () => provider.takeTestAmbiguityNotifications(),
       ),
-    );
-  const checkFirstRun = (): void => {
-    warnAboutMicrosoftSuggestions(context).catch((error: unknown) =>
-      output.appendLine(
-        `Suggestion setting check failed: ${error instanceof Error ? error.message : String(error)}`,
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.microsoftQuickInfoNoticeState",
+        () => ({
+          shown:
+            context.globalState.get<boolean>(MICROSOFT_QUICK_INFO_NOTICE_KEY) ??
+            false,
+          promptCount: quickInfoNoticePromptCount,
+        }),
+      ),
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.warnAboutMicrosoftQuickInfo",
+        () => warnAboutMicrosoftQuickInfo(context),
+      ),
+      vscode.commands.registerCommand(
+        "queryPuppyForTSql.test.disableMicrosoftQuickInfoAtEffectiveScope",
+        () =>
+          disableMicrosoftQuickInfoAtEffectiveScope(
+            inspectMicrosoftQuickInfo(),
+            updateMicrosoftQuickInfo,
+          ),
       ),
     );
+  let coexistenceNoticeCheckPending = false;
+  const checkFirstRun = (): void => {
+    if (coexistenceNoticeCheckPending) return;
+    coexistenceNoticeCheckPending = true;
+    void (async () => {
+      try {
+        await warnAboutMicrosoftSuggestions(context);
+        await warnAboutMicrosoftQuickInfo(context);
+      } catch (error) {
+        output.appendLine(
+          `Microsoft IntelliSense setting check failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      } finally {
+        coexistenceNoticeCheckPending = false;
+      }
+    })();
   };
   checkFirstRun();
   context.subscriptions.push(
@@ -732,22 +777,35 @@ function parameterHintStatusLine(document?: vscode.TextDocument): string {
   return `Parameter hints: DISABLED${source ? ` — ${source}: false.` : " by editor configuration."}`;
 }
 
-function inspectMicrosoftSuggestions(): MicrosoftSuggestionInspection {
+type MicrosoftIntelliSenseSetting = "enableSuggestions" | "enableQuickInfo";
+
+function inspectMicrosoftIntelliSenseSetting(
+  setting: MicrosoftIntelliSenseSetting,
+): MicrosoftSuggestionInspection {
   const resource = vscode.window.activeTextEditor?.document.uri;
   const configuration = vscode.workspace.getConfiguration(
     "mssql.intelliSense",
     resource,
   );
-  const inspection = configuration.inspect<boolean>("enableSuggestions");
+  const inspection = configuration.inspect<boolean>(setting);
   return {
-    effectiveValue: configuration.get<boolean>("enableSuggestions") ?? true,
+    effectiveValue: configuration.get<boolean>(setting) ?? true,
     globalValue: inspection?.globalValue,
     workspaceValue: inspection?.workspaceValue,
     workspaceFolderValue: inspection?.workspaceFolderValue,
   };
 }
 
-async function updateMicrosoftSuggestions(
+function inspectMicrosoftSuggestions(): MicrosoftSuggestionInspection {
+  return inspectMicrosoftIntelliSenseSetting("enableSuggestions");
+}
+
+function inspectMicrosoftQuickInfo(): MicrosoftSuggestionInspection {
+  return inspectMicrosoftIntelliSenseSetting("enableQuickInfo");
+}
+
+async function updateMicrosoftIntelliSenseSetting(
+  setting: MicrosoftIntelliSenseSetting,
   scope: SuggestionConfigurationScope,
 ): Promise<void> {
   const target = {
@@ -760,7 +818,19 @@ async function updateMicrosoftSuggestions(
       "mssql.intelliSense",
       vscode.window.activeTextEditor?.document.uri,
     )
-    .update("enableSuggestions", false, target);
+    .update(setting, false, target);
+}
+
+async function updateMicrosoftSuggestions(
+  scope: SuggestionConfigurationScope,
+): Promise<void> {
+  await updateMicrosoftIntelliSenseSetting("enableSuggestions", scope);
+}
+
+async function updateMicrosoftQuickInfo(
+  scope: QuickInfoConfigurationScope,
+): Promise<void> {
+  await updateMicrosoftIntelliSenseSetting("enableQuickInfo", scope);
 }
 
 async function disableMicrosoftSuggestions(): Promise<void> {
@@ -806,6 +876,60 @@ async function disableMicrosoftSuggestions(): Promise<void> {
   );
 }
 
+async function disableMicrosoftQuickInfo(): Promise<void> {
+  const inspection = inspectMicrosoftQuickInfo();
+  const state = resolveMicrosoftQuickInfoState(inspection);
+  if (!state.enabled) {
+    await vscode.window.showInformationMessage(
+      "Microsoft SQL Quick Info is already disabled.",
+    );
+    return;
+  }
+
+  if (state.enablingScope === "workspaceFolder") {
+    const action = "Disable for this workspace folder";
+    const globalContext =
+      inspection.globalValue === false
+        ? "Microsoft SQL Quick Info is disabled globally, but this workspace folder explicitly enables it."
+        : "This workspace folder explicitly enables Microsoft SQL Quick Info.";
+    const choice = await vscode.window.showInformationMessage(
+      globalContext,
+      action,
+    );
+    if (choice === action)
+      await disableMicrosoftQuickInfoAtEffectiveScope(
+        inspection,
+        updateMicrosoftQuickInfo,
+      );
+    return;
+  }
+  if (state.enablingScope === "workspace") {
+    const action = "Disable for this workspace";
+    const globalContext =
+      inspection.globalValue === false
+        ? "Microsoft SQL Quick Info is disabled globally, but this workspace explicitly enables it."
+        : "This workspace explicitly enables Microsoft SQL Quick Info.";
+    const choice = await vscode.window.showInformationMessage(
+      globalContext,
+      action,
+    );
+    if (choice === action)
+      await disableMicrosoftQuickInfoAtEffectiveScope(
+        inspection,
+        updateMicrosoftQuickInfo,
+      );
+    return;
+  }
+
+  await disableMicrosoftQuickInfoAtEffectiveScope(
+    inspection,
+    updateMicrosoftQuickInfo,
+  );
+  void vscode.window.showInformationMessage(
+    "Microsoft SQL Quick Info disabled globally. Microsoft suggestions and error checking remain unchanged.",
+  );
+}
+
 async function warnAboutMicrosoftSuggestions(
   context: vscode.ExtensionContext,
 ): Promise<void> {
@@ -834,6 +958,40 @@ async function warnAboutMicrosoftSuggestions(
     }
   } finally {
     suggestionNoticePending = false;
+  }
+}
+
+async function warnAboutMicrosoftQuickInfo(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  if (
+    context.globalState.get<boolean>(MICROSOFT_QUICK_INFO_NOTICE_KEY) ||
+    quickInfoNoticePending
+  )
+    return;
+  if (vscode.window.activeTextEditor?.document.languageId !== "sql") return;
+  if (!vscode.extensions.getExtension("ms-mssql.mssql")) return;
+  if (!inspectMicrosoftQuickInfo().effectiveValue) return;
+  const disable = "Disable globally";
+  const notNow = "Not now";
+  quickInfoNoticePending = true;
+  quickInfoNoticePromptCount++;
+  await context.globalState.update(MICROSOFT_QUICK_INFO_NOTICE_KEY, true);
+  try {
+    const choice = await vscode.window.showInformationMessage(
+      "Query Puppy provides enhanced SQL Hover information. Disable Microsoft SQL Quick Info to avoid duplicate Hover descriptions?",
+      disable,
+      notNow,
+    );
+    if (choice === disable) {
+      await updateMicrosoftQuickInfo("global");
+      if (inspectMicrosoftQuickInfo().effectiveValue)
+        await vscode.window.showWarningMessage(
+          "Microsoft SQL Quick Info remains enabled by a workspace override. Run “Query Puppy for T-SQL: Disable Microsoft SQL Quick Info” to resolve it.",
+        );
+    }
+  } finally {
+    quickInfoNoticePending = false;
   }
 }
 

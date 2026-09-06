@@ -68,6 +68,7 @@ architecture documents describe the intended present-day design.
 - 0.17.3 editor initializer-preview delivery verification — complete
 - 0.17.4 local-variable Hover presentation cleanup — complete
 - 0.17.5 full plain local-variable Hover restoration — complete
+- 0.17.6 Microsoft Quick Info coexistence — complete
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -99,6 +100,9 @@ around individual Hover contributions. Version 0.17.4 changes Query Puppy's nati
 Hover contribution to plain initializer-only text so independently merged SQL Hover
 content is not redundantly repeated. Version 0.17.5 restores Query Puppy's complete
 semantic variable description while retaining the plain styling introduced in 0.17.4.
+Version 0.17.6 preserves that complete Hover and adds explicit supported Microsoft
+Quick Info configuration handling so users can opt out of duplicate mssql Hover
+descriptions without changing other Microsoft SQL features.
 Quick Fixes also remain future work.
 
 The 0.12.6 compliance slice established the official GPLv3 license text, package
@@ -249,6 +253,17 @@ and semantic Rename work remains deferred.
       closed, without claiming an initializer value.
 - [x] Retain canonical declaration/reference identity and independent native provider
       aggregation coverage.
+
+## 0.17.6 — Microsoft Quick Info coexistence
+
+- [x] Detect the effective supported `mssql.intelliSense.enableQuickInfo` setting and
+      report its concise coexistence state alongside Microsoft suggestions.
+- [x] Add an explicit dedicated command and one-time opt-in prompt that change only
+      Microsoft Quick Info at the effective supported global or workspace scope.
+- [x] Preserve the complete plain initializer-aware Query Puppy Hover and verify its
+      exact eight-variable payload independently from the mssql test stub.
+- [x] Cover global, workspace, theoretical workspace-folder override resolution,
+      no-write disabled state, and unrelated-setting preservation.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 

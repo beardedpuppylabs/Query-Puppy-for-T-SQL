@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.6
+
+- Added supported Microsoft Quick Info conflict handling so users can keep Query
+  Puppy's complete initializer-aware Hover without duplicate mssql Hover
+  descriptions.
+
 ## 0.17.5
 
 - Restored complete scalar local-variable Hover descriptions in plain styling while

@@ -452,7 +452,11 @@ locations cannot carry descriptive content. It resolves declaration and referenc
 positions through the same canonical symbol identity and returns one plain full
 description containing the variable name, canonical SQL type, and supported initializer
 preview. VS Code/VSCodium merges independent Hover providers, and its public API does
-not let one provider replace or mutate another provider's contribution. These four
+not let one provider replace or mutate another provider's contribution. Query Puppy
+therefore detects the supported `mssql.intelliSense.enableQuickInfo` setting and offers
+an explicit one-time opt-in plus a dedicated command to disable Microsoft Quick Info at
+the effective supported configuration scope. It never changes the setting silently,
+and status output reports remaining global or workspace conflicts. These four
 cursor-targeted providers share one `DocumentSemanticCache`; completion and relationship
 Code Actions retain their separate caches because they have different consumer and
 catalog-context requirements.

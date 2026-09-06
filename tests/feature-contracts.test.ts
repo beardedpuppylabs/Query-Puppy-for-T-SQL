@@ -481,6 +481,41 @@ test("contract: document-local navigation uses native providers and editor-neutr
   assert.doesNotMatch(localVariableSource, /from "vscode"/);
 });
 
+test("contract: Microsoft Quick Info coexistence uses supported scoped configuration", async () => {
+  const manifest = JSON.parse(await readFile("package.json", "utf8")) as {
+    contributes?: {
+      commands?: readonly { command?: string; title?: string }[];
+    };
+  };
+  assert.ok(
+    manifest.contributes?.commands?.some(
+      (command) =>
+        command.command === "queryPuppyForTSql.disableMicrosoftQuickInfo" &&
+        command.title ===
+          "Query Puppy for T-SQL: Disable Microsoft SQL Quick Info",
+    ),
+  );
+
+  const extensionSource = await readFile("src/extension.ts", "utf8");
+  assert.match(
+    extensionSource,
+    /registerCommand\(\s*"queryPuppyForTSql\.disableMicrosoftQuickInfo"/,
+  );
+  assert.match(extensionSource, /"enableQuickInfo"/);
+  assert.match(extensionSource, /ConfigurationTarget\.Global/);
+  assert.match(extensionSource, /ConfigurationTarget\.Workspace/);
+  assert.match(extensionSource, /ConfigurationTarget\.WorkspaceFolder/);
+  assert.match(extensionSource, /mssqlQuickInfoNoticeShown/);
+  assert.match(
+    extensionSource,
+    /Disable Microsoft SQL Quick Info to avoid duplicate Hover descriptions/,
+  );
+  assert.doesNotMatch(
+    extensionSource,
+    /unregister.*Hover|monkey.?patch|executeHoverProvider.*enableQuickInfo/is,
+  );
+});
+
 test("contract: high-confidence diagnostics use a native collection and editor-neutral issues", async () => {
   const extensionSource = await readFile("src/extension.ts", "utf8");
   assert.match(extensionSource, /SqlDocumentDiagnostics/);

@@ -9,5 +9,27 @@
   "main": "./extension.cjs",
   "activationEvents": [
     "*"
-  ]
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "mssql test dependency stub",
+      "properties": {
+        "mssql.intelliSense.enableSuggestions": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window"
+        },
+        "mssql.intelliSense.enableQuickInfo": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window"
+        },
+        "mssql.intelliSense.enableErrorChecking": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window"
+        }
+      }
+    }
+  }
 }

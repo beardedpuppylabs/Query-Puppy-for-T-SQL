@@ -1367,6 +1367,120 @@ export async function run(): Promise<void> {
   );
   assert.ok(extension, "development extension was not discovered");
   await extension.activate();
+
+  type QuickInfoNoticeState = {
+    readonly shown: boolean;
+    readonly promptCount: number;
+  };
+  const quickInfoPromptDocument = await vscode.workspace.openTextDocument({
+    language: "sql",
+    content: "DECLARE @QuickInfoValue int = 42; SELECT @QuickInfoValue;",
+  });
+  const quickInfoPromptConfiguration = vscode.workspace.getConfiguration(
+    "mssql.intelliSense",
+    quickInfoPromptDocument.uri,
+  );
+  await quickInfoPromptConfiguration.update(
+    "enableSuggestions",
+    false,
+    vscode.ConfigurationTarget.Global,
+  );
+  await quickInfoPromptConfiguration.update(
+    "enableQuickInfo",
+    true,
+    vscode.ConfigurationTarget.Global,
+  );
+  await vscode.window.showTextDocument(quickInfoPromptDocument);
+
+  let quickInfoNoticeState: QuickInfoNoticeState | undefined;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    quickInfoNoticeState = await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.microsoftQuickInfoNoticeState",
+    );
+    if (quickInfoNoticeState?.shown) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.deepEqual(quickInfoNoticeState, { shown: true, promptCount: 1 });
+  await vscode.commands.executeCommand(
+    "queryPuppyForTSql.test.warnAboutMicrosoftQuickInfo",
+  );
+  assert.deepEqual(
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.microsoftQuickInfoNoticeState",
+    ),
+    { shown: true, promptCount: 1 },
+    "the persisted Quick Info notice must prevent repeat prompts",
+  );
+
+  const configurationBeforeGlobalDisable = vscode.workspace.getConfiguration(
+    "mssql.intelliSense",
+    quickInfoPromptDocument.uri,
+  );
+  const suggestionBeforeQuickInfoDisable =
+    configurationBeforeGlobalDisable.get<boolean>("enableSuggestions");
+  const errorCheckingBeforeQuickInfoDisable =
+    configurationBeforeGlobalDisable.get<boolean>("enableErrorChecking");
+  await vscode.commands.executeCommand(
+    "queryPuppyForTSql.disableMicrosoftQuickInfo",
+  );
+  const configurationAfterGlobalDisable = vscode.workspace.getConfiguration(
+    "mssql.intelliSense",
+    quickInfoPromptDocument.uri,
+  );
+  assert.equal(
+    configurationAfterGlobalDisable.inspect<boolean>("enableQuickInfo")
+      ?.globalValue,
+    false,
+  );
+  assert.equal(
+    configurationAfterGlobalDisable.get<boolean>("enableQuickInfo"),
+    false,
+  );
+  assert.equal(
+    configurationAfterGlobalDisable.get<boolean>("enableSuggestions"),
+    suggestionBeforeQuickInfoDisable,
+    "disabling Quick Info must not change Microsoft suggestions",
+  );
+  assert.equal(
+    configurationAfterGlobalDisable.get<boolean>("enableErrorChecking"),
+    errorCheckingBeforeQuickInfoDisable,
+    "disabling Quick Info must not change Microsoft error checking",
+  );
+
+  await quickInfoPromptConfiguration.update(
+    "enableQuickInfo",
+    true,
+    vscode.ConfigurationTarget.Workspace,
+  );
+  assert.equal(
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.disableMicrosoftQuickInfoAtEffectiveScope",
+    ),
+    "workspace",
+  );
+  assert.equal(
+    vscode.workspace
+      .getConfiguration("mssql.intelliSense", quickInfoPromptDocument.uri)
+      .inspect<boolean>("enableQuickInfo")?.workspaceValue,
+    false,
+  );
+  const disabledQuickInfoInspection = vscode.workspace
+    .getConfiguration("mssql.intelliSense", quickInfoPromptDocument.uri)
+    .inspect<boolean>("enableQuickInfo");
+  assert.equal(
+    await vscode.commands.executeCommand(
+      "queryPuppyForTSql.test.disableMicrosoftQuickInfoAtEffectiveScope",
+    ),
+    undefined,
+  );
+  assert.deepEqual(
+    vscode.workspace
+      .getConfiguration("mssql.intelliSense", quickInfoPromptDocument.uri)
+      .inspect<boolean>("enableQuickInfo"),
+    disabledQuickInfoInspection,
+    "already-disabled Quick Info must not cause another configuration write",
+  );
+
   const baseScope = {
     activeDatabase: database,
     indexes: new Map([
@@ -1604,6 +1718,29 @@ export async function run(): Promise<void> {
     ["@ExpressionValue", "local variable @ExpressionValue int"],
     ["@FunctionValue", "local variable @FunctionValue datetime"],
   ]);
+  for (const [name, expectedDescription] of expectedDescriptions) {
+    for (const offset of [
+      hoverSql.indexOf(name) + 1,
+      hoverSql.lastIndexOf(name) + 1,
+    ]) {
+      const position = hoverDocument.positionAt(offset);
+      const directHover = await directHoverProvider.provideHover(
+        hoverDocument,
+        position,
+      );
+      assert.ok(directHover instanceof vscode.Hover);
+      assert.equal(hoverPlainText(directHover), expectedDescription);
+      assert.doesNotMatch(hoverText(directHover), /```|Initializer:/i);
+
+      const nativeTexts = (await nativeHoversAt(offset)).map(hoverPlainText);
+      assert.deepEqual(
+        nativeTexts,
+        [expectedDescription],
+        `${name} must have one complete Query Puppy Hover when Microsoft Quick Info is disabled`,
+      );
+    }
+  }
+
   const baseHoverRegistration = vscode.languages.registerHoverProvider(
     { language: "sql" },
     {
