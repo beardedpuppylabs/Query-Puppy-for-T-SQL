@@ -2136,6 +2136,78 @@ export async function run(): Promise<void> {
     true,
   );
   assert.equal(queryPuppyDiagnostics().length, 1);
+  const invalidAliasDiagnosticSql = [
+    "SELECT p.Id",
+    "FROM dbo.Parent AS p",
+    "WHERE EXISTS (",
+    "    SELECT 1",
+    "    FROM dbo.Child AS c",
+    "    WHERE c.ParentId = p.Id",
+    ")",
+    "  AND c.Id > 0;",
+  ].join("\n");
+  const validCorrelatedAliasSql = [
+    "SELECT p.Id",
+    "FROM dbo.Parent AS p",
+    "WHERE EXISTS (",
+    "    SELECT 1",
+    "    FROM dbo.Child AS c",
+    "    WHERE c.ParentId = p.Id",
+    ");",
+  ].join("\n");
+  const replaceDiagnosticSql = async (sql: string): Promise<void> => {
+    assert.equal(
+      await semanticDiagnosticEditor.edit((builder) =>
+        builder.replace(
+          new vscode.Range(
+            semanticDiagnosticDocument.positionAt(0),
+            semanticDiagnosticDocument.positionAt(
+              semanticDiagnosticDocument.getText().length,
+            ),
+          ),
+          sql,
+        ),
+      ),
+      true,
+    );
+  };
+  await replaceDiagnosticSql(invalidAliasDiagnosticSql);
+  assert.equal(queryPuppyDiagnostics().length, 1);
+  const aliasVisibilityDiagnostic = queryPuppyDiagnostics()[0];
+  assert.ok(aliasVisibilityDiagnostic);
+  assert.equal(aliasVisibilityDiagnostic.source, "Query Puppy");
+  assert.equal(aliasVisibilityDiagnostic.code, "QP1002");
+  assert.equal(
+    aliasVisibilityDiagnostic.severity,
+    vscode.DiagnosticSeverity.Error,
+  );
+  assert.equal(
+    aliasVisibilityDiagnostic.message,
+    "Row-source alias 'c' is not visible in this query scope.",
+  );
+  assert.equal(
+    semanticDiagnosticDocument.getText(aliasVisibilityDiagnostic.range),
+    "c",
+  );
+  const invalidAliasOffset = invalidAliasDiagnosticSql.lastIndexOf("c.Id");
+  assert.deepEqual(
+    aliasVisibilityDiagnostic.range,
+    new vscode.Range(
+      semanticDiagnosticDocument.positionAt(invalidAliasOffset),
+      semanticDiagnosticDocument.positionAt(invalidAliasOffset + 1),
+    ),
+  );
+
+  await replaceDiagnosticSql(validCorrelatedAliasSql);
+  assert.deepEqual(
+    queryPuppyDiagnostics().filter(
+      (diagnostic) => diagnostic.code === "QP1002",
+    ),
+    [],
+    "a valid correlated outer alias must not produce QP1002",
+  );
+  await replaceDiagnosticSql(invalidAliasDiagnosticSql);
+  assert.equal(queryPuppyDiagnostics().length, 1);
   const diagnosticUri = semanticDiagnosticDocument.uri;
   await vscode.commands.executeCommand(
     "workbench.action.revertAndCloseActiveEditor",

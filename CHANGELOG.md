@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.0
+
+- Added a conservative native diagnostic for explicit row-source aliases that are
+  provably referenced outside their valid query scope.
+
 ## 0.17.6
 
 - Added supported Microsoft Quick Info conflict handling so users can keep Query

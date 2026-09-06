@@ -20,7 +20,7 @@ In a schema with hundreds or thousands of objects, remembering part of a name sh
   bounded source-literal initializer previews for scalar local variables
 - Editor hover details for typed local variables and their declaration initializers
 - Conservative native document diagnostics for proven cross-`GO` variable-scope
-  errors
+  errors and explicit row-source aliases referenced outside their query scope
 - Smart Alias and Tab-only wildcard productivity features
 - Query-local sources and same-server cross-database completion
 - Persistent per-database metadata for fast warm starts

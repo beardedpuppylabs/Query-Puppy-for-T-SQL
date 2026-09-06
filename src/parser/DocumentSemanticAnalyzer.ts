@@ -1104,7 +1104,7 @@ export function resolveVisibleRowSource(
       }
     : undefined;
 }
-function analyzeTokenizedDocumentSemantics(
+export function analyzeTokenizedDocumentSemantics(
   sql: string,
   tokens: readonly SqlToken[],
   cursor: number,

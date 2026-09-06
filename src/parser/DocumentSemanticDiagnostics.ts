@@ -1,11 +1,19 @@
 import { normalizeName } from "../metadata/MetadataModels.js";
 import { documentBatchTokenRanges } from "./BatchBoundary.js";
+import { analyzeTokenizedDocumentSemantics } from "./DocumentSemanticAnalyzer.js";
 import { resolveBatchLocalVariables } from "./LocalVariableSymbols.js";
+import {
+  queryScopeAtOffset,
+  resolveUniqueInvisibleExplicitAlias,
+} from "./QueryScopeResolver.js";
 import { tokenizeSql, type SqlToken } from "./SqlTokenizer.js";
-import { documentStatementTokenRanges } from "./StatementBoundary.js";
+import {
+  documentStatementTokenRanges,
+  type StatementTokenRange,
+} from "./StatementBoundary.js";
 
 export interface DocumentSemanticIssue {
-  readonly code: "QP1001";
+  readonly code: "QP1001" | "QP1002";
   readonly severity: "error";
   readonly message: string;
   readonly range: { readonly start: number; readonly end: number };
@@ -40,6 +48,61 @@ const isModuleDefinitionBatch = (
       return true;
   }
   return false;
+};
+
+const rangeContains = (
+  outer: { readonly start: number; readonly end: number },
+  inner: { readonly start: number; readonly end: number },
+): boolean => outer.start <= inner.start && outer.end >= inner.end;
+
+const isNonAliasQualifiedPath = (
+  tokens: readonly SqlToken[],
+  index: number,
+): boolean =>
+  tokens[index - 1]?.text === "." ||
+  tokens[index + 3]?.text === "." ||
+  tokens[index + 3]?.text === "(";
+
+const collectInvisibleAliasIssues = (
+  sql: string,
+  tokens: readonly SqlToken[],
+  statement: StatementTokenRange,
+): readonly DocumentSemanticIssue[] => {
+  const cursor = tokens[statement.end - 1]?.end;
+  if (cursor === undefined) return [];
+  const model = analyzeTokenizedDocumentSemantics(sql, tokens, cursor);
+  const sourcePaths = model.queryScopes.flatMap((scope) =>
+    scope.localRowSources.flatMap((binding) =>
+      binding.sourcePath ? [binding.sourcePath] : [],
+    ),
+  );
+  const issues: DocumentSemanticIssue[] = [];
+
+  for (let index = statement.start; index < statement.end - 1; index++) {
+    const qualifier = tokens[index];
+    if (
+      qualifier?.kind !== "identifier" ||
+      tokens[index + 1]?.text !== "." ||
+      isNonAliasQualifiedPath(tokens, index)
+    )
+      continue;
+    const range = { start: qualifier.start, end: qualifier.end };
+    if (sourcePaths.some((sourcePath) => rangeContains(sourcePath, range)))
+      continue;
+    const declaration = resolveUniqueInvisibleExplicitAlias(
+      model.queryScopes,
+      queryScopeAtOffset(model.queryScopes, qualifier.start),
+      qualifier.text,
+    );
+    if (!declaration) continue;
+    issues.push({
+      code: "QP1002",
+      severity: "error",
+      message: `Row-source alias '${qualifier.text}' is not visible in this query scope.`,
+      range,
+    });
+  }
+  return issues;
 };
 
 /** Finds only document-local semantic errors proven without catalog access. */
@@ -105,11 +168,17 @@ export function collectHighConfidenceDocumentIssues(
           range: { start: token.start, end: token.end },
         });
       }
+      issues.push(...collectInvisibleAliasIssues(sql, tokens, statement));
     }
 
     for (const declaration of declarations)
       declarationsFromEarlierBatches.add(declaration.normalizedName);
   }
 
-  return issues;
+  return issues.sort(
+    (left, right) =>
+      left.range.start - right.range.start ||
+      left.range.end - right.range.end ||
+      left.code.localeCompare(right.code),
+  );
 }

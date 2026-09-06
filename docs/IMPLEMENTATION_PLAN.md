@@ -69,6 +69,7 @@ architecture documents describe the intended present-day design.
 - 0.17.4 local-variable Hover presentation cleanup — complete
 - 0.17.5 full plain local-variable Hover restoration — complete
 - 0.17.6 Microsoft Quick Info coexistence — complete
+- 0.18.0 high-confidence row-source alias visibility diagnostic — complete
 
 0.12.6 completes Phase E3 by adding zero-or-one conservative
 HeuristicCandidate/Candidate predicate for an already-selected physical table pair.
@@ -103,6 +104,8 @@ semantic variable description while retaining the plain styling introduced in 0.
 Version 0.17.6 preserves that complete Hover and adds explicit supported Microsoft
 Quick Info configuration handling so users can opt out of duplicate mssql Hover
 descriptions without changing other Microsoft SQL features.
+Version 0.18.0 adds `QP1002` only for uniquely provable references to explicit
+RowSource aliases outside their canonical QueryScope visibility.
 Quick Fixes also remain future work.
 
 The 0.12.6 compliance slice established the official GPLv3 license text, package
@@ -188,8 +191,8 @@ does not retain reliable declaration/reference identity.
 - [x] Add focused semantic, source-contract, and activated Extension Host lifecycle
       coverage without a live SQL Server dependency.
 
-Use-before-declaration, alias-scope, aliased-base-name, duplicate-alias, Quick Fix,
-and semantic Rename work remains deferred.
+Use-before-declaration, generic unresolved-alias, aliased-base-name,
+duplicate-alias, Quick Fix, and semantic Rename work remains deferred.
 
 ## 0.17.1 — local-variable initializer preview
 
@@ -264,6 +267,20 @@ and semantic Rename work remains deferred.
       exact eight-variable payload independently from the mssql test stub.
 - [x] Cover global, workspace, theoretical workspace-folder override resolution,
       no-write disabled state, and unrelated-setting preservation.
+
+## 0.18.0 — high-confidence row-source alias visibility diagnostic
+
+- [x] Add native Error diagnostic `QP1002` on the exact qualifier token when one
+      explicit alias declaration exists in the same semantic statement but is not
+      visible through the canonical QueryScope chain.
+- [x] Reuse tokenizer, statement ownership, QueryScopes, correlation, shadowing,
+      sibling isolation, derived-table boundaries, and APPLY visibility without
+      catalog or workspace access.
+- [x] Fail closed for unknown or multipart physical qualifiers, unrelated statements
+      and batches, ambiguous declarations, module bodies, and positional APPLY cases.
+- [x] Preserve `QP1001` and add focused editor-neutral plus activated Extension Host
+      coverage for exact code, message, severity, range, lifecycle, and negative
+      correlation behavior.
 
 ## Relationship Intelligence Phase D — ProjectDefined
 

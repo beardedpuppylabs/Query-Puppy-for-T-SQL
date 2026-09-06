@@ -481,12 +481,17 @@ editor-neutral collector tokenizes once and enumerates the existing canonical ba
 and statement boundaries across the whole document. `QP1001` is emitted only when a
 scalar or table-variable reference occurs in a supported query/DML statement, the
 same name has a canonical declaration in an earlier `GO` batch, and the current
-batch has no declaration for that name. Module-definition batches, unresolved
-variables without earlier local evidence, incomplete SQL, and optional broader
-diagnostic categories fail closed. Diagnostics update synchronously for eligible SQL
-documents on activation, open, and edit, and clear on correction or close. This path
-performs no catalog, backend, relationship, filesystem, or workspace work and is not
-a general SQL linter. Semantic Rename remains a future consumer.
+batch has no declaration for that name. `QP1002` reuses the canonical QueryScope
+visibility chain and is emitted on a qualifier token only when the same semantic
+statement contains exactly one matching RowSource binding, that binding is an
+explicit alias declaration, no matching binding is visible at the reference, and the
+token is not part of a source path or longer multipart name. Unknown qualifiers,
+unrelated statements and batches, ambiguous bindings, visible shadowing/correlation,
+and positional APPLY cases fail closed. Module-definition batches and optional
+broader diagnostic categories also remain excluded. Diagnostics update synchronously for eligible SQL documents on
+activation, open, and edit, and clear on correction or close. This path performs no
+catalog, backend, relationship, filesystem, or workspace work and is not a general
+SQL linter. Semantic Rename remains a future consumer.
 
 ## Schema Intelligence
 

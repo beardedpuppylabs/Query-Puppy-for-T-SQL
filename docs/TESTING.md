@@ -246,7 +246,7 @@ promises.
 | Document-local Find References                                                       | Implemented                      | semantic, source-contract, and direct/activated Extension Host tests                                          |
 | Document-local Document Highlights                                                   | Implemented                      | semantic, source-contract, and direct/activated Extension Host tests                                          |
 | Document-local Document Symbols / Outline                                            | Implemented                      | whole-document semantic, initializer-preview, source-contract, and direct/activated Extension Host tests      |
-| High-confidence document-local semantic diagnostics                                  | Implemented                      | `document-semantic-diagnostics.test.ts`, source contract, and activated Extension Host lifecycle test         |
+| High-confidence document-local semantic diagnostics                                  | Implemented                      | `document-semantic-diagnostics.test.ts`, source contract, and activated Extension Host QP1001/QP1002 tests    |
 | Backend-neutral connection and metadata boundary                                     | Implemented                      | `backend-boundary.test.ts` fake-backend contracts                                                             |
 | Shared mssql connection context without extension-owned credentials                  | Implemented                      | `connection.test.ts` mssql adapter contracts                                                                  |
 | Read-only Schema Intelligence initialization                                         | Implemented                      | `metadata-loader.test.ts` — catalog-read-only contract                                                        |
@@ -839,6 +839,26 @@ Test:
 Activated Extension Host coverage must execute the registered expansion command
 against both `*` and `alias.*`, and prove an ordinary Enter edit leaves the wildcard
 unchanged.
+
+## High-confidence diagnostic tests
+
+Protect editor-neutral and activated native behavior for:
+
+- `QP1001` cross-`GO` scalar/table-variable evidence and existing fail-closed cases
+- `QP1002` only when a qualified reference has exactly one matching RowSource binding
+  in its semantic statement, that binding is explicitly aliased, and it is outside
+  the canonical QueryScope visibility chain
+- exact issue code, Error severity, message, and qualifier-token range
+- one issue per proven offending reference in deterministic source order
+- inner-to-outer, sibling-subquery, and derived-table visibility violations
+- valid outer correlation, shadowing, and APPLY left-side visibility remaining clean
+- unknown and multipart physical qualifiers, unrelated statements/`GO` batches,
+  ambiguous declarations, module bodies, and positional APPLY cases failing closed
+- native source `Query Puppy`, correction updates, and document-close cleanup
+
+These tests must reuse the document semantic analyzer and QueryScope resolver without
+catalog, backend, filesystem, workspace-search, or VS Code dependencies in the
+editor-neutral collector.
 
 ## Local variable tests
 

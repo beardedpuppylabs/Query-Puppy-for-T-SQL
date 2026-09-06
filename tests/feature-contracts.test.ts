@@ -546,7 +546,14 @@ test("contract: high-confidence diagnostics use a native collection and editor-n
   assert.match(semanticSource, /documentStatementTokenRanges/);
   assert.match(semanticSource, /resolveBatchLocalVariables/);
   assert.match(semanticSource, /QP1001/);
+  assert.match(semanticSource, /QP1002/);
+  assert.match(semanticSource, /resolveUniqueInvisibleExplicitAlias/);
+  assert.match(semanticSource, /analyzeTokenizedDocumentSemantics/);
   assert.doesNotMatch(semanticSource, /from "vscode"/);
+  assert.doesNotMatch(
+    semanticSource,
+    /MetadataLoader|MssqlConnectionSharingAdapter|workspace\.findFiles/,
+  );
 });
 
 test("contract: learned JOIN candidates use the local cached evidence policy boundary", async () => {
