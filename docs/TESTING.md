@@ -862,6 +862,23 @@ These tests must reuse the document semantic analyzer and QueryScope resolver wi
 catalog, backend, filesystem, workspace-search, or VS Code dependencies in the
 editor-neutral collector.
 
+### Diagnostics performance benchmark
+
+Measure the synchronous editor-neutral diagnostics path with:
+
+```bash
+npm run benchmark:diagnostics
+```
+
+The benchmark calls the production `collectHighConfidenceDocumentIssues()` collector
+for deterministic small, medium, and large tiers of ordinary statements, `GO`/local
+variable batches, nested alias scopes, and a mixed script. It performs one unrecorded
+warm-up per case, reports every measured run plus median/minimum/maximum durations,
+and fails if the generated QP1001/QP1002 counts change. Timings are comparative
+developer evidence, not machine-independent pass/fail thresholds. The benchmark needs
+no SQL Server, catalog, connection, project, or network context and is excluded from
+the VSIX.
+
 ## Local variable tests
 
 Protect:

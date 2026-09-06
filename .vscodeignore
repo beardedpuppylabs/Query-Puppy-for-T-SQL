@@ -15,6 +15,7 @@ docs/**
 manual-acceptance/**
 src/**
 tests/**
+benchmarks/**
 scripts/**
 spike/**
 tmp/**
