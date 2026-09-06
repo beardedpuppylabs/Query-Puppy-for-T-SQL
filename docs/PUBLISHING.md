@@ -351,9 +351,13 @@ Query Puppy for T-SQL X.Y.Z
 Release notes are exactly the matching `CHANGELOG.md` section. Ordinary `0.x`
 versions are normal releases with `prerelease: false`.
 
-The workflow creates or resumes only an exact matching draft, uploads the verified
-VSIX and `<vsix-filename>.sha256`, verifies both assets are non-empty, and only then
-publishes the Release. The checksum contains conventional output:
+The workflow creates or resumes only an exact automation-authored matching draft.
+If a tagless draft was left on an older `main` commit by a stale run, a later run
+for the same still-unreleased version retargets and revalidates that draft before
+replacing its expected assets. Drafts with another author or an existing conflicting
+tag remain untouched and fail closed. The workflow uploads the verified VSIX and
+`<vsix-filename>.sha256`, verifies both assets are non-empty, and only then publishes
+the Release. The checksum contains conventional output:
 
 ```text
 <sha256>  query-puppy-for-t-sql-<version>.vsix

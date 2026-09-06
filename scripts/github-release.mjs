@@ -111,6 +111,7 @@ function policyRelease(release) {
   }
   return {
     id: release.id,
+    authorLogin: release.author?.login,
     tagName: release.tag_name,
     name: release.name ?? "",
     body: (release.body ?? "").trim(),
@@ -214,10 +215,34 @@ if (command === "preflight") {
 
   // This is the first mutation. All local, package, remote, CI, and current-HEAD
   // checks have completed before reaching this point.
-  const draft =
-    decision.action === "publish"
-      ? await createDraft()
-      : await githubRequest(`${apiBase}/releases/${state.release.id}`);
+  let draft;
+  if (decision.action === "publish") {
+    draft = await createDraft();
+  } else if (decision.retargetDraft) {
+    draft = await githubRequest(`${apiBase}/releases/${state.release.id}`, {
+      method: "PATCH",
+      contentType: "application/json",
+      body: JSON.stringify({ target_commitish: expectedHeadSha }),
+    });
+
+    const retargetedState = await remoteState();
+    const retargetedDecision = evaluateRemoteReleaseState(retargetedState);
+    if (retargetedDecision.action === "stale") {
+      console.log(`stale: ${retargetedDecision.reason}`);
+      process.exit(0);
+    }
+    if (
+      retargetedDecision.action !== "recover-draft" ||
+      retargetedDecision.retargetDraft
+    ) {
+      throw new Error(
+        "The stale draft did not reach the exact current-commit recovery state.",
+      );
+    }
+    draft = retargetedState.release;
+  } else {
+    draft = await githubRequest(`${apiBase}/releases/${state.release.id}`);
+  }
   if (!draft.draft) {
     throw new Error(`Release ${metadata.tagName} is no longer a draft.`);
   }

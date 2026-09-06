@@ -109,12 +109,11 @@ export function selectReleaseByTag(releases, tagName) {
   return matches[0] ?? null;
 }
 
-function validateReleaseIdentity(release, expected) {
+function validateReleaseMetadata(release, expected) {
   if (
     release.name !== expected.releaseTitle ||
     release.body !== expected.releaseNotes ||
-    release.prerelease !== false ||
-    release.targetCommitish !== expected.expectedHeadSha
+    release.prerelease !== false
   ) {
     throw new Error(
       `GitHub Release ${expected.tagName} has conflicting identity or metadata.`,
@@ -170,8 +169,7 @@ export function evaluateRemoteReleaseState({
     return { action: "publish", reason: "No tag or GitHub Release exists." };
   }
 
-  validateReleaseIdentity(release, {
-    expectedHeadSha,
+  validateReleaseMetadata(release, {
     tagName,
     releaseTitle,
     releaseNotes,
@@ -183,10 +181,30 @@ export function evaluateRemoteReleaseState({
 
   const assets = classifyAssets(release, expectedAssetNames);
   if (release.draft) {
+    if (release.authorLogin !== "github-actions[bot]") {
+      throw new Error(
+        `Draft GitHub Release ${tagName} was not created by the release automation.`,
+      );
+    }
+    if (release.targetCommitish !== expectedHeadSha && tagCommitSha) {
+      throw new Error(
+        `Draft GitHub Release ${tagName} cannot be retargeted because its tag already exists.`,
+      );
+    }
     return {
       action: "recover-draft",
-      reason: "An exact automation-owned draft can be completed safely.",
+      retargetDraft: release.targetCommitish !== expectedHeadSha,
+      reason:
+        release.targetCommitish === expectedHeadSha
+          ? "An exact automation-owned draft can be completed safely."
+          : "An exact tagless automation-owned draft can be retargeted and completed safely.",
     };
+  }
+
+  if (release.targetCommitish !== expectedHeadSha) {
+    throw new Error(
+      `Published GitHub Release ${tagName} targets a different commit.`,
+    );
   }
 
   if (!tagCommitSha) {

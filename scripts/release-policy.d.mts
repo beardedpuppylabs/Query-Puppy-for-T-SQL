@@ -13,6 +13,7 @@ export interface ReleaseAssetState {
 
 export interface ReleaseState {
   id?: number;
+  authorLogin?: string;
   tagName: string;
   name: string;
   body: string;
@@ -54,4 +55,5 @@ export function selectReleaseByTag(
 export function evaluateRemoteReleaseState(input: RemoteReleaseStateInput): {
   action: "stale" | "publish" | "recover-draft" | "noop";
   reason: string;
+  retargetDraft?: boolean;
 };

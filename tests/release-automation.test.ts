@@ -37,6 +37,7 @@ const completeRelease = (
   overrides: Partial<ReleaseState> = {},
 ): ReleaseState => ({
   id: 42,
+  authorLogin: "github-actions[bot]",
   tagName: "v0.19.0",
   name: "Query Puppy for T-SQL 0.19.0",
   body: "- Automatic releases.",
@@ -144,6 +145,92 @@ test("stale workflow commits never publish", () => {
   );
 });
 
+test("a stale automation draft remains recoverable by the next same-version main commit", () => {
+  const commitA = "commit-a";
+  const commitB = "commit-b";
+  const draftFromRunA = completeRelease({
+    targetCommitish: commitA,
+    draft: true,
+    assets: [{ name: "query-puppy-for-t-sql-0.19.0.vsix", size: 100 }],
+  });
+
+  assert.equal(
+    evaluateRemoteReleaseState(
+      remoteState({
+        expectedHeadSha: commitA,
+        currentMainSha: commitA,
+        tagCommitSha: null,
+        release: null,
+      }),
+    ).action,
+    "publish",
+  );
+
+  assert.equal(
+    evaluateRemoteReleaseState(
+      remoteState({
+        expectedHeadSha: commitA,
+        currentMainSha: commitB,
+        tagCommitSha: null,
+        release: draftFromRunA,
+      }),
+    ).action,
+    "stale",
+  );
+
+  assert.deepEqual(
+    evaluateRemoteReleaseState(
+      remoteState({
+        expectedHeadSha: commitB,
+        currentMainSha: commitB,
+        tagCommitSha: null,
+        release: draftFromRunA,
+      }),
+    ),
+    {
+      action: "recover-draft",
+      retargetDraft: true,
+      reason:
+        "An exact tagless automation-owned draft can be retargeted and completed safely.",
+    },
+  );
+
+  const recoveryAssetStates = [
+    [],
+    [{ name: "query-puppy-for-t-sql-0.19.0.vsix", size: 100 }],
+    completeRelease().assets,
+  ];
+  for (const assets of recoveryAssetStates) {
+    assert.equal(
+      evaluateRemoteReleaseState(
+        remoteState({
+          expectedHeadSha: commitB,
+          currentMainSha: commitB,
+          tagCommitSha: null,
+          release: { ...draftFromRunA, assets },
+        }),
+      ).retargetDraft,
+      true,
+    );
+  }
+
+  assert.deepEqual(
+    evaluateRemoteReleaseState(
+      remoteState({
+        expectedHeadSha: commitB,
+        currentMainSha: commitB,
+        tagCommitSha: null,
+        release: { ...draftFromRunA, targetCommitish: commitB },
+      }),
+    ),
+    {
+      action: "recover-draft",
+      retargetDraft: false,
+      reason: "An exact automation-owned draft can be completed safely.",
+    },
+  );
+});
+
 test("conflicting and partial published states fail closed", async (context) => {
   await context.test("tag without release", () => {
     assert.throws(
@@ -173,6 +260,52 @@ test("conflicting and partial published states fail closed", async (context) => 
           remoteState({ tagCommitSha: "other-commit" }),
         ),
       /points to a different commit/u,
+    );
+  });
+  await context.test("published release targeting another commit", () => {
+    assert.throws(
+      () =>
+        evaluateRemoteReleaseState(
+          remoteState({
+            expectedHeadSha: "commit-b",
+            currentMainSha: "commit-b",
+            tagCommitSha: "commit-b",
+            release: completeRelease({ targetCommitish: "commit-a" }),
+          }),
+        ),
+      /targets a different commit/u,
+    );
+  });
+  await context.test("stale draft with an immutable tag", () => {
+    assert.throws(
+      () =>
+        evaluateRemoteReleaseState(
+          remoteState({
+            expectedHeadSha: "commit-b",
+            currentMainSha: "commit-b",
+            tagCommitSha: "commit-a",
+            release: completeRelease({
+              targetCommitish: "commit-a",
+              draft: true,
+            }),
+          }),
+        ),
+      /points to a different commit/u,
+    );
+  });
+  await context.test("draft from another author", () => {
+    assert.throws(
+      () =>
+        evaluateRemoteReleaseState(
+          remoteState({
+            tagCommitSha: null,
+            release: completeRelease({
+              authorLogin: "maintainer",
+              draft: true,
+            }),
+          }),
+        ),
+      /was not created by the release automation/u,
     );
   });
 });
@@ -221,6 +354,11 @@ test("contract: CI releases only successful current main pushes with narrow perm
   assert.match(workflow, /scripts\/github-release\.mjs preflight/u);
   assert.match(workflow, /scripts\/github-release\.mjs publish/u);
   assert.match(githubRelease, /prerelease: false/u);
+  assert.ok(
+    (githubRelease.match(/target_commitish: expectedHeadSha/gu)?.length ?? 0) >=
+      2,
+  );
+  assert.match(githubRelease, /retargetedDecision\.action === "stale"/u);
   assert.doesNotMatch(workflow, /marketplace|open[ -]?vsx/iu);
 });
 
