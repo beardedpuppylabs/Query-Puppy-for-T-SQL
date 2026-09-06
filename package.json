@@ -157,11 +157,12 @@
     "test:integration": "node --import tsx --test tests/integration/*.test.ts",
     "test:extension": "npm run build && node scripts/run-extension-tests.mjs",
     "benchmark:diagnostics": "node --import tsx benchmarks/diagnostics.ts",
-    "lint": "eslint src tests benchmarks",
+    "lint": "eslint src tests benchmarks scripts",
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
     "verify": "npm run format:check && npm run lint && npm run compile && npm test && npm run test:extension && npm run build",
-    "package": "npm run verify && vsce package --no-dependencies --allow-missing-repository --out query-puppy-for-t-sql-0.18.1.vsix",
+    "package:vsix": "vsce package --no-dependencies --allow-missing-repository",
+    "package": "npm run verify && npm run package:vsix",
     "publish:marketplace": "vsce publish"
   },
   "devDependencies": {

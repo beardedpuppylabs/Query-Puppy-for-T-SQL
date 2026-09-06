@@ -1,9 +1,10 @@
-# Publishing to the Visual Studio Marketplace
+# GitHub Releases and Visual Studio Marketplace Publishing
 
 ## Purpose
 
-This document describes the explicit release and Visual Studio Marketplace
-publication procedure for Query Puppy for T-SQL.
+This document describes the automatic version-driven GitHub Release workflow and
+the subsequent manual Visual Studio Marketplace publication procedure for Query
+Puppy for T-SQL.
 
 Publishing is intentionally separate from development, verification, build, and
 packaging.
@@ -80,14 +81,14 @@ The matching GitHub Release title is:
 Query Puppy for T-SQL X.Y.Z
 ```
 
-The Visual Studio Marketplace remains the primary extension-binary distribution
-channel. For every GPL release, the GitHub Release records the immutable source
-milestone and release notes and must attach the same verified VSIX bytes published
-to the Marketplace. This preserves an auditable artifact-to-source mapping.
+GitHub Releases are the authoritative source for release VSIX bytes. The Visual
+Studio Marketplace remains the primary extension installation channel, but every
+Marketplace upload must use the exact verified VSIX attached to the corresponding
+GitHub Release. This preserves an auditable artifact-to-source mapping.
 
-## Publication safety
+## Release automation safety
 
-Publishing must never occur automatically as a side effect of:
+Marketplace publishing must never occur automatically as a side effect of:
 
 - dependency installation
 - formatting
@@ -98,14 +99,22 @@ Publishing must never occur automatically as a side effect of:
 - build
 - VSIX packaging
 
-Marketplace publication requires an explicit release action.
+Marketplace publication requires an explicit manual upload of the GitHub Release
+asset.
 
-Normal contributor and Codex development tasks must not publish ad hoc. An explicit
-user publication request may authorize publication, and a future established,
-documented release workflow may own publication when its configured deliberate
-release condition is met. The current repository procedure remains the manual,
-explicit workflow documented below; this distinction does not itself add or change
-release automation.
+Normal contributor and Codex development tasks must not publish ad hoc. The
+maintained CI workflow owns GitHub Release publication after a deliberate manifest
+version bump reaches `main` and all prerequisite jobs pass. Pull requests and normal
+same-version commits do not create releases.
+
+Automatic GitHub releases begin only above the explicit floor in
+`.github/release-policy.json`. The floor is `0.18.1` because that Marketplace-only
+release cannot be backfilled without its proven original VSIX bytes. The floor is a
+one-time bootstrap policy and is not advanced after later releases.
+
+The release job alone receives `contents: write`; workflow defaults remain
+`contents: read`. It uses the GitHub-provided workflow token and no Marketplace PAT,
+Azure credential, paid runner, or paid service.
 
 Never commit:
 
@@ -124,7 +133,7 @@ Before changing publishing automation or authentication, verify the current
 official Microsoft Visual Studio Marketplace / VS Code extension-publishing
 documentation instead of relying on historical project notes.
 
-## Manual release procedure
+## Release procedure
 
 ### 1. Verify Marketplace publisher ownership
 
@@ -217,18 +226,23 @@ npm run test:integration
 Do not report integration tests as passed when the environment was absent or the
 suite was skipped.
 
-### 6. Build the VSIX
+### 6. Let successful `main` CI build the release VSIX
 
-Run:
+For local release rehearsal, run:
 
 ```bash
 npm run package
 ```
 
-Production build and packaging are deliberate, user-owned release steps. They are
-not run automatically by normal contributor CI or routine Codex development work.
+`npm run package` remains the safe all-in-one local verification and packaging
+command. Its output is not the release artifact and must not be uploaded later in
+place of CI output.
 
-Use the exact VSIX path produced by the current package script.
+After the version, lockfile, and changelog change reaches `main`, the existing CI
+workflow waits for both `quality` and `extension-host-and-build`. The release job
+then uses `npm run package:vsix` to build exactly one release VSIX. The package-only
+script avoids repeating the complete prerequisite test suite while retaining the
+normal `vscode:prepublish` production build.
 
 The package script is intentionally non-interactive. Keep Marketplace manifest
 repository metadata pointed at the canonical public GitHub repository; never
@@ -245,15 +259,15 @@ query-puppy-for-t-sql-<version>.vsix
 
 where `<version>` is the actual current package version.
 
-### 7. Inspect package contents
+### 7. Automated package and checksum verification
 
-Inspect the file list that vsce intends to package:
+For a local rehearsal, inspect the file list that `vsce` intends to package:
 
 ```bash
 npx vsce ls --no-dependencies
 ```
 
-Then inspect the exact VSIX produced by `npm run package`:
+Then inspect the local VSIX produced by `npm run package`:
 
 ```bash
 unzip -l query-puppy-for-t-sql-<version>.vsix
@@ -275,7 +289,12 @@ Check specifically for accidental inclusion of:
 - development dependency trees
 - unnecessary internal engineering documentation
 
-Also verify that:
+The release job performs these checks against its exact single VSIX before any
+GitHub mutation. It verifies the packaged identity and version, compares packaged
+`LICENSE` and `THIRD_PARTY_NOTICES.md` with their repository sources, rejects
+forbidden development content, and confirms that the production bundle is present.
+
+Also verify locally, when rehearsing, that:
 
 - `LICENSE` and `THIRD_PARTY_NOTICES.md` are present
 - `spike/**`, `node_modules/**`, development/test source, and temporary project-source
@@ -288,17 +307,20 @@ published VSIX.
 
 `.gitignore` and `.vscodeignore` serve different purposes.
 
-### 8. Inspect packaged identity
+### 8. Release identity and changelog preflight
 
-Verify the packaged extension manifest resolves to:
+The release job verifies the packaged extension manifest resolves to:
 
 ```text
 BeardedPuppyLabs.query-puppy-for-t-sql
 ```
 
-Do not rely only on the source `package.json`.
+It does not rely only on the source `package.json`.
 
-Inspect the actual package output as part of release verification.
+Before packaging or GitHub mutation, it also requires one stable `X.Y.Z` manifest
+version, matching root lockfile versions, a non-empty exact changelog section, a
+candidate above the automatic-release floor, the exact successful workflow commit
+still at current `main`, and non-conflicting tag and Release state.
 
 ### 9. Review and push the release source
 
@@ -313,33 +335,43 @@ Verify the public branch contains:
 - the canonical GPLv3 `LICENSE` and current `THIRD_PARTY_NOTICES.md`
 - current source, repository, issue, support, and security links
 
-Record the release commit SHA. The later tag, GitHub Release source archives,
-attached VSIX, and Marketplace upload must all map to this exact reviewed source.
+Record the release commit SHA. The automatic tag, GitHub Release source archives,
+attached VSIX, and later Marketplace upload must all map to this exact reviewed
+source.
 
-### 10. Create and push the release tag
+### 10. Automatic tag and GitHub Release
 
-Create the annotated or lightweight semantic version tag using the exact package
-version, then push it explicitly:
-
-```bash
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
-
-Do not reuse or move an already published release tag.
-
-### 11. Create the GitHub Release
-
-Create a GitHub Release from `vX.Y.Z` with title:
+For an eligible unreleased version, successful `main` CI creates immutable tag
+`vX.Y.Z` at the exact current `main` commit and publishes a GitHub Release titled:
 
 ```text
 Query Puppy for T-SQL X.Y.Z
 ```
 
-Use the changelog as the release-note source and keep claims consistent with actual
-verification. Attach the exact already-inspected VSIX. Record its SHA-256 before
-uploading it anywhere; do not rebuild independently for the GitHub Release and
-Marketplace.
+Release notes are exactly the matching `CHANGELOG.md` section. Ordinary `0.x`
+versions are normal releases with `prerelease: false`.
+
+The workflow creates or resumes only an exact matching draft, uploads the verified
+VSIX and `<vsix-filename>.sha256`, verifies both assets are non-empty, and only then
+publishes the Release. The checksum contains conventional output:
+
+```text
+<sha256>  query-puppy-for-t-sql-<version>.vsix
+```
+
+An already complete exact Release is a successful no-op. A stale run exits without
+publishing. Conflicting tags, Releases, or published partial states fail closed.
+Release-job concurrency plus a final `main` HEAD and remote-state check prevents
+rapid pushes from racing. Never reuse, move, or force-update a release tag.
+
+### 11. Obtain the exact GitHub Release VSIX
+
+Wait for the successful GitHub Release. Download its attached VSIX and checksum;
+verify the SHA-256 when desired or required. Do not run `npm run package`, run
+`vsce package`, or use another build to replace these bytes before Marketplace
+upload.
+
+The GitHub Release VSIX is the sole Marketplace input for that version.
 
 ### 12. Authenticate for Marketplace publication
 
@@ -370,10 +402,10 @@ If a token-based workflow is deliberately used and remains officially supported:
 - never print the token into logs
 - revoke temporary credentials when they are no longer needed
 
-### 13. Publish explicitly
+### 13. Publish the exact asset explicitly
 
 Only after all preceding checks pass, perform the explicit publication action using
-the same verified VSIX bytes attached to the GitHub Release.
+the downloaded, checksum-verifiable VSIX bytes attached to the GitHub Release.
 
 Depending on the current supported repository workflow, this may be:
 
@@ -458,23 +490,19 @@ typescript
 
 Before every later release:
 
-1. confirm the intended version
-2. update the changelog and synchronize affected documentation
-3. run contract, repository, and diff verification
-4. run relevant manual and live integration acceptance when required
-5. perform the user-owned production build and package a fresh VSIX
-6. inspect the exact archive and packaged extension identity
-7. verify no credentials or private infrastructure leaked into the package
-8. review and push the public release source
-9. create and push the `vX.Y.Z` tag
-10. create `Query Puppy for T-SQL X.Y.Z` as the GitHub Release and attach the exact
-    verified VSIX
-11. record and compare the VSIX SHA-256 used by GitHub and Marketplace
-12. review current Marketplace authentication guidance
-13. publish only through an explicit Marketplace release action
-14. verify Marketplace, GitHub source, tag, Release, License, notices, Corresponding
-    Source, and links
-15. verify repository About metadata when it changed
+1. confirm the intended next version and update `package.json`, the lockfile,
+   `CHANGELOG.md`, and affected maintained documentation together
+2. run contract, repository, diff, and relevant manual/live acceptance checks
+3. review and push the release source to `main`
+4. wait for the prerequisite CI jobs and automatic GitHub Release to succeed
+5. verify the tag, source commit, title, exact changelog notes, normal-release state,
+   VSIX, checksum, License, notices, Corresponding Source, and links
+6. download the exact GitHub Release VSIX and optionally recheck its SHA-256
+7. review current Marketplace authentication guidance
+8. upload those exact bytes through an explicit manual Marketplace action without
+   rebuilding
+9. verify Marketplace identity, version, content, and links
+10. verify repository About metadata when it changed
 
 ## Publisher migration policy
 

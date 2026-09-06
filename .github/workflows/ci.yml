@@ -58,3 +58,90 @@ jobs:
 
       - name: Run canonical verification in a virtual display
         run: xvfb-run -a npm run verify
+
+  release:
+    name: Version-driven GitHub Release
+    needs:
+      - quality
+      - extension-host-and-build
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.quality.result == 'success' &&
+      needs.extension-host-and-build.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: release-${{ github.repository }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out the exact successful commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Evaluate the local release candidate
+        id: candidate
+        run: >-
+          node scripts/prepare-release.mjs
+          --output-dir "$RUNNER_TEMP/query-puppy-release"
+          --github-output "$GITHUB_OUTPUT"
+
+      - name: Check current main and GitHub release state
+        if: steps.candidate.outputs.eligible == 'true'
+        id: remote
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          node scripts/github-release.mjs preflight
+          --metadata "${{ steps.candidate.outputs.metadata_path }}"
+          --github-output "$GITHUB_OUTPUT"
+
+      - name: Build the single release VSIX
+        if: >-
+          steps.remote.outputs.action == 'publish' ||
+          steps.remote.outputs.action == 'recover-draft'
+        run: npm run package:vsix
+
+      - name: Verify the release VSIX
+        if: >-
+          steps.remote.outputs.action == 'publish' ||
+          steps.remote.outputs.action == 'recover-draft'
+        run: >-
+          node scripts/verify-release-vsix.mjs
+          "${{ steps.candidate.outputs.vsix_filename }}"
+          "$(node -p "require('./package.json').version")"
+
+      - name: Create the deterministic SHA-256 checksum
+        if: >-
+          steps.remote.outputs.action == 'publish' ||
+          steps.remote.outputs.action == 'recover-draft'
+        run: >-
+          sha256sum "${{ steps.candidate.outputs.vsix_filename }}"
+          > "${{ steps.candidate.outputs.checksum_filename }}"
+
+      - name: Create or complete the GitHub Release
+        if: >-
+          steps.remote.outputs.action == 'publish' ||
+          steps.remote.outputs.action == 'recover-draft'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          node scripts/github-release.mjs publish
+          --metadata "${{ steps.candidate.outputs.metadata_path }}"
+          --vsix "${{ steps.candidate.outputs.vsix_filename }}"
+          --checksum "${{ steps.candidate.outputs.checksum_filename }}"

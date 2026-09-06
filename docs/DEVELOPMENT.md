@@ -34,9 +34,9 @@ architecture authority.
 Use versions compatible with the repository's current package metadata and
 development dependencies.
 
-Node.js 24 is the maintained CI and contributor baseline for the 0.12.1 hygiene
-release. Newer non-LTS local runtimes are not the compatibility target merely
-because they are installed on a contributor's machine.
+Node.js 24 is the maintained CI and contributor baseline. Newer non-LTS local
+runtimes are not the compatibility target merely because they are installed on a
+contributor's machine.
 
 Do not assume that the newest globally available Node.js, npm, VS Code, VSCodium,
 or vsce release is automatically the version targeted by this repository.
@@ -64,6 +64,12 @@ query-puppy-for-t-sql-<version>.vsix
 If any verification step fails, the command stops and no successful package should
 be assumed. Live SQL Server integration tests are intentionally separate because
 they require a configured fixture and credentials; see [Integration tests](#integration-tests).
+
+`npm run package:vsix` is the package-only counterpart used by release CI after the
+same commit has passed its prerequisite quality and Extension Host jobs. It still
+runs the standard `vscode:prepublish` production build through `vsce`, but does not
+repeat the complete verification suite. Both commands let `vsce` derive the output
+name from the current manifest version; no release-specific filename is hard-coded.
 
 ## Install the built VSIX
 
@@ -128,16 +134,18 @@ contract inventory in [Testing Strategy](TESTING.md) for the sentinel mapping.
 
 ## Codex verification boundary
 
-For normal development tasks, Codex runs the applicable non-production checks:
+For normal development tasks, Codex runs the applicable checks requested by the
+current task. A typical non-release change uses:
 
 ```bash
 npm run format:check && npm run lint && npm run compile && npm test
 ```
 
-Codex does not run production builds, bundle commands, Extension Host scripts that
-implicitly build, VSIX packaging, or publication unless the user explicitly asks
-for that step in the current task. The human build and packaging commands in this
-document remain the supported workflow for developers.
+Production builds, Extension Host scripts, packaging, and publication are run only
+when the current task or maintained release workflow requires them. GitHub Release
+automation is version-driven and remains separate from ordinary local packaging;
+Marketplace publication is always a later manual operation using the exact GitHub
+Release VSIX.
 
 ## Extension Development Host
 

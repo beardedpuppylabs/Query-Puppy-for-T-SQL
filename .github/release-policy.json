@@ -1,0 +1,4 @@
+{
+  "minimumExclusiveVersion": "0.18.1",
+  "reason": "Automatic GitHub releases start after the Marketplace-only 0.18.1 release because its original VSIX bytes are not available for a byte-identical GitHub backfill."
+}
