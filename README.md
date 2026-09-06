@@ -1,40 +1,42 @@
 # Query Puppy for T-SQL
 
-Query Puppy for T-SQL is context-aware SQL Server IntelliSense for large and complex databases where memorizing every table, column, function, and relationship is unrealistic. It combines case-insensitive Contains discovery with query-scope analysis, expected types, document-local navigation, and real SQL Server schema metadata.
+Query Puppy for T-SQL is **free and open-source semantic T-SQL developer tooling** for Visual Studio Code and VSCodium.
 
-Query Puppy for T-SQL is free and open-source software under the [GNU General Public License version 3 only](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/LICENSE). [Source code, issues, and development](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL) are hosted publicly on GitHub.
+It is built for real SQL Server databases where remembering every table, column, function, type, and relationship is unrealistic. Query Puppy adds context-aware completion, relationship intelligence, type awareness, document-local navigation, Hover, and conservative diagnostics while reusing the active Microsoft `mssql` connection for SQL Server context and read-only metadata.
 
-In a schema with hundreds or thousands of objects, remembering part of a name should be enough to find it. Types and trustworthy schema relationships help rank the most useful suggestions, and relationship intelligence can construct `JOIN` predicates. The extension provides its own completion provider while reusing the active Microsoft SQL Server (`mssql`) connection—there is no second login or separate connection configuration.
+Query Puppy does **not** manage separate SQL credentials, execute your queries, display result sets, or replace your database workbench.
+
+## Development status
+
+Query Puppy is a **pre-1.0 project under active development**. It already supports substantial day-to-day T-SQL work, but it has not reached a stable 1.0 maturity level yet.
+
+Expect occasional rough edges, unsupported SQL patterns, editor-integration quirks, and behavior that may continue to evolve between releases. The project deliberately favors conservative, explainable behavior over pretending to understand SQL it cannot resolve reliably.
+
+If you rely on Query Puppy in day-to-day work, review the documented limitations and report reproducible problems on GitHub. Clear bug reports are especially valuable while the pre-1.0 surface is still maturing.
 
 ## Highlights
 
-- Contains-based discovery across large SQL Server catalogs
-- Context- and query-scope-aware completion
-- Type-aware ranking that keeps legal alternatives available
-- PK, UQ, and FK metadata on physical columns
-- JOIN predicates based on actual foreign keys, explicit project relationships, user-confirmed JOINs, qualifying learned evidence, and conservative pair-bounded heuristic fallback
-- Local, privacy-conscious acquisition of resolved JOIN evidence on document save
-- Built-in and catalog function completion, typing, and Signature Help
-- Document-local Go to Definition, Peek Definition, Find References, Document
-  Highlights, and Document Symbols / Outline for supported SQL symbols, including
-  bounded source-literal initializer previews for scalar local variables
-- Editor hover details for typed local variables and their declaration initializers
-- Conservative native document diagnostics for proven cross-`GO` variable-scope
-  errors and explicit row-source aliases referenced outside their query scope
-- Smart Alias and Tab-only wildcard productivity features
-- Query-local sources and same-server cross-database completion
-- Persistent per-database metadata for fast warm starts
-- Active `mssql` connection reuse without separate credentials
+- **Contains search for large schemas** — find tables, columns, and other objects by the part of the name you remember.
+- **Context-aware completion** — suggestions follow the SQL position, visible query scope, aliases, local row sources, and writable targets.
+- **Type-aware ranking** — compatible expressions rank higher without hiding other legal choices.
+- **Relationship-aware JOINs** — use declared FKs, explicit project knowledge, user-confirmed JOINs, qualifying local evidence, and a narrow heuristic fallback.
+- **Native navigation** — Go to Definition / Peek, Find References, Document Highlights, and Document Symbols / Outline for supported local SQL symbols.
+- **Hover and diagnostics** — inspect typed local variables and catch a small set of provable document-local mistakes.
+- **SQL Server callable intelligence** — built-ins, UDFs, TVFs, stored procedures, ExpectedType, and native Signature Help.
+- **Persistent metadata cache** — fast warm starts without querying the catalog on every keystroke.
+- **Local-first privacy** — no Query Puppy telemetry, no remote query upload, and no separate credential store.
 
-## Find objects by what you remember
+## Find and complete SQL by context
 
-Type a fragment:
+In a large schema, remembering part of a name should be enough.
+
+Type:
 
 ```text
 addr
 ```
 
-and find names such as:
+and Query Puppy can find names such as:
 
 ```text
 Addresses
@@ -43,41 +45,9 @@ CustomerAddresses
 ShippingAddresses
 ```
 
-Matching is contiguous, case-insensitive Contains—not fuzzy search and not only StartsWith. Exact names may rank first; otherwise results use deterministic semantic groups and alphabetical order within equivalent tiers.
+Matching is contiguous, case-insensitive **Contains** matching. It is not fuzzy search and is not limited to StartsWith.
 
-Then let a real SQL Server foreign key complete the join:
-
-```sql
-FROM dbo.Customers AS c
-JOIN sales.CustomerOrders AS o
-    ON
-```
-
-can suggest:
-
-```sql
-o.CustomerId = c.CustomerId
-```
-
-Typing the whitespace after `ON` can open native completion automatically. If no
-usable relationship is known, Query Puppy still offers legal aliases and columns
-for the ON expression. It never invents a relationship predicate from name or
-datatype similarity alone; the conservative pair-bounded heuristic policy described
-below requires complete key, type, naming, and ambiguity evidence.
-
-After an existing ON predicate, typing `AND ` or `OR ` can reopen native completion
-when another known relationship predicate remains. Query Puppy suppresses mappings
-already present in either equality order and inserts only missing mappings from a
-composite relationship.
-
-After a completed unaliased INNER, LEFT, RIGHT, or FULL JOIN source, Query Puppy
-offers both the preferred Smart Alias and the `ON` continuation keyword. After a
-completed alias, only `ON` remains. CROSS JOIN and APPLY keep their own syntax and
-do not receive `ON`.
-
-## Context-aware completion
-
-Completion follows the SQL position instead of showing every catalog object everywhere:
+Completion follows the SQL instead of showing the entire catalog everywhere:
 
 ```sql
 SELECT c.addr
@@ -86,63 +56,25 @@ WHERE c.
 ORDER BY c.
 ```
 
-- `FROM`, `JOIN`, and `APPLY` offer row sources such as tables, views, synonyms, TVFs, and visible local sources.
-- Duplicate physical names from different schemas are displayed and inserted as
-  `schema.object`; unique names stay concise. An ambiguous unqualified source remains
-  unresolved and receives a deduplicated status-bar prompt to add the schema.
-- `UPDATE`, `INSERT INTO`, and `DELETE FROM` target positions offer writable target row sources with the same Contains and qualification behavior.
-- Ctrl+Space works at a blank target position; typing a target fragment participates in normal editor suggestion behavior. Query Puppy does not force the multi-provider Suggest Widget open on the blank keyword-space boundary.
-- `alias.` offers columns projected by that row source.
-- `SELECT`, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, and function arguments offer meaningful expression candidates rather than databases, procedures, and tables.
-- Projection aliases are available where SQL Server permits them, including `ORDER BY`.
+Current semantic completion includes:
 
-Contains filtering remains active inside these semantic domains. For example, `c.addr` can find every visible column containing `addr`.
+- legal row sources in `FROM`, `JOIN`, and `APPLY`;
+- writable targets for `UPDATE`, `INSERT INTO`, and `DELETE FROM`;
+- columns for visible aliases and row sources;
+- meaningful expression candidates in `SELECT`, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, and supported function arguments;
+- projection aliases where SQL Server permits them;
+- schema disambiguation when physical object names collide;
+- CTEs, temp tables, table variables, `SELECT INTO`, derived tables, `VALUES`, and `APPLY`;
+- nested scopes, legal correlation, shadowing, and set operations;
+- explicit same-server cross-database qualification.
 
-## Type-aware completion
+Query Puppy can also infer expected SQL types at supported expression positions. Compatible expressions rank higher, but type awareness does not hide otherwise legal alternatives.
 
-Query Puppy for T-SQL can infer the type expected at common expression positions and rank compatible expressions higher. For example:
+The same type and callable model supports a bounded catalog of common SQL Server built-ins, aggregate and window functions, catalog UDFs and TVFs, stored-procedure parameters, return-type inference where available, and native Signature Help.
 
-```sql
-WHERE oh.CustomerId = c.
-```
+## Relationship-aware JOINs
 
-If `oh.CustomerId` is `bigint`, the native suggestion list explains the ranking with compact groups:
-
-```text
-─ Type match · bigint
-  BillingAddressId
-  CustomerId
-─ Compatible numeric
-  RegionId
-─ Other visible columns
-  CustomerCode
-  DisplayName
-```
-
-Only non-empty groups are shown, and a one-group result remains uncluttered. Within a group candidates are alphabetical. An explicit qualifier such as `c.` still limits membership to columns of `c`; type information only ranks those legal members. Visible string, GUID, and other columns remain selectable—type-aware completion ranks rather than hides visible candidates. With no known expected type there are no type groups and the ordinary semantic/alphabetical order is preserved exactly.
-
-The same reusable type model supports comparisons in `WHERE` and `JOIN`, catalog-backed scalar UDF/TVF arguments, `UPDATE` right-hand sides, explicit-column `INSERT ... VALUES` and `INSERT ... SELECT`, `LIKE`, and simple arithmetic. For example, inside a parameter declared as `decimal(18,2)`, decimal candidates rank above unrelated types.
-
-The resulting order is deterministic: an exact typed-name match can rank first, followed by type compatibility and the existing semantic/scope tiers, then alphabetical order. In an explicit comparison, a column participating in the real FK relationship can rank ahead of unrelated columns that are otherwise equally strong type matches.
-
-## Schema Intelligence
-
-Query Puppy for T-SQL reads SQL Server catalog metadata for primary keys, unique constraints and indexes, and foreign keys. It understands composite keys, composite foreign keys, filtered unique indexes, and cross-schema relationships within a database.
-
-Physical-column suggestions use one deterministic visible row with fixed name, role, type, and nullability slots:
-
-```text
-CustomerId         PK      bigint          NOT NULL
-CustomerCode       UQ      varchar(50)     NOT NULL
-BillingAddressId   FK      bigint          NULL
-DisplayName                nvarchar(200)   NULL
-```
-
-Multiple roles appear compactly, for example `PK·FK`. The row uses fixed 32/8/20-character name, role, and type slots before nullability. A shortened visible name still filters, sorts, and inserts using the complete identifier. Completion documentation wraps long identifiers at approximately 40 characters and retains the complete column name, constraint names, composite columns, FK mappings, referential actions, datatype, and nullability.
-
-## Declared-FK JOIN Intelligence
-
-After a joined row source, `ON` can offer a complete predicate from the actual enabled SQL Server foreign key:
+When Query Puppy knows why two physical tables are related, it can offer a complete predicate:
 
 ```sql
 FROM dbo.Customers AS c
@@ -150,334 +82,163 @@ JOIN sales.CustomerOrders AS o
     ON o.CustomerId = c.CustomerId
 ```
 
-The relationship is not guessed from similar column names. The currently joined right-side alias is rendered first, and disabled foreign keys are not used as normal relationship suggestions.
+Composite relationships remain one ordered predicate.
 
-When several foreign keys connect the same tables, each valid relationship remains a separate choice. A customer-to-address join can therefore distinguish primary, billing, and shipping address relationships instead of choosing one heuristically.
+Query Puppy keeps relationship provenance explicit:
 
-Composite foreign keys are offered as one ordered predicate:
+| Source                   | Meaning                                                                                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Declared foreign key** | An actual enabled SQL Server FK. Authoritative and ranked first.                                                                         |
+| **User-confirmed**       | A safely resolved JOIN explicitly saved with **Save JOIN as Query Puppy relationship**.                                                  |
+| **Project-defined**      | Explicit project knowledge in `.query-puppy/relationships.json`.                                                                         |
+| **Learned**              | Local evidence from at least three independently deduplicated eligible JOIN occurrences, revalidated against current metadata.           |
+| **Heuristic candidate**  | A last-resort **Candidate** for an already-selected physical table pair when strict key, type, naming, and ambiguity checks all succeed. |
 
-```sql
-ol.CompanyId = oh.CompanyId
-AND ol.OrderId = oh.OrderId
+The heuristic fallback does not discover tables, does not masquerade as a foreign key, and is not persisted as relationship truth.
+
+### Project and learned relationships
+
+Legacy and ERP databases often contain valid logical relationships that are not declared as SQL Server FKs.
+
+Run:
+
+```text
+Query Puppy for T-SQL: Open Project Relationships
 ```
 
-At a `JOIN` source position, objects connected to a legally visible left source by an enabled FK receive a semantic ranking boost. In an explicit comparison, the relationship-mapped column can also break a tie between equally compatible members. Contains filtering still applies, unrelated matching objects remain available, and relationship intelligence stays within one database.
-
-## Project-defined relationships
-
-Legacy and ERP databases often have valid logical relationships without physical SQL
-Server foreign keys. A workspace can define those relationships explicitly in:
+to create or open the source-control-friendly project file:
 
 ```text
 .query-puppy/relationships.json
 ```
 
-Run **Query Puppy for T-SQL: Open Project Relationships** to create or open the file.
-The file is ordinary source-control-friendly JSON with native schema validation:
+Version 1 supports same-database physical table relationships.
 
-```json
-{
-  "version": 1,
-  "relationships": [
-    {
-      "source": {
-        "database": "IntelliSenseLab",
-        "schema": "qpacc",
-        "object": "ProjectChild"
-      },
-      "target": {
-        "database": "IntelliSenseLab",
-        "schema": "qpacc",
-        "object": "ProjectParent"
-      },
-      "mappings": [
-        { "source": "CompanyId", "target": "CompanyId" },
-        { "source": "ParentRef", "target": "ParentId" }
-      ]
-    }
-  ]
-}
-```
-
-`source` is the logical dependent table and `target` is the logical principal table.
-Mappings are ordered and composite mappings remain one relationship. Query Puppy
-validates every endpoint and column against current cached metadata, ignores invalid
-definitions safely, and reports specific errors in its output channel. Changes are
-noticed by a native file watcher and applied on the next completion without refreshing
-or rewriting the SQL metadata cache.
-
-Project relationships generate the same correctly qualified JOIN predicate shape in
-either query order, but native completion identifies them as **Project relationship
-JOIN**, not as an FK. A matching physical declared FK wins and is shown first. No
-relationship is inferred when the file contains no definition.
-
-You can also save a concrete JOIN you have already written. Place the cursor on its
-`JOIN`/`ON` predicate and invoke the native Code Action:
+You can also place the cursor on an eligible equality-only JOIN and invoke:
 
 ```text
 Save JOIN as Query Puppy relationship
 ```
 
-For example:
+to persist it as explicit `UserConfirmed` project knowledge. Query Puppy never creates a SQL Server foreign key or executes database DDL.
 
-```sql
-FROM qpacc.ProjectParent AS p
-JOIN qpacc.ProjectChild AS c
-  ON c.CompanyId = p.CompanyId
- AND c.ParentRef = p.ParentId
-```
+Optional relationship learning observes eligible resolved JOINs when a SQL document is saved. It stores only bounded local evidence such as canonical endpoints, ordered mappings, counts, and hashed occurrence identities. It does **not** store raw SQL text, comments, literals, aliases, plaintext file paths, credentials, or connection strings, and it does not transmit learned evidence to a Query Puppy service.
 
-Query Puppy resolves both aliases and columns, stores the composite mapping as one
-`UserConfirmed` relationship, and can offer the same predicate in later queries. If
-one mapped endpoint is an unfiltered PK/UQ it determines the principal direction;
-otherwise a small native Quick Pick asks which table is the source/dependent. The
-saved entry is source-control-visible project knowledge:
+## Navigate and understand local SQL
 
-```json
-{
-  "provenance": "userConfirmed",
-  "source": {
-    "database": "IntelliSenseLab",
-    "schema": "qpacc",
-    "object": "ProjectChild"
-  },
-  "target": {
-    "database": "IntelliSenseLab",
-    "schema": "qpacc",
-    "object": "ProjectParent"
-  },
-  "mappings": [
-    { "source": "CompanyId", "target": "CompanyId" },
-    { "source": "ParentRef", "target": "ParentId" }
-  ]
-}
-```
+Query Puppy reuses its document-semantic symbol identities for native editor navigation.
 
-The action is deliberately conservative: every predicate term must be a direct
-resolved column equality between exactly two persistent same-database tables, joined
-only by `AND`. Functions, arithmetic, literals, variables, `OR`, inequalities,
-unresolved members, and CTE/temp/derived/table-variable endpoints are not saved.
-Writing or saving a JOIN never creates project relationship truth by itself—only
-invoking the action updates `relationships.json` and the production relationship
-graph.
-Completion presents saved edges as **User-confirmed relationship JOIN**, not as an FK.
-Query Puppy updates only `.query-puppy/relationships.json`; it never creates a SQL
-Server foreign key or executes database DDL.
+Current document-local support includes:
 
-Version 1 supports same-database table relationships. Applicability is scoped by the
-owning workspace folder and database name. In a multi-root workspace, each SQL file
-uses only its folder's relationship file; untitled or outside-workspace documents use
-declared FKs only. Projects targeting different servers that reuse the same database
-name should use separate workspace relationship files.
+- **Go to Definition / Peek Definition**
+- **Find References**
+- **Document Highlights**
+- **Document Symbols / Outline**
 
-Existing version-1 entries without `provenance` remain manually authored
-`ProjectDefined` relationships. The optional persisted values are currently limited to
-`projectDefined` and `userConfirmed`.
+Supported symbols include CTEs, explicit row-source aliases, scalar local variables, table variables, and deterministic temporary tables.
 
-## Local learned JOIN evidence
+Navigation stays in the current document and fails closed for unresolved, ambiguous, unsupported, physical-database, or cross-document cases instead of falling back to textual guesses.
 
-Query Puppy can observe the same conservative, safely resolved equality-only JOIN
-shape when an active SQL document is saved. After three independently deduplicated
-resolved JOIN occurrences, valid evidence becomes a local
-`LearnedFromQuery`/`StrongEvidence` candidate in the same canonical runtime graph used
-by other relationships. It can produce **Learned relationship JOIN** predicates,
-comparison tie-breaking, and related-RowSource ranking below declared FKs,
-UserConfirmed relationships, and ProjectDefined relationships.
+### Hover
 
-Learning is enabled by default through
-`queryPuppyForTSql.relationshipLearning.enabled`. It runs only for saved SQL files in
-an owning workspace, only when the required database metadata is already loaded, and
-never initiates a catalog load. Repeated saves, completion requests, and unrelated
-edits do not recount an unchanged JOIN. Persisted occurrence fingerprints preserve
-that protection when a file or editor is closed and reopened or the extension host is
-restarted. Separate resolved JOIN occurrences count once each; observations with
-ambiguous direction are skipped without interrupting typing.
+Typed scalar local variables have native Hover information at supported declaration and reference positions.
 
-The extension persists only canonical database/schema/object endpoints, canonical
-ordered column mappings, an aggregate observation count, and bounded occurrence
-fingerprints. Each fingerprint contains SHA-256 hashes of the workspace-relative
-document identity and canonical relationship identity, the occurrence ordinal, and a
-stable eviction order. It stores no SQL text, comments, literals, aliases, plaintext
-paths or filenames, source locations, credentials, connection strings, confidence
-score, or raw/unbounded observation history. The versioned evidence file is in VS Code/VSCodium's
-extension-managed workspace storage, not in the project directory or
-`.query-puppy/relationships.json`, so it is local and normally not committed to source
-control. Multi-root folders receive separate hashed evidence files.
+Safe direct numeric, string, Unicode-string, and `NULL` declaration initializers can include a bounded source-literal preview. Query Puppy does not evaluate expressions or track runtime values.
 
-Storage is limited to 4,096 unique relationship mappings per workspace folder. When
-the limit is exceeded, higher observation counts are retained first and ties use
-canonical alphabetical identity. Seen occurrences are separately limited to 16,384;
-the oldest recorded fingerprints are evicted first. An evicted occurrence can count
-again if encountered later, which is the deliberate bounded-storage tradeoff. Writes
-are serialized and atomic. Malformed or unsupported evidence files are ignored rather
-than overwritten. Run **Query Puppy for T-SQL: Clear Learned Relationship Evidence**
-to clear both counts and occurrence fingerprints for the active workspace folder; the
-corresponding learned candidates disappear on the next completion. Explicit
-ProjectDefined and UserConfirmed relationships are unaffected. Disabling learning
-stops new acquisition without hiding qualifying evidence already stored.
+## Conservative document diagnostics
 
-A saved disappearance removes that occurrence's dedupe marker without decrementing
-historical evidence. Reintroducing it after the saved absence may therefore contribute
-one new observation. Formatting, alias changes, reordered `AND` terms, and unrelated
-offset movement do not create a new occurrence. Existing format-version-1 counts are
-preserved when the local store upgrades to version 2; because version 1 had no
-occurrence fingerprints, the first eligible save after upgrade may contribute once.
+Query Puppy reports only document-local errors it can prove with high confidence.
 
-An observation identical to a declared FK, ProjectDefined relationship, or
-UserConfirmed relationship is excluded and any matching local evidence is removed.
-No heuristic participates in learned-evidence acquisition. Query Store, plan-cache,
-query history, telemetry, remote services, and query-execution hooks are also absent.
-Stale objects, missing columns, incompatible types, and cross-database mappings fail
-closed when evidence is resolved against current metadata. Accepting a learned
-completion is not confirmation and writes no project file. Use **Save JOIN as Query
-Puppy relationship** to explicitly promote a resolved JOIN to UserConfirmed project
-knowledge.
+Current diagnostics are:
 
-## Conservative heuristic JOIN candidates
+- **`QP1001`** — a scalar or table variable is referenced where no valid local declaration is available because the matching declaration belongs to an earlier `GO` batch. A declaration later in the current batch does not retroactively validate an earlier use.
+- **`QP1002`** — an explicit row-source alias is uniquely and provably referenced outside the query scope where it is visible.
 
-When both physical tables are already present in a JOIN, Query Puppy may offer one
-**Heuristic relationship JOIN** predicate as a last-resort fallback. It does not use
-heuristics to discover tables or rank JOIN targets.
+These diagnostics are local and do not require catalog or database access.
 
-A heuristic candidate appears only when one direction has exactly one complete
-unfiltered target primary/unique key mapping, every component has known compatible SQL
-types, at least one source column exactly combines the target object name with the
-target key-column name (for example `CustomerId -> Customers.Id`), and the result is
-unambiguous. A same-name tenant/context mapping such as `CompanyId -> CompanyId` may
-complete a composite key only when another component supplies that target-aware signal.
-Incomplete keys, filtered uniqueness, identical key names alone, incompatible or
-unknown types, multiple plausible assignments, and difficult ERP naming intentionally
-produce no suggestion.
+Query Puppy is not a complete T-SQL compiler or general SQL linter. When the SQL is ambiguous or outside the supported semantic model, it prefers no diagnostic over a confident-looking guess.
 
-The candidate is visibly marked **Candidate** and its documentation lists the exact
-structural evidence. It is not a SQL Server FK or confirmed relationship. It is
-calculated only for the current physical pair, is not persisted to metadata snapshots,
-project relationships, or learned evidence, and disappears when current metadata no
-longer supports it. Accepting it inserts only the predicate. The developer may then
-explicitly invoke **Save JOIN as Query Puppy relationship** to persist the resolved
-JOIN as UserConfirmed project knowledge.
+## Small productivity features
 
-## Query-local intelligence
+### Smart Alias
 
-Document-local row sources participate in the same completion model as catalog objects:
-
-```sql
-WITH CustomerData AS
-(
-    SELECT CustomerId, BillingAddressId
-    FROM dbo.Customers
-)
-SELECT c.
-FROM CustomerData AS c
-```
-
-Supported sources include CTEs and chained CTEs, local and global temp tables, table variables, `SELECT INTO`, derived tables, `VALUES`, and `CROSS APPLY`/`OUTER APPLY`. Projected columns, aliases, types, and nullability are retained where they can be inferred reliably.
-
-Nested scopes resolve aliases from the innermost query outward. Eligible correlated outer references remain visible, while inner aliases, sibling scopes, and shadowed names stay isolated. Ordinary derived tables do not correlate; the right side of `APPLY` can see eligible left-side sources.
-
-Set operations—`UNION`, `UNION ALL`, `INTERSECT`, and `EXCEPT`—compose result columns by ordinal using the first branch's names. Their results work through CTEs, derived tables, `APPLY`, alias completion, and wildcard expansion.
-
-## Functions, procedures, and DML
-
-Supported SQL Server built-ins participate in function completion, native Signature Help, active-parameter tracking, ExpectedType ranking, and return-type inference. The current bounded catalog includes:
-
-- String: `CHARINDEX`, `CONCAT`, `LEFT`, `LEN`, `LOWER`, `LTRIM`, `REPLACE`, `RIGHT`, `RTRIM`, `SUBSTRING`, `UPPER`
-- Date/time: `DATEADD`, `DATEDIFF`, `DATEFROMPARTS`, `DATENAME`, `DATEPART`, `EOMONTH`, `GETDATE`, `SYSDATETIME`, `SYSUTCDATETIME`
-- Numeric: `ABS`, `CEILING`, `FLOOR`, `ROUND`
-- Null/value: `COALESCE`, `ISNULL`, `NULLIF`
-- Aggregate: `AVG`, `COUNT`, `COUNT_BIG`, `MAX`, `MIN`, `STRING_AGG`, `SUM`
-- Window/ranking/value: `DENSE_RANK`, `LAG`, `LEAD`, `NTILE`, `RANK`, `ROW_NUMBER`
-
-Function Signature Help opens automatically after `(`, follows commas, and can be
-reopened with the editor's **Trigger Parameter Hints** command. Stored procedures use
-the same native UI with valid `EXEC`/`EXECUTE` syntax; the first argument position and
-top-level commas track positional or named parameters, SQL types, and `OUTPUT`.
-
-Window expressions understand native `OVER (` grammar, `PARTITION BY`, and window `ORDER BY`, then reuse ordinary QueryScope member completion. Datepart positions in `DATEADD`, `DATEDIFF`, `DATEPART`, and `DATENAME` offer documented canonical datepart tokens without treating them as strings or reading database metadata. `CASE` and `COALESCE` use the shared SQL type-precedence model conservatively; advanced window-frame grammar and a complete SQL Server built-in catalog remain outside the current scope.
-
-Catalog scalar UDFs and table-valued functions use the same callable intelligence for parameters and Signature Help. Scalar return types are inferred where metadata permits; TVFs remain row sources whose result columns can participate in `FROM`, `JOIN`, and member completion.
-
-Additional context-aware support includes:
-
-- writable-column completion for `INSERT`
-- `UPDATE` targets and ExpectedType ranking for right-hand expressions
-- ExpectedType ranking for explicit-column `INSERT ... VALUES` and `INSERT ... SELECT`
-- statement-correct `inserted` and `deleted` columns in `OUTPUT`
-- named `EXEC` parameters in declaration order, excluding parameters already assigned
-- stored-procedure parameter completion and native Signature Help
-
-Server-maintained identity, computed, generated, and rowversion columns are excluded from writable-column suggestions.
-
-## Smart aliases
-
-At a legal alias position after a resolved row source in `FROM`, `JOIN`, or `APPLY`, the extension suggests an explicit alias without replacing the object name:
+At a legal alias position after a resolved row source, Query Puppy can suggest a deterministic short alias:
 
 ```text
 FROM dbo.CustomerOrders <cursor>
-suggestion: AS co    alias for CustomerOrders
 ```
 
-Accepting the completion inserts `AS co`. If `AS ` is already present, the suggestion inserts only `co` and never duplicates the keyword. At an unaliased predicate-bearing JOIN source, `AS co` ranks above the equally valid `ON` continuation; Smart Alias remains optional and never forces alias syntax. Object-name completion remains active while the cursor is still part of the row-source identifier, already-aliased sources do not receive another alias, and collision fallback is deterministic.
-
-Aliases are suggestions, not rewrites. They can be disabled with `queryPuppyForTSql.smartAliases.enabled`.
-
-## SELECT wildcard expansion
-
-Place the cursor directly after a semantic `*` or `alias.*` in a SELECT projection and press Tab to replace that wildcard with known columns. Source and column order are preserved.
-
-- One unaliased source produces unqualified columns.
-- One explicitly aliased source uses that alias.
-- Multiple visible sources use their aliases or shortest deterministic qualifiers.
-- An explicit `alias.*` always preserves that qualifier.
-
-Enter never expands a wildcard. This keeps an ordinary `SELECT *` safe on very wide tables. Tab behaves normally when the wildcard cannot be resolved.
-
-## Cross-database completion
-
-Database, schema, and object qualification work across databases available through the same active SQL Server connection:
+suggestion:
 
 ```text
-Database.                 -> schemas
-Database.Schema.          -> objects in that schema
-Database.fragment         -> schema matches, then objects across schemas
-Database..Object          -> dbo object
+AS co
 ```
 
-Secondary-database metadata is loaded only after explicit qualification, and every referenced database has its own metadata-cache lifecycle. Ordinary unqualified `FROM` completion remains restricted to the active database. Linked Servers and four-part names are not supported.
+Disable Smart Alias with:
 
-## Performance and persistent caching
+```text
+queryPuppyForTSql.smartAliases.enabled
+```
 
-The first use of an uncached database starts a set-based catalog load. On a large ERP database this can take time, so Query Puppy shows a visible schema-loading status and persists the completed snapshot in VS Code/VSCodium extension storage.
+### Tab-only `SELECT *` expansion
 
-On later sessions, cached metadata is hydrated immediately and completion can use it while one first-use background refresh runs for that database. The previous snapshot remains available until a complete replacement is ready, and a refresh failure retains the usable snapshot. Concurrent requests for the same database share the same load or refresh.
+Place the cursor directly after a semantic `*` or `alias.*` in a SELECT projection and press **Tab** to replace it with known columns.
 
-After that first-session refresh attempt, the 15-minute freshness threshold is evaluated only when the database is used—there is no refresh poller for idle databases. Completion and FK lookup use in-memory indexes, with no catalog query or persistent-cache read per keystroke. Secondary databases stay lazy and independently cached. After DDL, run **Query Puppy for T-SQL: Refresh Schema Metadata** when you need the change without waiting for the next eligible background refresh.
+**Enter never expands a wildcard.**
 
-## How it works with mssql
+## Built for large schemas and the existing SQL Server workbench
 
-[Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql) is a required dependency because it owns SQL Server connections. Query Puppy for T-SQL uses its connection-sharing integration to identify the active connection/database, list same-server databases, and run read-only catalog queries. It does not request separate SQL credentials or open its own independently configured connection.
+Microsoft [`ms-mssql.mssql`](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql) is currently a required dependency and remains the SQL Server workbench.
 
-Query Puppy for T-SQL does not consume, scrape, or filter Microsoft's completion output; it registers its own completion and Hover providers. Running both completion providers can produce duplicate suggestions, while Microsoft Quick Info can duplicate local-variable Hover descriptions. On first use, Query Puppy for T-SQL can offer to disable `mssql.intelliSense.enableSuggestions` and `mssql.intelliSense.enableQuickInfo` globally. The dedicated Microsoft Suggestions and Microsoft Quick Info commands resolve explicit workspace overrides. Query Puppy never changes either setting silently. Other `mssql` services, including error checking and connection handling, remain available.
+`mssql` owns connection management, credentials, query execution, results, and the broader SQL Server workbench experience.
 
-## Privacy and database permissions
+Query Puppy currently uses its `mssql` integration to identify the active connection/database, enumerate same-server databases, and run read-only catalog queries. It registers its own completion, Signature Help, Hover, navigation, symbol, diagnostic, and code-action providers; it does not scrape or post-process Microsoft's completion list.
 
-- No extension-specific database credentials are requested or stored.
-- The active `mssql` connection is reused; no independent SQL connection is opened.
-- Schema metadata discovery is read-only and does not require DDL or DML privileges.
-- Allow-listed schema metadata is cached persistently in extension-owned local storage and hydrated into memory for IntelliSense. The snapshots contain schema metadata, not passwords, tokens, secret-bearing connection strings, query text, or document-local SQL state.
-- On SQL document save, optional local relationship learning stores canonical physical endpoints, ordered column mappings, aggregate counts, and bounded SHA-256 occurrence fingerprints in extension-managed workspace storage. It never stores raw SQL, literals, aliases, plaintext paths or filenames, credentials, or connection strings, and it is not transmitted remotely.
-- The extension contains no telemetry. Query text, application data, and database contents are not uploaded to an external Query Puppy service.
+Schema metadata is loaded in sets, indexed in memory, and persisted as a completed local snapshot. Later sessions can hydrate cached metadata immediately while an eligible refresh runs. Query Puppy does not query the catalog or read the persistent cache on every keystroke.
 
-The connected login still needs permission to read the relevant SQL Server catalog metadata.
+After DDL, run:
 
-## Installation and getting started
+```text
+Query Puppy for T-SQL: Refresh Schema Metadata
+```
+
+when you need the new schema state immediately.
+
+If Microsoft completion or Quick Info creates duplicate suggestions or Hover content, Query Puppy can offer to disable the corresponding Microsoft setting. It never changes those settings silently.
+
+## Privacy
+
+- No extension-specific SQL credentials are requested or stored.
+- The active `mssql` connection is reused; Query Puppy does not open a separately configured production SQL connection.
+- Schema discovery is read-only.
+- Persistent snapshots contain allow-listed schema metadata, not passwords, tokens, query text, or application data.
+- Optional learned-relationship evidence stays local and minimal.
+- Query Puppy contains no telemetry.
+- Query text, application data, and database contents are not uploaded to an external Query Puppy service.
+
+## Installation
+
+### Visual Studio Code
 
 1. Install [Microsoft SQL Server (`ms-mssql.mssql`)](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql).
-2. Install [Query Puppy for T-SQL from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=BeardedPuppyLabs.query-puppy-for-t-sql), or install a release VSIX in VSCodium.
+2. Install [Query Puppy for T-SQL](https://marketplace.visualstudio.com/items?itemName=BeardedPuppyLabs.query-puppy-for-t-sql) from the Visual Studio Marketplace.
 3. Open a SQL document and connect it with `mssql`.
-4. If duplicate completion lists or local-variable Hover descriptions appear, disable the corresponding Microsoft SQL feature when prompted or with the provided command.
+4. Start typing or use **Ctrl+Space** to invoke completion manually.
 
-Requires VS Code 1.105 or a compatible VSCodium release.
+### VSCodium
+
+VSCodium is a supported target environment. The project does not currently publish a dedicated VSCodium binary-distribution channel or a current public GitHub Release VSIX.
+
+To build the VSIX from the public source repository, follow [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) and run:
+
+```bash
+npm ci
+npm run package
+```
+
+Then install the generated VSIX in VSCodium.
+
+Requires Visual Studio Code 1.105 or a compatible VSCodium release.
 
 ## Commands
 
@@ -492,46 +253,41 @@ Requires VS Code 1.105 or a compatible VSCodium release.
 - **Query Puppy for T-SQL: Diagnose Signature Help**
 - **Query Puppy for T-SQL: Diagnose Query Scope**
 
-The diagnostic commands report connection, cache, scope, visible-row-source, correlation, and provider information through VS Code/VSCodium UI and the extension output channel.
-
 ## Settings
 
-- `queryPuppyForTSql.enabled`: enable or disable Query Puppy for T-SQL completion.
-- `queryPuppyForTSql.debugLogging`: write detailed diagnostics to the **Query Puppy for T-SQL** output channel.
-- `queryPuppyForTSql.smartAliases.enabled`: enable or disable smart alias suggestions.
-- `queryPuppyForTSql.relationshipLearning.enabled`: enable or disable local resolved-JOIN evidence acquisition on SQL document save. Enabled by default; disabling acquisition keeps existing qualifying learned candidates visible.
+- `queryPuppyForTSql.enabled` — enable or disable Query Puppy completion.
+- `queryPuppyForTSql.debugLogging` — write detailed diagnostics to the **Query Puppy for T-SQL** output channel.
+- `queryPuppyForTSql.smartAliases.enabled` — enable or disable Smart Alias suggestions.
+- `queryPuppyForTSql.relationshipLearning.enabled` — enable or disable acquisition of new local resolved-JOIN evidence. Existing qualifying evidence remains available when acquisition is disabled.
 
-## Known limitations
+## Current limitations
 
-- SQL Server is the only supported database engine.
-- Linked Servers and four-part object names are out of scope. Cross-database support is limited to databases on the active SQL Server connection.
-- The defensive parser is not a complete T-SQL compiler; unusually exotic or incomplete grammar can reduce context accuracy.
-- Dedicated intelligence for advanced window-frame grammar, `MERGE`, `PIVOT`, and `OPENJSON` is not currently implemented.
-- Type inference is conservative. Unnamed computed projections may be omitted, and recursive CTE/set-branch type reconciliation is best-effort.
-- Type-aware ranking does not implement SQL Server's complete conversion and datatype-precedence engine. Built-in intelligence is intentionally limited to the documented supported set rather than a complete SQL Server function catalog.
-- Stored-procedure result-set discovery is not performed, so the extension does not fabricate procedure result columns.
-- Heuristic JOIN predicates are deliberately narrow: they apply only after both physical tables are selected, require complete key/type/name evidence, and fail closed for ambiguous or unfamiliar naming. They do not discover or rank tables.
-- Learned candidates require three independently deduplicated eligible occurrences. They remain local StrongEvidence rather than SQL Server FKs or explicit project truth; there is no rejection model, relationship editor, or relationship-navigation feature yet.
-- Project relationship format version 1 supports same-database tables only and binds by workspace folder plus database name; cross-database project edges and stable cross-server identities are not yet supported.
-- Background refresh replaces a complete snapshot rather than applying incremental schema changes. A recent DDL change may remain absent until refresh completes; run **Query Puppy for T-SQL: Refresh Schema Metadata** when immediate discovery is needed.
-- Completion detail width is controlled by the native Suggest Widget and may be truncated in narrow layouts.
+- SQL Server/T-SQL is the only supported database engine.
+- Linked Servers and four-part object names are not supported.
+- Cross-database support is limited to databases available through the active SQL Server connection.
+- The defensive parser and type system are deliberately conservative rather than complete implementations of every T-SQL grammar and conversion rule.
+- The built-in function catalog is bounded rather than exhaustive.
+- Stored-procedure result-set discovery is not performed.
+- Project relationship format version 1 supports same-database physical tables only.
+- Heuristic JOIN candidates apply only after both physical tables are already selected and only when strict evidence is unambiguous.
+- Diagnostics currently cover only the documented high-confidence `QP1001` and `QP1002` cases.
+- Query Puppy does not execute queries, display result sets, provide database administration, or replace the SQL Server workbench.
 
-## Development and support
-
-See [CONTRIBUTING.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/CONTRIBUTING.md) for development and pull requests, [SUPPORT.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/SUPPORT.md) for bugs and feature requests, and [SECURITY.md](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/SECURITY.md) for private vulnerability reporting.
-
-## Open source
-
-Query Puppy for T-SQL is free and open-source software under the GNU General
-Public License version 3 only (`GPL-3.0-only`). The GPL permits use,
-modification, redistribution, and commercial use subject to its terms.
-
-All Query Puppy features remain available without paid feature gates, per-seat
-licensing, or a mandatory subscription. Voluntary sponsorship may support
-independent development but does not buy features, support obligations, roadmap
-priority, proprietary rights, governance, or technical influence.
+## Development, support, and security
 
 - [Source code](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL)
 - [Issue tracker](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/issues)
+- [Contributing](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/CONTRIBUTING.md)
+- [Support](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/SUPPORT.md)
+- [Security](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/SECURITY.md)
+
+## Free and open source
+
+Query Puppy for T-SQL is free and open-source software under the GNU General Public License version 3 only (`GPL-3.0-only`).
+
+The GPL permits use, modification, redistribution, and commercial use subject to its terms.
+
+All Query Puppy features remain available without paid feature gates, per-seat licensing, or a mandatory subscription. Voluntary sponsorship may support independent development, but sponsorship does not buy features, support obligations, roadmap priority, proprietary rights, governance, or technical influence.
+
 - [GNU GPL version 3](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/LICENSE)
 - [Third-party notices](https://github.com/beardedpuppylabs/Query-Puppy-for-T-SQL/blob/main/THIRD_PARTY_NOTICES.md)

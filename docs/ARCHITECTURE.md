@@ -2,72 +2,83 @@
 
 ## Purpose
 
-This document describes the high-level architecture and semantic boundaries of
-Query Puppy for T-SQL.
+This document describes the high-level architecture and semantic boundaries of Query Puppy for T-SQL.
 
-It documents intended architecture, not incidental implementation details.
+Query Puppy is semantic T-SQL developer tooling for Visual Studio Code and VSCodium. Completion is one important consumer of the semantic engine, but it is no longer the only one. The same document and metadata semantics also support native navigation, Document Symbols / Outline, Hover, Diagnostics, Signature Help, and Code Actions.
 
-When implementation differs from this document, determine whether the code has
-drifted or the documentation is stale before changing either.
+This document describes intended current architecture, not incidental implementation details.
+
+When implementation differs from this document, determine whether the code has drifted or the documentation is stale before changing either.
 
 ## High-level system
 
+Query Puppy combines two kinds of context:
+
+1. **SQL Server catalog context** obtained through the current metadata/connectivity backend and cached as canonical per-database metadata.
+2. **Document semantic context** derived locally from the active T-SQL document, including scopes, row sources, symbols, types, callable sites, and supported local SQL structures.
+
 Conceptually:
 
-    Editor / User Context
-              |
-              v
+```text
+Microsoft mssql / active editor context
+                |
+                v
     Connection Context Resolver
-              |
-              v
-    Metadata / Connectivity Backend
-              |
-              +-- Mssql Connection Sharing Adapter
-              |      +-- current Microsoft mssql connection-sharing API
-              |
-              +-- future backend(s)
-              |
-              v
-    Canonical Catalog Metadata Loader
-              |
-              v
-       Complete Refresh Snapshot
-              |
-              +---------------------------+
-              |                           |
-              v                           v
-    Persistent Canonical Snapshot   Session DatabaseIndex
-       (globalStorageUri)           (catalog + relationships)
-              |                           |
-              +------ warm hydrate -------+
-                         |
-            +------------+------------+
-            |                         |
-            v                         v
-    Document Semantic Model      SQL Type Model
-            |
-            v
-        QueryScopes
-            |
-            v
-         RowSources
-            |
-            +---------------------------+
-            |                           |
-            v                           v
-    Completion Context           Signature Context
-            |                           |
-            v                           v
-    Semantic Candidates         Signature Help
-            |
-            v
-    Ranking / Grouping
-            |
-            v
-    CompletionItem Materialization
-            |
-            v
-      VS Code / VSCodium
+                |
+                +-------------------------------+
+                |                               |
+                v                               v
+      active database identity          Metadata Backend
+                                                |
+                                                v
+                                     read-only catalog metadata
+                                                |
+                                                v
+                                  Complete Metadata Snapshot
+                                                |
+                         +----------------------+------------------+
+                         |                                         |
+                         v                                         v
+              Persistent Canonical Snapshot                Session DatabaseIndex
+                                                          (catalog + relationships)
+                                                                    |
+                                                                    |
+SQL document -------------------------------------------------------+
+     |
+     v
+Document Semantic Model
+     |
+     +--> statements / GO batches
+     +--> QueryScopes / RowSources
+     +--> semantic symbols and references
+     +--> SQL type and expected-type information
+     +--> callable/signature context
+     +--> relationship-aware context
+     |
+     v
+Shared semantic consumers
+     |
+     +--> Completion
+     +--> Signature Help
+     +--> Go to Definition / Peek Definition
+     +--> Find References
+     +--> Document Highlights
+     +--> Document Symbols / Outline
+     +--> Hover
+     +--> Diagnostics
+     +--> Code Actions
+     |
+     v
+Visual Studio Code / VSCodium native UI
+```
+
+The architectural direction is deliberate:
+
+> Semantic models are shared product infrastructure. Editor features consume those models rather than creating parallel interpretations of the same SQL.
+
+Catalog-backed consumers may use the active database index when they require physical SQL Server knowledge. Purely document-local consumers should not trigger metadata loads or database access merely because a provider was invoked.
+
+Connection context and metadata transport remain separate backend capabilities. The current production adapter uses Microsoft `mssql`, but semantic consumers must depend on the backend-neutral contracts rather than on provider-specific connection internals.
 
 ## Callable architecture
 

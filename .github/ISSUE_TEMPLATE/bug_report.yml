@@ -5,13 +5,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a problem. Never include passwords, access tokens, credentials, complete connection strings, or sensitive production data. Anonymize SQL and schema identifiers where necessary.
+        Thanks for reporting a problem. Query Puppy is a pre-1.0 project under active development, and reproducible reports help mature it toward a stable 1.0 release. Never include passwords, access tokens, credentials, complete connection strings, or sensitive production data. Anonymize SQL and schema identifiers where necessary.
 
   - type: input
     id: query-puppy-version
     attributes:
       label: Query Puppy version
-      placeholder: 0.12.1
+      placeholder: e.g. 0.x.y
     validations:
       required: true
 
@@ -20,7 +20,7 @@ body:
     attributes:
       label: Editor and version
       description: Include whether this is Visual Studio Code or VSCodium.
-      placeholder: VSCodium 1.105.x
+      placeholder: e.g. Visual Studio Code 1.x or VSCodium 1.x
     validations:
       required: true
 
@@ -32,25 +32,45 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: feature-area
+    attributes:
+      label: Affected feature area
+      options:
+        - Completion / IntelliSense
+        - Relationship-aware JOINs
+        - Project or learned relationships
+        - Signature Help / callable intelligence
+        - Go to Definition / References / Highlights
+        - Document Symbols / Outline
+        - Hover
+        - Diagnostics
+        - Metadata loading / cache / refresh
+        - Microsoft mssql integration
+        - Smart Alias / wildcard expansion
+        - Other
+    validations:
+      required: true
+
   - type: input
     id: sql-server-version
     attributes:
       label: SQL Server version
       description: Include this when the problem may depend on server behavior or catalog metadata.
-      placeholder: SQL Server 2022
+      placeholder: e.g. SQL Server 2022
 
   - type: input
     id: database-context
     attributes:
-      label: Active database and context
-      description: Use anonymized names when necessary. Do not include a connection string.
+      label: Database context
+      description: Include only when relevant. Use anonymized names and never include a connection string.
       placeholder: Active database, schema, and relevant object kind
 
   - type: textarea
     id: reproduction
     attributes:
-      label: Minimal SQL reproduction
-      description: Show the exact cursor position and how completion or Signature Help was triggered.
+      label: Minimal reproduction
+      description: Provide anonymized T-SQL and identify the exact cursor position, symbol, action, or editor command involved when relevant.
       render: sql
     validations:
       required: true
@@ -72,8 +92,8 @@ body:
   - type: dropdown
     id: refresh-attempted
     attributes:
-      label: Schema metadata refresh attempted
-      description: "Did you run Query Puppy for T-SQL: Refresh Schema Metadata and wait for it to finish?"
+      label: Schema metadata refresh
+      description: "If this issue depends on physical catalog metadata, did you run Query Puppy for T-SQL: Refresh Schema Metadata and wait for it to finish?"
       options:
         - "Yes"
         - "No"

@@ -16,9 +16,11 @@ For verification responsibilities, see:
 
 - [Testing Strategy](TESTING.md)
 
-The current central `PROJECT_DEVELOPMENT_PLAN.md` is authoritative for SemVer and
-version immutability. This document owns the operational publication procedure and must
-not redefine that version policy.
+This document defines the repository-facing release and publication procedure.
+Maintainer project governance may impose additional release constraints, but external
+contributors do not need access to private project-management sources. Officially
+released package versions are immutable: do not reuse a released version for different
+code or artifacts.
 
 ## Current public identity
 
@@ -161,8 +163,8 @@ Also confirm:
 
 Before a release:
 
-- apply the next SemVer required by `PROJECT_DEVELOPMENT_PLAN.md` in the same coherent
-  change as publishable production behavior
+- apply the next SemVer required by the current maintainer release decision in the
+  same coherent change as publishable production behavior
 - verify that the intended version has not already been officially released for
   different code; released versions are immutable
 - confirm the intended package version in `package.json`
@@ -423,7 +425,7 @@ verify these values:
 Description:
 
 ```text
-Semantic T-SQL IntelliSense for SQL Server in Visual Studio Code and VSCodium.
+Semantic T-SQL developer tooling for SQL Server in Visual Studio Code and VSCodium.
 ```
 
 Website: the Visual Studio Marketplace listing.
@@ -432,16 +434,24 @@ Topics:
 
 ```text
 sql-server
-tsql
 mssql
+tsql
+t-sql
 vscode
 vscodium
+vscode-extension
 intellisense
 autocomplete
-completion
+sql-tools
 database-tools
-typescript
+semantic-sql
+code-navigation
+diagnostics
+relationships
 open-source
+foss
+floss
+typescript
 ```
 
 ## Later releases

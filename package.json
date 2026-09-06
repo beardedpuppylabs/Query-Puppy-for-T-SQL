@@ -1,7 +1,7 @@
 {
   "name": "query-puppy-for-t-sql",
   "displayName": "Query Puppy for T-SQL",
-  "description": "Semantic T-SQL IntelliSense for large SQL Server schemas with Contains search, type-aware completion, relationship-aware JOINs, document-local navigation, and persistent metadata caching.",
+  "description": "Semantic T-SQL developer tooling for large SQL Server schemas with context-aware completion, relationship-aware JOINs, navigation, Hover, diagnostics, and persistent metadata.",
   "version": "0.18.1",
   "publisher": "BeardedPuppyLabs",
   "author": "Bearded Puppy Labs",
@@ -33,24 +33,30 @@
     "sql-server",
     "tsql",
     "t-sql",
+    "vscode",
+    "vscodium",
+    "vscode-extension",
     "intellisense",
     "autocomplete",
     "completion",
-    "database",
-    "contains-search",
-    "foreign-key",
+    "sql-tools",
+    "database-tools",
+    "semantic-sql",
     "schema",
+    "large-schema",
+    "erp",
     "join",
+    "relationships",
+    "foreign-key",
     "type-aware",
     "signature-help",
-    "persistent-cache",
-    "relationships",
-    "relationship-intelligence",
-    "erp",
-    "large-schema",
-    "semantic-sql",
-    "vscode",
-    "vscodium"
+    "navigation",
+    "references",
+    "outline",
+    "hover",
+    "diagnostics",
+    "open-source",
+    "floss"
   ],
   "extensionDependencies": [
     "ms-mssql.mssql"
@@ -108,7 +114,7 @@
         "queryPuppyForTSql.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable contains-based SQL completion."
+          "description": "Enable Query Puppy for T-SQL completion."
         },
         "queryPuppyForTSql.debugLogging": {
           "type": "boolean",

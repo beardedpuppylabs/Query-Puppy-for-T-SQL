@@ -1,25 +1,25 @@
 name: Feature request
-description: Propose a focused semantic T-SQL IntelliSense improvement
+description: Propose a focused semantic T-SQL developer-tooling improvement
 title: "[Feature]: "
 body:
   - type: markdown
     attributes:
       value: |
-        Query Puppy focuses on semantic T-SQL IntelliSense for SQL Server. Please avoid confidential SQL, schema details, and production data.
+        Query Puppy focuses on semantic T-SQL developer tooling for SQL Server in Visual Studio Code and VSCodium. Please avoid confidential SQL, schema details, and production data.
 
   - type: textarea
     id: problem
     attributes:
       label: Problem or use case
-      description: What SQL editing task is difficult today, and who encounters it?
+      description: What SQL editing, understanding, navigation, or analysis task is difficult today, and who encounters it?
     validations:
       required: true
 
   - type: textarea
     id: proposed-behavior
     attributes:
-      label: Proposed behavior
-      description: Describe the editor behavior you would find useful without prescribing an implementation.
+      label: Desired behavior
+      description: Describe the editor behavior or outcome you would find useful without prescribing an implementation.
     validations:
       required: true
 
@@ -27,14 +27,14 @@ body:
     id: sql-example
     attributes:
       label: Realistic SQL example
-      description: If applicable, provide anonymized T-SQL and mark the cursor position.
+      description: If applicable, provide anonymized T-SQL and mark the relevant cursor position or symbol.
       render: sql
 
   - type: textarea
     id: existing-tools
     attributes:
       label: Existing editor or mssql behavior
-      description: Does VS Code, VSCodium, or Microsoft mssql already provide something similar? Where does it fall short?
+      description: Does Visual Studio Code, VSCodium, or Microsoft mssql already provide something similar? Where does it fall short?
     validations:
       required: true
 
@@ -42,7 +42,7 @@ body:
     id: semantic-value
     attributes:
       label: Query Puppy semantic value
-      description: How could Query Puppy's scopes, types, or real SQL Server metadata add value without duplicating an existing feature?
+      description: How could Query Puppy's existing semantic models such as scopes, types, metadata, relationships, callables, symbols, or diagnostics add distinct value?
     validations:
       required: true
 
@@ -51,5 +51,7 @@ body:
     attributes:
       label: Project boundaries
       options:
-        - label: This request is focused on SQL Server/T-SQL and does not require a second database connection, private editor APIs, or a custom completion popup.
+        - label: This request is focused on SQL Server/T-SQL developer tooling and does not require Query Puppy to become a second query-execution or database-administration workbench.
+          required: true
+        - label: This request does not depend on private or unsupported editor APIs as a required product design.
           required: true

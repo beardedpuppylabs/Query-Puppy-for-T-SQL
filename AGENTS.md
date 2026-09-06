@@ -7,34 +7,24 @@ More specific task instructions may override them when explicitly required.
 
 ## Project mission
 
-Query Puppy for T-SQL is a context-aware SQL Server IntelliSense extension for
-VS Code and VSCodium.
+Query Puppy for T-SQL is semantic T-SQL developer tooling for SQL Server in Visual
+Studio Code and VSCodium. It provides a shared semantic engine consumed by
+completion, Signature Help, navigation, document symbols, Hover, diagnostics, and
+code actions.
 
-It is designed especially for large real-world SQL Server schemas such as ERP
-systems containing hundreds or thousands of tables, views, columns, functions,
-procedures, and relationships.
-
-The extension provides its own semantic completion provider.
-
-It does not scrape, filter, or post-process Microsoft SQL Server completion
-results.
-
-The Microsoft SQL Server extension is used for its active SQL connection through
-the project's existing connection-sharing integration.
+Microsoft `mssql` remains the current SQL Server workbench integration and owns
+the active connection. Query Puppy does not scrape or post-process Microsoft
+completion results.
 
 ## Documentation model
 
 The repository documentation has distinct responsibilities.
 
-Project strategy, product boundaries, roadmap direction, versioning policy,
-licensing/compliance policy, sustainability policy, and cross-cutting engineering
-principles are defined by:
-
-- `PROJECT_DEVELOPMENT_PLAN.md`
-
-`PROJECT_DEVELOPMENT_PLAN.md` is the authoritative strategic source. Repository
-instructions and operational documentation must apply that policy and must not
-redefine or contradict it.
+Product strategy is maintained by the project maintainers. External contributors
+do not need access to private project-management sources. Repository changes must
+follow the current public implementation contracts in `AGENTS.md`, the architecture
+and testing documents under `docs/`, and the release procedure in
+`docs/PUBLISHING.md`.
 
 Current architecture is defined by:
 
@@ -95,17 +85,19 @@ commands:
 Before modifying versioning, licensing/compliance policy, or deciding whether a
 publishable code change requires a package-version bump:
 
-    read PROJECT_DEVELOPMENT_PLAN.md
+    read docs/PUBLISHING.md
 
 Before adding, copying, vendoring, replacing, or materially upgrading third-party
 software or redistributable assets:
 
-    read PROJECT_DEVELOPMENT_PLAN.md
+    read LICENSE
+    read THIRD_PARTY_NOTICES.md
+    read AGENTS.md
+    read docs/PUBLISHING.md
 
 Before modifying VSIX release procedures, Marketplace publication, publisher
 identity, publishing authentication, licensing, or release security checks:
 
-    read PROJECT_DEVELOPMENT_PLAN.md
     read docs/PUBLISHING.md
 
 Before planning a new milestone, changing milestone scope, or updating completed
@@ -1050,15 +1042,17 @@ Do not rewrite Git history.
 
 ## Release safety
 
-`PROJECT_DEVELOPMENT_PLAN.md` is the authoritative source for release-version and
-licensing/compliance policy.
+`docs/PUBLISHING.md` defines the repository-facing release and publication
+procedure. Licensing and third-party compliance requirements are defined by this
+file, `LICENSE`, `THIRD_PARTY_NOTICES.md`, and the release checks in
+`docs/PUBLISHING.md`.
 
 Versioning is part of publishable product work, not merely a release-time
 administrative step.
 
 For every task that changes publishable production behavior:
 
-1. inspect `PROJECT_DEVELOPMENT_PLAN.md`;
+1. inspect `docs/PUBLISHING.md`;
 2. determine the appropriate next SemVer version;
 3. update `package.json`;
 4. update `package-lock.json`;
@@ -1068,8 +1062,8 @@ For every task that changes publishable production behavior:
 Never reuse a version that has already been officially released for different code
 or behavior. Released version numbers identify immutable product states.
 
-Use the project SemVer policy from `PROJECT_DEVELOPMENT_PLAN.md` rather than
-inventing a local rule.
+Use the release procedure in `docs/PUBLISHING.md` rather than inventing a local
+rule.
 
 In particular:
 
@@ -1078,8 +1072,8 @@ In particular:
 - meaningful new user-facing capabilities or feature milestones increment MINOR;
 - incompatible configuration, public API, or migration changes increment MAJOR
   where appropriate;
-- licensing-only work follows the deliberate release/version decision recorded in
-  `PROJECT_DEVELOPMENT_PLAN.md`; do not invent another version transition.
+- licensing-only work follows a deliberate maintainer release/version decision; do
+  not invent another version transition.
 
 A version bump is normally not required for documentation-only, test-only, internal
 behavior-preserving refactoring, research-only, or non-publishable experimental work.
@@ -1102,8 +1096,8 @@ Before packaging or publishing, ensure no credentials, tokens, private SQL
 connection strings, fixture secrets, or other sensitive local data are included.
 
 Before any release, verify required third-party attribution and license notices in
-the final artifact according to `PROJECT_DEVELOPMENT_PLAN.md` and the maintained
-notice files.
+the final artifact according to `docs/PUBLISHING.md` and the maintained notice
+files.
 
 The 0.12.6 GPL compliance work established the required ownership/provenance
 review, bundle/VSIX inventory, research-only exclusions, `THIRD_PARTY_NOTICES.md`,
@@ -1115,10 +1109,9 @@ exact release-tag/source/VSIX Corresponding Source traceability before publicati
 For release-process changes, keep `docs/PUBLISHING.md` synchronized with the actual
 package scripts and current supported publication workflow.
 
-If repository instructions conflict with `PROJECT_DEVELOPMENT_PLAN.md` on strategic
-versioning, licensing, or sustainability policy, treat the Development Plan as
-authoritative and update the conflicting maintained repository documentation in the
-same coherent task where appropriate.
+If repository instructions conflict on versioning, licensing, or sustainability
+policy, reconcile the maintained public documentation with the maintainer's
+deliberate release decision in the same coherent task where appropriate.
 
 ## Documentation growth
 
@@ -1199,7 +1192,7 @@ Before considering a development task complete:
 5. confirm semantic metadata remains lossless through affected pipelines
 6. determine whether the task changes publishable production behavior
 7. if publishable behavior changed, apply the required SemVer bump from
-   `PROJECT_DEVELOPMENT_PLAN.md` and update `package.json`, `package-lock.json`, and
+   `docs/PUBLISHING.md` and update `package.json`, `package-lock.json`, and
    `CHANGELOG.md`
 8. if no version bump was applied, ensure the task genuinely falls under a documented
    no-bump category or another explicit project rule explains the decision
@@ -1223,8 +1216,7 @@ Before considering a development task complete:
     required notices survive packaging
 21. for GPL release work, verify the exact release version/tag/source revision/VSIX
     mapping and availability of the required Corresponding Source
-22. review whether `AGENTS.md`, `PROJECT_DEVELOPMENT_PLAN.md`, or any `docs/` file needs
-    updating
+22. review whether `AGENTS.md` or any `docs/` file needs updating
 23. update documentation when its architectural, operational, release, versioning,
     licensing/compliance, sustainability, or milestone contract genuinely changed
 24. verify maintained publisher identity references when public/release metadata was
