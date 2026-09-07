@@ -363,10 +363,21 @@ the Release. The checksum contains conventional output:
 <sha256>  query-puppy-for-t-sql-<version>.vsix
 ```
 
-An already complete exact Release is a successful no-op. A stale run exits without
+An already complete exact Release is a successful no-op when its immutable tag and
+Release target identify the same original release commit, including from a later
+current `main` commit that retains the same manifest version. The workflow never
+retargets or rewrites that completed release. A stale unreleased run exits without
 publishing. Conflicting tags, Releases, or published partial states fail closed.
-Release-job concurrency plus a final `main` HEAD and remote-state check prevents
-rapid pushes from racing. Never reuse, move, or force-update a release tag.
+
+Release-job concurrency serializes workflow release jobs. Repeated current-`main`
+and remote-state checks prevent publication across every stale window they observe,
+and a tagless automation-owned draft remains recoverable when a run becomes stale
+before publication. GitHub's Releases API does not make the final state read and the
+following `draft: false` mutation atomic, so a final check-to-publish interval remains.
+Post-publication verification can detect an inconsistent result but cannot undo or
+pretend the publication did not occur. The first live eligible version above the
+bootstrap floor therefore remains the first production exercise of this GitHub
+mutation path. Never reuse, move, or force-update a release tag.
 
 ### 11. Obtain the exact GitHub Release VSIX
 

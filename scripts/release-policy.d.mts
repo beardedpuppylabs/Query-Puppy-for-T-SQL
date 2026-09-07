@@ -56,4 +56,5 @@ export function evaluateRemoteReleaseState(input: RemoteReleaseStateInput): {
   action: "stale" | "publish" | "recover-draft" | "noop";
   reason: string;
   retargetDraft?: boolean;
+  assetsComplete?: boolean;
 };

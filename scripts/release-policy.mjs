@@ -111,6 +111,7 @@ export function selectReleaseByTag(releases, tagName) {
 
 function validateReleaseMetadata(release, expected) {
   if (
+    release.tagName !== expected.tagName ||
     release.name !== expected.releaseTitle ||
     release.body !== expected.releaseNotes ||
     release.prerelease !== false
@@ -175,10 +176,6 @@ export function evaluateRemoteReleaseState({
     releaseNotes,
   });
 
-  if (tagCommitSha && tagCommitSha !== expectedHeadSha) {
-    throw new Error(`Tag ${tagName} points to a different commit.`);
-  }
-
   const assets = classifyAssets(release, expectedAssetNames);
   if (release.draft) {
     if (release.authorLogin !== "github-actions[bot]") {
@@ -186,14 +183,15 @@ export function evaluateRemoteReleaseState({
         `Draft GitHub Release ${tagName} was not created by the release automation.`,
       );
     }
-    if (release.targetCommitish !== expectedHeadSha && tagCommitSha) {
+    if (tagCommitSha) {
       throw new Error(
-        `Draft GitHub Release ${tagName} cannot be retargeted because its tag already exists.`,
+        `Draft GitHub Release ${tagName} cannot be recovered because its immutable tag already exists.`,
       );
     }
     return {
       action: "recover-draft",
       retargetDraft: release.targetCommitish !== expectedHeadSha,
+      assetsComplete: assets.complete,
       reason:
         release.targetCommitish === expectedHeadSha
           ? "An exact automation-owned draft can be completed safely."
@@ -201,15 +199,14 @@ export function evaluateRemoteReleaseState({
     };
   }
 
-  if (release.targetCommitish !== expectedHeadSha) {
-    throw new Error(
-      `Published GitHub Release ${tagName} targets a different commit.`,
-    );
-  }
-
   if (!tagCommitSha) {
     throw new Error(
       `Published GitHub Release ${tagName} has no immutable tag.`,
+    );
+  }
+  if (release.targetCommitish !== tagCommitSha) {
+    throw new Error(
+      `Published GitHub Release ${tagName} target and immutable tag identify different commits.`,
     );
   }
   if (!assets.complete) {

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { appendFile, readFile } from "node:fs/promises";
 import path from "node:path";
+import { orchestrateGitHubRelease } from "./github-release-orchestration.mjs";
 import {
   evaluateRemoteReleaseState,
   selectReleaseByTag,
@@ -151,18 +152,11 @@ async function decide() {
   return evaluateRemoteReleaseState(await remoteState());
 }
 
-async function createDraft() {
+async function createDraft(payload) {
   return githubRequest(`${apiBase}/releases`, {
     method: "POST",
     contentType: "application/json",
-    body: JSON.stringify({
-      tag_name: metadata.tagName,
-      target_commitish: expectedHeadSha,
-      name: metadata.releaseTitle,
-      body: metadata.releaseNotes,
-      draft: true,
-      prerelease: false,
-    }),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -206,112 +200,42 @@ if (command === "preflight") {
     throw new Error("Checksum file does not match the exact release VSIX.");
   }
 
-  const state = await remoteState();
-  const decision = evaluateRemoteReleaseState(state);
-  if (decision.action === "noop" || decision.action === "stale") {
-    console.log(`${decision.action}: ${decision.reason}`);
-    process.exit(0);
-  }
-
-  // This is the first mutation. All local, package, remote, CI, and current-HEAD
-  // checks have completed before reaching this point.
-  let draft;
-  if (decision.action === "publish") {
-    draft = await createDraft();
-  } else if (decision.retargetDraft) {
-    draft = await githubRequest(`${apiBase}/releases/${state.release.id}`, {
-      method: "PATCH",
-      contentType: "application/json",
-      body: JSON.stringify({ target_commitish: expectedHeadSha }),
-    });
-
-    const retargetedState = await remoteState();
-    const retargetedDecision = evaluateRemoteReleaseState(retargetedState);
-    if (retargetedDecision.action === "stale") {
-      console.log(`stale: ${retargetedDecision.reason}`);
-      process.exit(0);
-    }
-    if (
-      retargetedDecision.action !== "recover-draft" ||
-      retargetedDecision.retargetDraft
-    ) {
-      throw new Error(
-        "The stale draft did not reach the exact current-commit recovery state.",
-      );
-    }
-    draft = retargetedState.release;
-  } else {
-    draft = await githubRequest(`${apiBase}/releases/${state.release.id}`);
-  }
-  if (!draft.draft) {
-    throw new Error(`Release ${metadata.tagName} is no longer a draft.`);
-  }
-
-  const expectedNames = new Set([
-    metadata.vsixFilename,
-    metadata.checksumFilename,
-  ]);
-  for (const asset of draft.assets) {
-    if (expectedNames.has(asset.name)) {
-      await githubRequest(`${apiBase}/releases/assets/${asset.id}`, {
+  const result = await orchestrateGitHubRelease({
+    expectedHeadSha,
+    loadRemoteState: remoteState,
+    createDraft,
+    retargetDraft: (releaseId, payload) =>
+      githubRequest(`${apiBase}/releases/${releaseId}`, {
+        method: "PATCH",
+        contentType: "application/json",
+        body: JSON.stringify(payload),
+      }),
+    deleteAsset: (assetId) =>
+      githubRequest(`${apiBase}/releases/assets/${assetId}`, {
         method: "DELETE",
-      });
-    }
-  }
-
-  await uploadAsset(
-    draft.id,
-    vsixPath,
-    metadata.vsixFilename,
-    "application/octet-stream",
-  );
-  await uploadAsset(
-    draft.id,
-    checksumPath,
-    metadata.checksumFilename,
-    "text/plain",
-  );
-
-  const readyDraft = policyRelease(
-    await githubRequest(`${apiBase}/releases/${draft.id}`),
-  );
-  const readyDecision = evaluateRemoteReleaseState({
-    ...(await remoteState()),
-    release: readyDraft,
+      }),
+    uploadAsset: (releaseId, assetName) => {
+      if (assetName === metadata.vsixFilename) {
+        return uploadAsset(
+          releaseId,
+          vsixPath,
+          assetName,
+          "application/octet-stream",
+        );
+      }
+      if (assetName === metadata.checksumFilename) {
+        return uploadAsset(releaseId, checksumPath, assetName, "text/plain");
+      }
+      throw new Error(`Unexpected release asset requested: ${assetName}`);
+    },
+    publishDraft: (releaseId, payload) =>
+      githubRequest(`${apiBase}/releases/${releaseId}`, {
+        method: "PATCH",
+        contentType: "application/json",
+        body: JSON.stringify(payload),
+      }),
   });
-  if (readyDecision.action !== "recover-draft") {
-    throw new Error(
-      "The draft did not reach the expected recoverable state after asset upload.",
-    );
-  }
-  const requiredAssets = new Set([
-    metadata.vsixFilename,
-    metadata.checksumFilename,
-  ]);
-  if (
-    readyDraft.assets.length !== requiredAssets.size ||
-    !readyDraft.assets.every(
-      (asset) => requiredAssets.has(asset.name) && asset.size > 0,
-    )
-  ) {
-    throw new Error(
-      "The draft does not contain exactly the required non-empty release assets.",
-    );
-  }
-
-  await githubRequest(`${apiBase}/releases/${draft.id}`, {
-    method: "PATCH",
-    contentType: "application/json",
-    body: JSON.stringify({ draft: false, prerelease: false }),
-  });
-
-  const finalDecision = await decide();
-  if (finalDecision.action !== "noop") {
-    throw new Error(
-      "Published release verification did not reach the complete no-op state.",
-    );
-  }
-  console.log(`Published ${metadata.releaseTitle} from ${expectedHeadSha}.`);
+  console.log(`${result.action}: ${result.reason}`);
 } else {
   throw new Error(`Unknown command: ${command}`);
 }

@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
+  orchestrateGitHubRelease,
+  type CreateDraftPayload,
+  type PublishDraftPayload,
+  type RetargetDraftPayload,
+} from "../scripts/github-release-orchestration.mjs";
+import {
   evaluateLocalReleaseCandidate,
   evaluateRemoteReleaseState,
   expectedVsixFilename,
@@ -21,6 +27,12 @@ const changelog = `# Changelog
 
 - Existing Marketplace release.
 `;
+
+const vsixName = "query-puppy-for-t-sql-0.19.0.vsix";
+const checksumName = `${vsixName}.sha256`;
+const vsixAsset = { id: 101, name: vsixName, size: 100 };
+const checksumAsset = { id: 102, name: checksumName, size: 90 };
+const completeAssets: ReleaseState["assets"] = [vsixAsset, checksumAsset];
 
 const localCandidate = (
   manifestVersion = "0.19.0",
@@ -44,10 +56,7 @@ const completeRelease = (
   targetCommitish: "release-commit",
   draft: false,
   prerelease: false,
-  assets: [
-    { name: "query-puppy-for-t-sql-0.19.0.vsix", size: 100 },
-    { name: "query-puppy-for-t-sql-0.19.0.vsix.sha256", size: 90 },
-  ],
+  assets: completeAssets,
   ...overrides,
 });
 
@@ -61,12 +70,80 @@ const remoteState = (
   release: completeRelease(),
   releaseTitle: "Query Puppy for T-SQL 0.19.0",
   releaseNotes: "- Automatic releases.",
-  expectedAssetNames: [
-    "query-puppy-for-t-sql-0.19.0.vsix",
-    "query-puppy-for-t-sql-0.19.0.vsix.sha256",
-  ],
+  expectedAssetNames: [vsixName, checksumName],
   ...overrides,
 });
+
+const draftRelease = (
+  targetCommitish: string,
+  assets: ReleaseState["assets"] = [],
+  overrides: Partial<ReleaseState> = {},
+): ReleaseState =>
+  completeRelease({
+    targetCommitish,
+    draft: true,
+    assets,
+    ...overrides,
+  });
+
+const stateAtB = (
+  release: ReleaseState | null,
+  tagCommitSha: string | null = null,
+  currentMainSha = "commit-b",
+): RemoteReleaseStateInput =>
+  remoteState({
+    expectedHeadSha: "commit-b",
+    currentMainSha,
+    tagCommitSha,
+    release,
+  });
+
+function orchestrationHarness(states: RemoteReleaseStateInput[]) {
+  const events: string[] = [];
+  const createPayloads: CreateDraftPayload[] = [];
+  const retargetPayloads: RetargetDraftPayload[] = [];
+  const publishPayloads: PublishDraftPayload[] = [];
+  let readIndex = 0;
+
+  return {
+    events,
+    createPayloads,
+    retargetPayloads,
+    publishPayloads,
+    run: () =>
+      orchestrateGitHubRelease({
+        expectedHeadSha: "commit-b",
+        loadRemoteState: async () => {
+          events.push("read");
+          const state = states[readIndex];
+          readIndex += 1;
+          if (!state) {
+            throw new Error("The fake has no remote state for this read.");
+          }
+          return structuredClone(state);
+        },
+        createDraft: async (payload) => {
+          events.push("create");
+          createPayloads.push(payload);
+          return draftRelease("commit-b");
+        },
+        retargetDraft: async (releaseId, payload) => {
+          events.push(`retarget:${releaseId}`);
+          retargetPayloads.push(payload);
+        },
+        deleteAsset: async (assetId) => {
+          events.push(`delete:${assetId}`);
+        },
+        uploadAsset: async (releaseId, assetName) => {
+          events.push(`upload:${releaseId}:${assetName}`);
+        },
+        publishDraft: async (releaseId, payload) => {
+          events.push(`publish:${releaseId}`);
+          publishPayloads.push(payload);
+        },
+      }),
+  };
+}
 
 test("release policy skips the Marketplace-only 0.18.1 bootstrap version", () => {
   assert.equal(localCandidate("0.18.1").eligible, false);
@@ -74,10 +151,6 @@ test("release policy skips the Marketplace-only 0.18.1 bootstrap version", () =>
 
 test("release policy accepts a future version with matching lock and changelog", () => {
   assert.equal(localCandidate().eligible, true);
-});
-
-test("release eligibility is independent of whether the triggering commit changed the version", () => {
-  assert.deepEqual(localCandidate(), localCandidate());
 });
 
 test("release policy rejects manifest and lockfile mismatch", () => {
@@ -136,6 +209,24 @@ test("an existing fully released version is a no-op", () => {
   assert.equal(evaluateRemoteReleaseState(remoteState()).action, "noop");
 });
 
+test("a release completed at A is a no-op for a later same-version commit B", () => {
+  assert.equal(localCandidate("0.19.0").eligible, true);
+  assert.deepEqual(
+    evaluateRemoteReleaseState(
+      remoteState({
+        expectedHeadSha: "commit-b",
+        currentMainSha: "commit-b",
+        tagCommitSha: "commit-a",
+        release: completeRelease({ targetCommitish: "commit-a" }),
+      }),
+    ),
+    {
+      action: "noop",
+      reason: "The intended version is already fully released.",
+    },
+  );
+});
+
 test("stale workflow commits never publish", () => {
   assert.equal(
     evaluateRemoteReleaseState(
@@ -190,6 +281,7 @@ test("a stale automation draft remains recoverable by the next same-version main
     {
       action: "recover-draft",
       retargetDraft: true,
+      assetsComplete: false,
       reason:
         "An exact tagless automation-owned draft can be retargeted and completed safely.",
     },
@@ -226,6 +318,7 @@ test("a stale automation draft remains recoverable by the next same-version main
     {
       action: "recover-draft",
       retargetDraft: false,
+      assetsComplete: false,
       reason: "An exact automation-owned draft can be completed safely.",
     },
   );
@@ -253,15 +346,18 @@ test("conflicting and partial published states fail closed", async (context) => 
       /missing required non-empty assets/u,
     );
   });
-  await context.test("tag on another commit", () => {
-    assert.throws(
-      () =>
-        evaluateRemoteReleaseState(
-          remoteState({ tagCommitSha: "other-commit" }),
-        ),
-      /points to a different commit/u,
-    );
-  });
+  await context.test(
+    "published Release target and immutable tag disagree",
+    () => {
+      assert.throws(
+        () =>
+          evaluateRemoteReleaseState(
+            remoteState({ tagCommitSha: "other-commit" }),
+          ),
+        /target and immutable tag identify different commits/u,
+      );
+    },
+  );
   await context.test("published release targeting another commit", () => {
     assert.throws(
       () =>
@@ -273,7 +369,7 @@ test("conflicting and partial published states fail closed", async (context) => 
             release: completeRelease({ targetCommitish: "commit-a" }),
           }),
         ),
-      /targets a different commit/u,
+      /target and immutable tag identify different commits/u,
     );
   });
   await context.test("stale draft with an immutable tag", () => {
@@ -290,7 +386,7 @@ test("conflicting and partial published states fail closed", async (context) => 
             }),
           }),
         ),
-      /points to a different commit/u,
+      /cannot be recovered because its immutable tag already exists/u,
     );
   });
   await context.test("draft from another author", () => {
@@ -329,9 +425,245 @@ test("an exact draft is recoverable without selecting unrelated historical draft
   );
 });
 
+test("release policy rejects ambiguous and internally inconsistent release state", async (context) => {
+  await context.test("duplicate matching Releases", () => {
+    assert.throws(
+      () =>
+        selectReleaseByTag(
+          [completeRelease(), completeRelease({ id: 43 })],
+          "v0.19.0",
+        ),
+      /Multiple GitHub Releases/u,
+    );
+  });
+  await context.test("unexpected draft asset", () => {
+    assert.throws(
+      () =>
+        evaluateRemoteReleaseState(
+          stateAtB(
+            draftRelease("commit-b", [
+              { id: 103, name: "unexpected.zip", size: 100 },
+            ]),
+          ),
+        ),
+      /unexpected assets/u,
+    );
+  });
+  await context.test("duplicate draft asset name", () => {
+    assert.throws(
+      () =>
+        evaluateRemoteReleaseState(
+          stateAtB(
+            draftRelease("commit-b", [
+              { id: 101, name: vsixName, size: 100 },
+              { id: 103, name: vsixName, size: 100 },
+            ]),
+          ),
+        ),
+      /duplicate asset names/u,
+    );
+  });
+  for (const [name, release] of [
+    ["tag name", completeRelease({ tagName: "v0.20.0" })],
+    ["title", completeRelease({ name: "Wrong title" })],
+    ["notes", completeRelease({ body: "Wrong notes" })],
+    ["prerelease state", completeRelease({ prerelease: true })],
+  ] as const) {
+    await context.test(`conflicting Release ${name}`, () => {
+      assert.throws(
+        () => evaluateRemoteReleaseState(remoteState({ release })),
+        /conflicting identity or metadata/u,
+      );
+    });
+  }
+});
+
+test("release orchestration recovers stale tagless drafts and replaces assets", async (context) => {
+  const recoveryCases = [
+    {
+      name: "no assets",
+      assets: [],
+      deletedEvents: [],
+    },
+    {
+      name: "one expected asset",
+      assets: [vsixAsset],
+      deletedEvents: ["delete:101"],
+    },
+    {
+      name: "both expected assets",
+      assets: completeAssets,
+      deletedEvents: ["delete:101", "delete:102"],
+    },
+  ];
+
+  for (const recoveryCase of recoveryCases) {
+    await context.test(recoveryCase.name, async () => {
+      const harness = orchestrationHarness([
+        stateAtB(draftRelease("commit-a", recoveryCase.assets)),
+        stateAtB(draftRelease("commit-b", recoveryCase.assets)),
+        stateAtB(draftRelease("commit-b", completeAssets)),
+        stateAtB(completeRelease({ targetCommitish: "commit-b" }), "commit-b"),
+      ]);
+
+      assert.equal((await harness.run()).action, "published");
+      assert.deepEqual(harness.events, [
+        "read",
+        "retarget:42",
+        "read",
+        ...recoveryCase.deletedEvents,
+        `upload:42:${vsixName}`,
+        `upload:42:${checksumName}`,
+        "read",
+        "publish:42",
+        "read",
+      ]);
+      assert.deepEqual(harness.retargetPayloads, [
+        { target_commitish: "commit-b" },
+      ]);
+      assert.deepEqual(harness.publishPayloads, [
+        { draft: false, prerelease: false },
+      ]);
+    });
+  }
+});
+
+test("release orchestration stops stale and conflicting drafts before asset mutation", async (context) => {
+  await context.test("main advances immediately after retarget", async () => {
+    const harness = orchestrationHarness([
+      stateAtB(draftRelease("commit-a")),
+      stateAtB(draftRelease("commit-b"), null, "commit-c"),
+    ]);
+
+    assert.equal((await harness.run()).action, "stale");
+    assert.deepEqual(harness.events, ["read", "retarget:42", "read"]);
+  });
+
+  await context.test("stale draft has an immutable tag", async () => {
+    const harness = orchestrationHarness([
+      stateAtB(draftRelease("commit-a"), "commit-b"),
+    ]);
+
+    await assert.rejects(
+      harness.run,
+      /cannot be recovered because its immutable tag already exists/u,
+    );
+    assert.deepEqual(harness.events, ["read"]);
+  });
+
+  await context.test("draft has a foreign author", async () => {
+    const harness = orchestrationHarness([
+      stateAtB(draftRelease("commit-a", [], { authorLogin: "maintainer" })),
+    ]);
+
+    await assert.rejects(harness.run, /not created by the release automation/u);
+    assert.deepEqual(harness.events, ["read"]);
+  });
+
+  await context.test("draft contains an unexpected asset", async () => {
+    const harness = orchestrationHarness([
+      stateAtB(
+        draftRelease("commit-b", [
+          { id: 103, name: "unexpected.zip", size: 100 },
+        ]),
+      ),
+    ]);
+
+    await assert.rejects(harness.run, /unexpected assets/u);
+    assert.deepEqual(harness.events, ["read"]);
+  });
+});
+
+test("release orchestration creates and publishes only after fresh state validation", async () => {
+  const harness = orchestrationHarness([
+    stateAtB(null),
+    stateAtB(draftRelease("commit-b")),
+    stateAtB(draftRelease("commit-b", completeAssets)),
+    stateAtB(completeRelease({ targetCommitish: "commit-b" }), "commit-b"),
+  ]);
+
+  assert.equal((await harness.run()).action, "published");
+  assert.deepEqual(harness.events, [
+    "read",
+    "create",
+    "read",
+    `upload:42:${vsixName}`,
+    `upload:42:${checksumName}`,
+    "read",
+    "publish:42",
+    "read",
+  ]);
+  assert.deepEqual(harness.createPayloads, [
+    {
+      tag_name: "v0.19.0",
+      target_commitish: "commit-b",
+      name: "Query Puppy for T-SQL 0.19.0",
+      body: "- Automatic releases.",
+      draft: true,
+      prerelease: false,
+    },
+  ]);
+  assert.deepEqual(harness.publishPayloads, [
+    { draft: false, prerelease: false },
+  ]);
+});
+
+test("release orchestration rejects zero-byte final assets before publication", async () => {
+  const harness = orchestrationHarness([
+    stateAtB(draftRelease("commit-b")),
+    stateAtB(
+      draftRelease("commit-b", [
+        { id: 101, name: vsixName, size: 0 },
+        checksumAsset,
+      ]),
+    ),
+  ]);
+
+  await assert.rejects(harness.run, /required non-empty release assets/u);
+  assert.deepEqual(harness.events, [
+    "read",
+    `upload:42:${vsixName}`,
+    `upload:42:${checksumName}`,
+    "read",
+  ]);
+});
+
+test("post-publication verification detects the final current-main race", async () => {
+  const harness = orchestrationHarness([
+    stateAtB(draftRelease("commit-b")),
+    stateAtB(draftRelease("commit-b", completeAssets)),
+    stateAtB(
+      completeRelease({ targetCommitish: "commit-b" }),
+      "commit-b",
+      "commit-c",
+    ),
+  ]);
+
+  await assert.rejects(harness.run, /complete no-op state: stale/u);
+  assert.deepEqual(harness.events, [
+    "read",
+    `upload:42:${vsixName}`,
+    `upload:42:${checksumName}`,
+    "read",
+    "publish:42",
+    "read",
+  ]);
+});
+
+test("published same-version A to later B is an orchestration no-op", async () => {
+  const harness = orchestrationHarness([
+    stateAtB(completeRelease({ targetCommitish: "commit-a" }), "commit-a"),
+  ]);
+
+  assert.equal((await harness.run()).action, "noop");
+  assert.deepEqual(harness.events, ["read"]);
+  assert.deepEqual(harness.createPayloads, []);
+  assert.deepEqual(harness.retargetPayloads, []);
+  assert.deepEqual(harness.publishPayloads, []);
+});
+
 test("contract: CI releases only successful current main pushes with narrow permissions", async () => {
   const workflow = await readFile(".github/workflows/ci.yml", "utf8");
-  const githubRelease = await readFile("scripts/github-release.mjs", "utf8");
 
   assert.match(workflow, /push:/u);
   assert.match(workflow, /pull_request:/u);
@@ -353,12 +685,7 @@ test("contract: CI releases only successful current main pushes with narrow perm
   assert.match(workflow, /cancel-in-progress: false/u);
   assert.match(workflow, /scripts\/github-release\.mjs preflight/u);
   assert.match(workflow, /scripts\/github-release\.mjs publish/u);
-  assert.match(githubRelease, /prerelease: false/u);
-  assert.ok(
-    (githubRelease.match(/target_commitish: expectedHeadSha/gu)?.length ?? 0) >=
-      2,
-  );
-  assert.match(githubRelease, /retargetedDecision\.action === "stale"/u);
+  assert.match(workflow, /if: steps\.candidate\.outputs\.eligible == 'true'/u);
   assert.doesNotMatch(workflow, /marketplace|open[ -]?vsx/iu);
 });
 
