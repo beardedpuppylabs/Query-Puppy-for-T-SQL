@@ -11,6 +11,7 @@ import { tokenizeSql } from "./SqlTokenizer.js";
 import {
   documentStatementTokenRanges,
   statementTokenRangeAtCursor,
+  type StatementTokenRange,
 } from "./StatementBoundary.js";
 import { batchTokenRangeAtCursor } from "./BatchBoundary.js";
 import {
@@ -761,7 +762,10 @@ interface MutableQueryScope {
   readonly applyOpenToken?: number;
 }
 
-const tokenDepths = (tokens: readonly SqlToken[]): readonly number[] => {
+/** Computes the canonical parenthesis depth for each token in one document. */
+export const documentTokenDepths = (
+  tokens: readonly SqlToken[],
+): readonly number[] => {
   let depth = 0;
   return tokens.map((token) => {
     const value = depth;
@@ -833,12 +837,13 @@ function queryScopeModel(
   cursor: number,
   known: readonly RowSource[],
   catalog?: SemanticCatalog,
+  preparedDepths?: readonly number[],
 ): {
   readonly scopes: readonly QueryScope[];
   readonly active?: QueryScope;
   readonly visible: readonly ScopedRowSource[];
 } {
-  const depths = tokenDepths(tokens);
+  const depths = preparedDepths ?? documentTokenDepths(tokens);
   const mutable: MutableQueryScope[] = [];
   const statementEndOffset =
     tokens[statementTokenEnd]?.start ??
@@ -1073,6 +1078,30 @@ function queryScopeModel(
       : {}),
     visible,
   };
+}
+
+export interface StatementQueryScopeModel {
+  readonly scopes: readonly QueryScope[];
+  readonly active?: QueryScope;
+  readonly visible: readonly ScopedRowSource[];
+}
+
+/** Builds only canonical QueryScopes for a statement from prepared document tokens. */
+export function analyzeStatementQueryScopes(
+  tokens: readonly SqlToken[],
+  statement: StatementTokenRange,
+  cursor: number,
+  preparedDepths?: readonly number[],
+): StatementQueryScopeModel {
+  return queryScopeModel(
+    tokens,
+    statement.start,
+    statement.end,
+    cursor,
+    [],
+    undefined,
+    preparedDepths,
+  );
 }
 
 /** Resolves an alias in semantic proximity order without consulting statement-wide symbols. */

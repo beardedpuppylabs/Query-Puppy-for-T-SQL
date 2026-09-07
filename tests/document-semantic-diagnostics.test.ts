@@ -1,6 +1,44 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collectHighConfidenceDocumentIssues } from "../src/parser/DocumentSemanticDiagnostics.js";
+import {
+  collectHighConfidenceDocumentIssues,
+  statementMayHaveInvisibleAliasIssue,
+} from "../src/parser/DocumentSemanticDiagnostics.js";
+import { tokenizeSql } from "../src/parser/SqlTokenizer.js";
+import { documentStatementTokenRanges } from "../src/parser/StatementBoundary.js";
+
+test("QP1002 analysis skips ordinary statements but retains plausible candidates", () => {
+  const candidateSql =
+    "SELECT 1 WHERE EXISTS (SELECT 1 FROM dbo.Account AS a) AND a.Id > 0;";
+  const ordinary = tokenizeSql(
+    "SELECT a.Id FROM dbo.Account AS a WHERE a.Id > 0;",
+  );
+  const candidate = tokenizeSql(candidateSql);
+
+  assert.equal(
+    statementMayHaveInvisibleAliasIssue(
+      ordinary,
+      documentStatementTokenRanges(ordinary)[0]!,
+    ),
+    false,
+  );
+  assert.equal(
+    statementMayHaveInvisibleAliasIssue(
+      candidate,
+      documentStatementTokenRanges(candidate)[0]!,
+    ),
+    true,
+  );
+  const invalid = candidateSql.lastIndexOf("a.Id");
+  assert.deepEqual(collectHighConfidenceDocumentIssues(candidateSql), [
+    {
+      code: "QP1002",
+      severity: "error",
+      message: "Row-source alias 'a' is not visible in this query scope.",
+      range: { start: invalid, end: invalid + 1 },
+    },
+  ]);
+});
 
 test("cross-GO local-variable references produce one exact error", () => {
   const sql = "DECLARE @CustomerId int;\nGO\nSELECT @CustomerId;";

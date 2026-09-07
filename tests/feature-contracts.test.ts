@@ -544,11 +544,12 @@ test("contract: high-confidence diagnostics use a native collection and editor-n
   );
   assert.match(semanticSource, /documentBatchTokenRanges/);
   assert.match(semanticSource, /documentStatementTokenRanges/);
-  assert.match(semanticSource, /resolveBatchLocalVariables/);
+  assert.match(semanticSource, /resolveLocalVariablesInBatch/);
   assert.match(semanticSource, /QP1001/);
   assert.match(semanticSource, /QP1002/);
   assert.match(semanticSource, /resolveUniqueInvisibleExplicitAlias/);
-  assert.match(semanticSource, /analyzeTokenizedDocumentSemantics/);
+  assert.match(semanticSource, /analyzeStatementQueryScopes/);
+  assert.doesNotMatch(semanticSource, /analyzeTokenizedDocumentSemantics/);
   assert.doesNotMatch(semanticSource, /from "vscode"/);
   assert.doesNotMatch(
     semanticSource,

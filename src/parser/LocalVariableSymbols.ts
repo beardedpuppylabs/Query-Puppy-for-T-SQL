@@ -1,7 +1,13 @@
 import { normalizeName, type SqlType } from "../metadata/MetadataModels.js";
-import { batchTokenRangeAtCursor } from "./BatchBoundary.js";
+import {
+  batchTokenRangeAtCursor,
+  type BatchTokenRange,
+} from "./BatchBoundary.js";
 import type { SqlToken } from "./SqlTokenizer.js";
-import { statementTokenRangeAtCursor } from "./StatementBoundary.js";
+import {
+  statementTokenRangeAtCursor,
+  type StatementTokenRange,
+} from "./StatementBoundary.js";
 
 export interface LocalVariableSymbol {
   readonly name: string;
@@ -139,12 +145,15 @@ const scalarInitializer = (
   return undefined;
 };
 
-/** Returns local variables declared before the cursor in the current client batch. */
-export function resolveBatchLocalVariables(
+const collectBatchLocalVariables = (
   tokens: readonly SqlToken[],
   cursor: number,
-): readonly LocalVariableSymbol[] {
-  const batch = batchTokenRangeAtCursor(tokens, cursor);
+  batch: BatchTokenRange,
+  statementForDeclaration: (
+    declarationToken: number,
+    declarationEnd: number,
+  ) => StatementTokenRange | undefined,
+): readonly LocalVariableSymbol[] => {
   const variables = new Map<string, LocalVariableSymbol>();
   for (let index = batch.start; index < batch.end; index++) {
     const declare = tokens[index];
@@ -155,7 +164,8 @@ export function resolveBatchLocalVariables(
       declare.start >= cursor
     )
       continue;
-    const statement = statementTokenRangeAtCursor(tokens, declare.end);
+    const statement = statementForDeclaration(index, declare.end);
+    if (!statement) continue;
     let depth = 0;
     let expectingVariable = true;
     for (
@@ -195,4 +205,46 @@ export function resolveBatchLocalVariables(
     }
   }
   return [...variables.values()];
+};
+
+/** Parses one known client batch without rediscovering its statement boundaries. */
+export function resolveLocalVariablesInBatch(
+  tokens: readonly SqlToken[],
+  cursor: number,
+  batch: BatchTokenRange,
+  statements: readonly StatementTokenRange[],
+): readonly LocalVariableSymbol[] {
+  let statementIndex = 0;
+  return collectBatchLocalVariables(
+    tokens,
+    cursor,
+    batch,
+    (declarationToken) => {
+      while (
+        statementIndex < statements.length &&
+        (statements[statementIndex]?.end ?? 0) <= declarationToken
+      )
+        statementIndex++;
+      const statement = statements[statementIndex];
+      return statement &&
+        statement.start <= declarationToken &&
+        declarationToken < statement.end
+        ? statement
+        : undefined;
+    },
+  );
+}
+
+/** Returns local variables declared before the cursor in the current client batch. */
+export function resolveBatchLocalVariables(
+  tokens: readonly SqlToken[],
+  cursor: number,
+): readonly LocalVariableSymbol[] {
+  const batch = batchTokenRangeAtCursor(tokens, cursor);
+  return collectBatchLocalVariables(
+    tokens,
+    cursor,
+    batch,
+    (_, declarationEnd) => statementTokenRangeAtCursor(tokens, declarationEnd),
+  );
 }

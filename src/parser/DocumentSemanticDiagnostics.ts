@@ -1,7 +1,10 @@
 import { normalizeName } from "../metadata/MetadataModels.js";
 import { documentBatchTokenRanges } from "./BatchBoundary.js";
-import { analyzeTokenizedDocumentSemantics } from "./DocumentSemanticAnalyzer.js";
-import { resolveBatchLocalVariables } from "./LocalVariableSymbols.js";
+import {
+  analyzeStatementQueryScopes,
+  documentTokenDepths,
+} from "./DocumentSemanticAnalyzer.js";
+import { resolveLocalVariablesInBatch } from "./LocalVariableSymbols.js";
 import {
   queryScopeAtOffset,
   resolveUniqueInvisibleExplicitAlias,
@@ -64,14 +67,14 @@ const isNonAliasQualifiedPath = (
   tokens[index + 3]?.text === "(";
 
 const collectInvisibleAliasIssues = (
-  sql: string,
   tokens: readonly SqlToken[],
   statement: StatementTokenRange,
+  depths: readonly number[],
 ): readonly DocumentSemanticIssue[] => {
   const cursor = tokens[statement.end - 1]?.end;
   if (cursor === undefined) return [];
-  const model = analyzeTokenizedDocumentSemantics(sql, tokens, cursor);
-  const sourcePaths = model.queryScopes.flatMap((scope) =>
+  const model = analyzeStatementQueryScopes(tokens, statement, cursor, depths);
+  const sourcePaths = model.scopes.flatMap((scope) =>
     scope.localRowSources.flatMap((binding) =>
       binding.sourcePath ? [binding.sourcePath] : [],
     ),
@@ -90,8 +93,8 @@ const collectInvisibleAliasIssues = (
     if (sourcePaths.some((sourcePath) => rangeContains(sourcePath, range)))
       continue;
     const declaration = resolveUniqueInvisibleExplicitAlias(
-      model.queryScopes,
-      queryScopeAtOffset(model.queryScopes, qualifier.start),
+      model.scopes,
+      queryScopeAtOffset(model.scopes, qualifier.start),
       qualifier.text,
     );
     if (!declaration) continue;
@@ -105,12 +108,28 @@ const collectInvisibleAliasIssues = (
   return issues;
 };
 
+/** @internal Exposes the conservative QP1002 hot-path gate for regression tests. */
+export const statementMayHaveInvisibleAliasIssue = (
+  tokens: readonly SqlToken[],
+  statement: StatementTokenRange,
+): boolean => {
+  let selectCount = 0;
+  let hasQualifiedIdentifier = false;
+  for (let index = statement.start; index < statement.end - 1; index++) {
+    if (tokens[index]?.normalized === "select") selectCount++;
+    if (tokens[index]?.kind === "identifier" && tokens[index + 1]?.text === ".")
+      hasQualifiedIdentifier = true;
+  }
+  return selectCount > 1 && hasQualifiedIdentifier;
+};
+
 /** Finds only document-local semantic errors proven without catalog access. */
 export function collectHighConfidenceDocumentIssues(
   sql: string,
 ): readonly DocumentSemanticIssue[] {
   const tokens = tokenizeSql(sql);
   const statements = documentStatementTokenRanges(tokens);
+  const depths = documentTokenDepths(tokens);
   const declarationsFromEarlierBatches = new Set<string>();
   const issues: DocumentSemanticIssue[] = [];
   let statementIndex = 0;
@@ -132,7 +151,12 @@ export function collectHighConfidenceDocumentIssues(
     if (isModuleDefinitionBatch(tokens, batch.start, batch.end)) continue;
     const batchEnd = tokens[batch.end - 1]?.end;
     if (batchEnd === undefined) continue;
-    const declarations = resolveBatchLocalVariables(tokens, batchEnd);
+    const declarations = resolveLocalVariablesInBatch(
+      tokens,
+      batchEnd,
+      batch,
+      batchStatements,
+    );
     const declarationStartByName = new Map(
       declarations.map((declaration) => [
         declaration.normalizedName,
@@ -175,7 +199,8 @@ export function collectHighConfidenceDocumentIssues(
           range: { start: token.start, end: token.end },
         });
       }
-      issues.push(...collectInvisibleAliasIssues(sql, tokens, statement));
+      if (statementMayHaveInvisibleAliasIssue(tokens, statement))
+        issues.push(...collectInvisibleAliasIssues(tokens, statement, depths));
     }
 
     for (const declaration of declarations)
