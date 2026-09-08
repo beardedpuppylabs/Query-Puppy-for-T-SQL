@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.18.2 - 2026-09-08
+
+- Assigned a unique package identity to the already-delivered document-diagnostics
+  performance optimization, which reuses prepared boundaries, batch-local variable
+  parsing, and canonical scope-only analysis instead of repeating full semantic work
+  for each statement.
+- Recorded the completed cleanup of obsolete project-specific MIT-era wording from
+  maintained public text while preserving accurate `GPL-3.0-only` licensing and
+  third-party attribution.
+- Recorded the completed version-driven GitHub Release automation, including
+  deterministic release identity, verified VSIX and checksum assets, immutable
+  release-state checks, and the explicit Marketplace-only `0.18.1` bootstrap floor.
+  Corrected its license verification to match `vsce`'s canonical packaged
+  `LICENSE.txt` path while retaining byte-for-byte comparison with the root license.
+
 ## 0.18.1
 
 - Fixed `QP1001` so a local-variable declaration later in a `GO` batch no longer

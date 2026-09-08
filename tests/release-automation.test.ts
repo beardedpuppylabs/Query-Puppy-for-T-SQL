@@ -664,6 +664,10 @@ test("published same-version A to later B is an orchestration no-op", async () =
 
 test("contract: CI releases only successful current main pushes with narrow permissions", async () => {
   const workflow = await readFile(".github/workflows/ci.yml", "utf8");
+  const artifactVerifier = await readFile(
+    "scripts/verify-release-vsix.mjs",
+    "utf8",
+  );
 
   assert.match(workflow, /push:/u);
   assert.match(workflow, /pull_request:/u);
@@ -687,6 +691,8 @@ test("contract: CI releases only successful current main pushes with narrow perm
   assert.match(workflow, /scripts\/github-release\.mjs publish/u);
   assert.match(workflow, /if: steps\.candidate\.outputs\.eligible == 'true'/u);
   assert.doesNotMatch(workflow, /marketplace|open[ -]?vsx/iu);
+  assert.match(artifactVerifier, /extension\/LICENSE\.txt/u);
+  assert.doesNotMatch(artifactVerifier, /"extension\/LICENSE"/u);
 });
 
 test("contract: the automatic-release floor is explicit and remains at 0.18.1", async () => {

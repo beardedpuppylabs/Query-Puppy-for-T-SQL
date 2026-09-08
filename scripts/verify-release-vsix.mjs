@@ -30,7 +30,7 @@ const entries = unzip(["-Z1", vsixPath]).split(/\r?\n/u).filter(Boolean);
 const requiredEntries = [
   "extension/package.json",
   "extension/dist/extension.js",
-  "extension/LICENSE",
+  "extension/LICENSE.txt",
   "extension/THIRD_PARTY_NOTICES.md",
 ];
 for (const entry of requiredEntries) {
@@ -69,14 +69,19 @@ if (
   );
 }
 
-for (const file of ["LICENSE", "THIRD_PARTY_NOTICES.md"]) {
-  const repositoryBytes = await readFile(file);
+for (const [repositoryFile, packagedFile] of [
+  ["LICENSE", "LICENSE.txt"],
+  ["THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md"],
+]) {
+  const repositoryBytes = await readFile(repositoryFile);
   const packagedBytes = Buffer.from(
-    unzip(["-p", vsixPath, `extension/${file}`]),
+    unzip(["-p", vsixPath, `extension/${packagedFile}`]),
     "utf8",
   );
   if (!repositoryBytes.equals(packagedBytes)) {
-    throw new Error(`Packaged ${file} differs from the repository source.`);
+    throw new Error(
+      `Packaged ${packagedFile} differs from repository ${repositoryFile}.`,
+    );
   }
 }
 
