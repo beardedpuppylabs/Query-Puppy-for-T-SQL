@@ -885,6 +885,42 @@ developer evidence, not machine-independent pass/fail thresholds. The benchmark 
 no SQL Server, catalog, connection, project, or network context and is excluded from
 the VSIX.
 
+## Lossless formatting foundation tests
+
+Protect the editor-neutral formatting core with deterministic tests for:
+
+- exact source reconstruction and UTF-16 offsets across whitespace, comments,
+  Unicode/escaped strings, delimited identifiers, variables, parameters, numbers,
+  compound operators, punctuation, LF, and CRLF
+- explicit scanner refusal for unterminated protected constructs and unsupported
+  lexical characters
+- complete `GO`, positive repeat counts, trailing comments, final separators, and
+  final newlines remaining exact while protected or identifier uses of `GO` are not
+  separators
+- unsupported `GO` forms, SQLCMD/template regions, malformed nesting, incomplete SQL,
+  semicolon-less adjacent statements, procedural/module batches, and MERGE failing
+  closed
+- conservative complete SELECT/CTE/JOIN/APPLY and common INSERT/UPDATE/DELETE/OUTPUT
+  unit preparation, including explicit declined regions between supported neighbors
+- exact top-level range selection and rejection of nested or partial selections,
+  especially the derived-table SELECT regression that mssql formatted unsafely
+- whitespace-only candidate acceptance plus rejection of token insertion, removal,
+  reordering, merging, splitting, spelling/case changes, semicolon changes, comment
+  movement, line-comment consumption, and unit-edge whitespace changes
+
+The deterministic large-corpus test must reconstruct the complete source and retain
+the expected unit count. Measure scanner/unit-preparation scaling separately with:
+
+```bash
+npm run benchmark:formatting
+```
+
+That benchmark performs one unrecorded warm-up, validates reconstruction and unit
+counts on roughly 26 KB mixed and 300 KB SELECT corpora, and reports each run plus
+median/minimum/maximum durations without machine-dependent thresholds. It measures
+foundation preparation only, not formatter-engine or provider throughput, and needs no
+SQL Server, catalog, connection, filesystem fixture, or network context.
+
 ## Local variable tests
 
 Protect:

@@ -519,6 +519,42 @@ close. This path performs no
 catalog, backend, relationship, filesystem, or workspace work and is not a general
 SQL linter. Semantic Rename remains a future consumer.
 
+## Lossless formatting foundation
+
+Formatting source has a separate editor-neutral lexical representation under
+`src/formatting/`. This representation complements rather than replaces the semantic
+tokenizer: it retains every raw token and trivia span at its original UTF-16 offsets,
+including whitespace, comments, strings, delimited identifiers, variables, operators,
+punctuation, semicolons, and complete `GO` separator lines. Formatting must never
+reconstruct SQL from normalized semantic tokens.
+
+The foundation performs one lossless scan per document and derives exact batch and
+top-level unit spans from that result. It currently prepares conservative complete
+SELECT/CTE and common INSERT/UPDATE/DELETE units. SQLCMD/template regions, unsupported
+`GO` forms, malformed nesting, ambiguous semicolon-less statements, procedural/module
+batches, MERGE, and other unproven syntax fail closed or remain explicit declined
+regions. Supported units may coexist with explicitly declined semicolon-delimited
+neighbors; no unsupported region is silently treated as format-safe.
+
+Exact range selection succeeds only when the requested offsets equal one prepared
+supported top-level unit. Nested SELECTs and partial expressions are never promoted to
+standalone formatting units. Unit spans exclude surrounding trivia so later edits can
+leave every outside byte untouched; the output guard consequently requires unit-edge
+whitespace to remain unchanged.
+
+Candidate formatter output must pass the canonical preservation guard before a future
+provider can use it. The initial guard allows whitespace changes only. All
+non-whitespace token kinds, spellings, ordering, protected text, comments, operators,
+punctuation, and terminators remain exact, and comment line attachment cannot change.
+This lexical equality is necessary evidence, not proof of complete SQL semantic
+equivalence.
+
+This release contains no formatter engine, formatting provider, worker, command, or
+setting. The foundation performs no catalog, connection, SQL execution, filesystem,
+workspace, remote, or AI work. Engine isolation, cancellation, document-version
+validation, editor registration, and any dependency adoption belong to a later
+independently versioned integration after the required licensing review.
+
 ## Schema Intelligence
 
 Persistent catalog columns may contain schema-role information.

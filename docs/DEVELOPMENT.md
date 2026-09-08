@@ -132,6 +132,16 @@ npm run test:contracts
 This focused command complements rather than replaces `npm test`. See the feature
 contract inventory in [Testing Strategy](TESTING.md) for the sentinel mapping.
 
+The dependency-free lossless formatting scanner and unit-preparation benchmark is:
+
+```bash
+npm run benchmark:formatting
+```
+
+Its timings are comparative local evidence without pass/fail thresholds. It does not
+run a formatter engine or exercise editor-provider responsiveness; see the formatting
+section in [Testing Strategy](TESTING.md) for the exact contract.
+
 ## Codex verification boundary
 
 For normal development tasks, Codex runs the applicable checks requested by the

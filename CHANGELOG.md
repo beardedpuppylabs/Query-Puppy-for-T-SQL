@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.18.5 - 2026-09-08
+
+- Added a dependency-free lossless T-SQL formatting foundation that preserves raw
+  source/trivia spans, validates SQL Server `GO` boundaries, and prepares only
+  conservative complete SELECT/CTE and common DML units.
+- Added exact top-level range selection and a strict whitespace-only output guard that
+  rejects token, spelling, comment-attachment, and terminator changes, including the
+  unsafe nested-SELECT selection regression.
+- Added deterministic formatting-foundation fixtures, fail-closed regressions, and a
+  scanner/unit-preparation benchmark. No formatter engine or editor provider is
+  included in this release.
+
 ## 0.18.4 - 2026-09-08
 
 - Fixed automatic GitHub Release creation so recovery is anchored to the numeric

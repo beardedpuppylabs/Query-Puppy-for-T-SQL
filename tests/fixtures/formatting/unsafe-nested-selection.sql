@@ -1,0 +1,3 @@
+SELECT 0 AS Before;
+SELECT q.Id FROM (SELECT Id,Name FROM dbo.T WHERE Active=1) AS q WHERE q.Id>0;
+SELECT 9 AS After;
