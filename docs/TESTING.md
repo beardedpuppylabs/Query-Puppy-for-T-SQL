@@ -850,12 +850,18 @@ Protect editor-neutral and activated native behavior for:
 - `QP1002` only when a qualified reference has exactly one matching RowSource binding
   in its semantic statement, that binding is explicitly aliased, and it is outside
   the canonical QueryScope visibility chain
+- `QP1003` on each additional case-insensitive explicit row-source alias declaration
+  in one canonical QueryScope, including AS/non-AS and supported physical/local,
+  derived, CTE-source, VALUES, and APPLY forms
 - exact issue code, Error severity, message, and qualifier-token range
 - one issue per proven offending reference in deterministic source order
 - inner-to-outer, sibling-subquery, and derived-table visibility violations
 - valid outer correlation, shadowing, and APPLY left-side visibility remaining clean
 - unknown and multipart physical qualifiers, unrelated statements/`GO` batches,
   ambiguous declarations, module bodies, and positional APPLY cases failing closed
+- nested shadowing, sibling/CTE/set-branch isolation, implicit source-name collisions,
+  projection aliases, variables, malformed/incomplete sources, and unsupported
+  comma-separated source lists remaining outside `QP1003`
 - native source `Query Puppy`, correction updates, and document-close cleanup
 
 These tests must reuse the document semantic analyzer and QueryScope resolver without
@@ -874,7 +880,7 @@ The benchmark calls the production `collectHighConfidenceDocumentIssues()` colle
 for deterministic small, medium, and large tiers of ordinary statements, `GO`/local
 variable batches, nested alias scopes, and a mixed script. It performs one unrecorded
 warm-up per case, reports every measured run plus median/minimum/maximum durations,
-and fails if the generated QP1001/QP1002 counts change. Timings are comparative
+and fails if the generated QP1001/QP1002/QP1003 counts change. Timings are comparative
 developer evidence, not machine-independent pass/fail thresholds. The benchmark needs
 no SQL Server, catalog, connection, project, or network context and is excluded from
 the VSIX.

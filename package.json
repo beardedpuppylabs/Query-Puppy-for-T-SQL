@@ -2,7 +2,7 @@
   "name": "query-puppy-for-t-sql",
   "displayName": "Query Puppy for T-SQL",
   "description": "Semantic T-SQL developer tooling for large SQL Server schemas with context-aware completion, relationship-aware JOINs, navigation, Hover, diagnostics, and persistent metadata.",
-  "version": "0.18.2",
+  "version": "0.18.3",
   "publisher": "BeardedPuppyLabs",
   "author": "Bearded Puppy Labs",
   "license": "GPL-3.0-only",

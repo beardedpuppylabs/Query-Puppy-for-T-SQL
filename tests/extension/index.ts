@@ -2225,6 +2225,38 @@ export async function run(): Promise<void> {
     ),
   );
 
+  const duplicateAliasDiagnosticSql =
+    "SELECT a.Id FROM dbo.Account AS a JOIN dbo.Address AS a ON a.Id = a.AccountId;";
+  await replaceDiagnosticSql(duplicateAliasDiagnosticSql);
+  assert.equal(queryPuppyDiagnostics().length, 1);
+  const duplicateAliasDiagnostic = queryPuppyDiagnostics()[0];
+  assert.ok(duplicateAliasDiagnostic);
+  assert.equal(duplicateAliasDiagnostic.source, "Query Puppy");
+  assert.equal(duplicateAliasDiagnostic.code, "QP1003");
+  assert.equal(
+    duplicateAliasDiagnostic.severity,
+    vscode.DiagnosticSeverity.Error,
+  );
+  assert.equal(
+    duplicateAliasDiagnostic.message,
+    "Row-source alias 'a' is declared more than once in this query scope.",
+  );
+  assert.equal(
+    semanticDiagnosticDocument.getText(duplicateAliasDiagnostic.range),
+    "a",
+  );
+  const duplicateAliasOffset = duplicateAliasDiagnosticSql.indexOf(
+    "a",
+    duplicateAliasDiagnosticSql.indexOf("JOIN"),
+  );
+  assert.deepEqual(
+    duplicateAliasDiagnostic.range,
+    new vscode.Range(
+      semanticDiagnosticDocument.positionAt(duplicateAliasOffset),
+      semanticDiagnosticDocument.positionAt(duplicateAliasOffset + 1),
+    ),
+  );
+
   await replaceDiagnosticSql(validCorrelatedAliasSql);
   assert.deepEqual(
     queryPuppyDiagnostics().filter(

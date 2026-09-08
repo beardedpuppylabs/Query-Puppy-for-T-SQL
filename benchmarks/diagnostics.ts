@@ -5,7 +5,7 @@ import { collectHighConfidenceDocumentIssues } from "../src/parser/DocumentSeman
 import { tokenizeSql } from "../src/parser/SqlTokenizer.js";
 import { documentStatementTokenRanges } from "../src/parser/StatementBoundary.js";
 
-type DiagnosticCode = "QP1001" | "QP1002";
+type DiagnosticCode = "QP1001" | "QP1002" | "QP1003";
 
 interface Workload {
   readonly id: string;
@@ -36,7 +36,7 @@ const ordinaryStatements = (units: number): GeneratedWorkload => ({
     (_, index) =>
       `SELECT a${index}.Id, a${index}.DisplayName FROM dbo.Entity${index} AS a${index} WHERE a${index}.Id > ${index};`,
   ).join("\n"),
-  expected: { QP1001: 0, QP1002: 0 },
+  expected: { QP1001: 0, QP1002: 0, QP1003: 0 },
 });
 
 const variableBatches = (units: number): GeneratedWorkload => ({
@@ -50,7 +50,7 @@ const variableBatches = (units: number): GeneratedWorkload => ({
       "GO",
     ].join("\n"),
   ).join("\n"),
-  expected: { QP1001: units, QP1002: 0 },
+  expected: { QP1001: units, QP1002: 0, QP1003: 0 },
 });
 
 const nestedAliasStatements = (units: number): GeneratedWorkload => ({
@@ -79,7 +79,7 @@ const nestedAliasStatements = (units: number): GeneratedWorkload => ({
       `AND c${index}.Id > 0;`,
     ].join("\n"),
   ).join("\n"),
-  expected: { QP1001: 0, QP1002: units * 2 },
+  expected: { QP1001: 0, QP1002: units * 2, QP1003: 0 },
 });
 
 const mixedScript = (units: number): GeneratedWorkload => {
@@ -88,7 +88,7 @@ const mixedScript = (units: number): GeneratedWorkload => {
   const aliases = nestedAliasStatements(units);
   return {
     sql: [ordinary.sql, variables.sql, aliases.sql].join("\n"),
-    expected: { QP1001: units, QP1002: units * 2 },
+    expected: { QP1001: units, QP1002: units * 2, QP1003: 0 },
   };
 };
 
@@ -118,7 +118,11 @@ const workloads: readonly Workload[] = [
 const diagnosticCounts = (
   sql: string,
 ): Readonly<Record<DiagnosticCode, number>> => {
-  const counts: Record<DiagnosticCode, number> = { QP1001: 0, QP1002: 0 };
+  const counts: Record<DiagnosticCode, number> = {
+    QP1001: 0,
+    QP1002: 0,
+    QP1003: 0,
+  };
   for (const issue of collectHighConfidenceDocumentIssues(sql))
     counts[issue.code]++;
   return counts;
@@ -177,7 +181,8 @@ for (const workload of workloads) {
 
     const minimum = Math.min(...timings);
     const maximum = Math.max(...timings);
-    const diagnosticTotal = lastCounts.QP1001 + lastCounts.QP1002;
+    const diagnosticTotal =
+      lastCounts.QP1001 + lastCounts.QP1002 + lastCounts.QP1003;
     console.log(
       [
         workload.id,
@@ -187,7 +192,7 @@ for (const workload of workloads) {
         tokens.length,
         statements.length,
         batches.length,
-        `${diagnosticTotal} (QP1001=${lastCounts.QP1001}, QP1002=${lastCounts.QP1002})`,
+        `${diagnosticTotal} (QP1001=${lastCounts.QP1001}, QP1002=${lastCounts.QP1002}, QP1003=${lastCounts.QP1003})`,
         `${formatTiming(median(timings))}/${formatTiming(minimum)}/${formatTiming(maximum)}`,
         `[${timings.map(formatTiming).join(", ")}]`,
       ].join(" | "),

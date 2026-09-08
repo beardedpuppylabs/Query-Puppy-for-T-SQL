@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   collectHighConfidenceDocumentIssues,
+  statementMayHaveDuplicateExplicitAliasIssue,
   statementMayHaveInvisibleAliasIssue,
 } from "../src/parser/DocumentSemanticDiagnostics.js";
 import { tokenizeSql } from "../src/parser/SqlTokenizer.js";
@@ -396,4 +397,161 @@ test("module bodies and positional APPLY references remain outside QP1002", () =
 
   for (const sql of sqlCases)
     assert.deepEqual(collectHighConfidenceDocumentIssues(sql), []);
+});
+
+test("QP1003 reports duplicate explicit aliases with and without AS", () => {
+  for (const sql of [
+    "SELECT a.Id FROM dbo.Account AS a JOIN dbo.Address AS a ON a.Id = a.AccountId;",
+    "SELECT a.Id FROM dbo.Account a JOIN dbo.Address a ON a.Id = a.AccountId;",
+  ]) {
+    const duplicate = sql.indexOf("a", sql.indexOf("JOIN"));
+    assert.deepEqual(collectHighConfidenceDocumentIssues(sql), [
+      {
+        code: "QP1003",
+        severity: "error",
+        message:
+          "Row-source alias 'a' is declared more than once in this query scope.",
+        range: { start: duplicate, end: duplicate + 1 },
+      },
+    ]);
+  }
+});
+
+test("QP1003 normalization preserves spelling and diagnoses every additional declaration", () => {
+  const sql =
+    "SELECT a.Id FROM dbo.First AS a JOIN dbo.Second AS A ON 1 = 1 JOIN dbo.Third AS [a] ON 1 = 1;";
+  const second = sql.indexOf(" AS A") + " AS ".length;
+  const third = sql.indexOf("[a]");
+
+  assert.deepEqual(collectHighConfidenceDocumentIssues(sql), [
+    {
+      code: "QP1003",
+      severity: "error",
+      message:
+        "Row-source alias 'A' is declared more than once in this query scope.",
+      range: { start: second, end: second + 1 },
+    },
+    {
+      code: "QP1003",
+      severity: "error",
+      message:
+        "Row-source alias 'a' is declared more than once in this query scope.",
+      range: { start: third, end: third + "[a]".length },
+    },
+  ]);
+});
+
+test("QP1003 reuses canonical bindings for physical, local, derived, CTE, and VALUES sources", () => {
+  const sqlCases = [
+    "SELECT a.Id FROM dbo.Account a JOIN (SELECT 1 AS Id) a ON 1 = 1;",
+    "WITH cte AS (SELECT 1 AS Id) SELECT a.Id FROM dbo.Account a JOIN cte a ON 1 = 1;",
+    "SELECT a.Id FROM #Rows AS a JOIN @Rows a ON 1 = 1;",
+    "SELECT a.Id FROM (VALUES (1)) AS a(Id) JOIN dbo.Account a ON 1 = 1;",
+  ];
+
+  for (const sql of sqlCases) {
+    const duplicate = sql.lastIndexOf(" a ");
+    assert.deepEqual(collectHighConfidenceDocumentIssues(sql), [
+      {
+        code: "QP1003",
+        severity: "error",
+        message:
+          "Row-source alias 'a' is declared more than once in this query scope.",
+        range: { start: duplicate + 1, end: duplicate + 2 },
+      },
+    ]);
+  }
+});
+
+test("QP1003 keeps nested, sibling, CTE, set-branch, statement, and batch scopes isolated", () => {
+  const sqlCases = [
+    "SELECT a.Id FROM dbo.OuterTable a WHERE EXISTS (SELECT 1 FROM dbo.InnerTable a);",
+    "SELECT 1 WHERE EXISTS (SELECT 1 FROM dbo.First a) AND EXISTS (SELECT 1 FROM dbo.Second a);",
+    "WITH first_cte AS (SELECT 1 FROM dbo.First a), second_cte AS (SELECT 1 FROM dbo.Second a) SELECT 1;",
+    "SELECT a.Id FROM dbo.First a UNION ALL SELECT a.Id FROM dbo.Second a;",
+    "SELECT a.Id FROM dbo.First a; SELECT a.Id FROM dbo.Second a;",
+    "SELECT a.Id FROM dbo.First a\nGO\nSELECT a.Id FROM dbo.Second a;",
+  ];
+
+  for (const sql of sqlCases)
+    assert.deepEqual(collectHighConfidenceDocumentIssues(sql), []);
+});
+
+test("QP1003 follows canonical APPLY ownership and visibility", () => {
+  const duplicateSql =
+    "SELECT a.Id FROM dbo.Account a CROSS APPLY (SELECT 1 AS Id) a;";
+  const duplicate = duplicateSql.lastIndexOf(" a");
+  assert.deepEqual(collectHighConfidenceDocumentIssues(duplicateSql), [
+    {
+      code: "QP1003",
+      severity: "error",
+      message:
+        "Row-source alias 'a' is declared more than once in this query scope.",
+      range: { start: duplicate + 1, end: duplicate + 2 },
+    },
+  ]);
+
+  assert.deepEqual(
+    collectHighConfidenceDocumentIssues(
+      "SELECT a.Id FROM dbo.Account a CROSS APPLY (SELECT 1 FROM dbo.Address a) x;",
+    ),
+    [],
+  );
+});
+
+test("QP1003 fails closed outside proven distinct explicit bindings", () => {
+  const sqlCases = [
+    "SELECT a.Id FROM dbo.a JOIN dbo.Other a ON 1 = 1;",
+    "SELECT 1 AS a FROM dbo.Account a;",
+    "SELECT unknown.Id FROM dbo.Account a JOIN dbo.Address b ON 1 = 1;",
+    "SELECT a.Id FROM dbo.Account a JOIN dbo. AS a",
+    "SELECT a.Id FROM dbo.Account a JOIN dbo.Address AS",
+    "SELECT a.Id FROM dbo.Account a, dbo.Address a;",
+    "CREATE PROCEDURE dbo.Test AS SELECT a.Id FROM dbo.Account a JOIN dbo.Address a ON 1 = 1;",
+  ];
+
+  for (const sql of sqlCases)
+    assert.deepEqual(collectHighConfidenceDocumentIssues(sql), []);
+});
+
+test("QP1003 candidate gate retains a supported single-SELECT duplicate", () => {
+  const sql =
+    "SELECT a.Id FROM dbo.Account a JOIN dbo.Address a ON a.Id = a.AccountId;";
+  const tokens = tokenizeSql(sql);
+  const statement = documentStatementTokenRanges(tokens)[0]!;
+
+  assert.equal(statementMayHaveInvisibleAliasIssue(tokens, statement), false);
+  assert.equal(
+    statementMayHaveDuplicateExplicitAliasIssue(tokens, statement),
+    true,
+  );
+  assert.equal(collectHighConfidenceDocumentIssues(sql)[0]?.code, "QP1003");
+});
+
+test("QP1002 and QP1003 share one statement result without changing issue order", () => {
+  const sql = [
+    "SELECT a.Id",
+    "FROM dbo.First a",
+    "JOIN dbo.Second a ON 1 = 1",
+    "WHERE EXISTS (SELECT 1 FROM dbo.Child c)",
+    "  AND c.Id > 0;",
+  ].join("\n");
+  const duplicate = sql.indexOf("a", sql.indexOf("JOIN"));
+  const invisible = sql.lastIndexOf("c.Id");
+
+  assert.deepEqual(collectHighConfidenceDocumentIssues(sql), [
+    {
+      code: "QP1003",
+      severity: "error",
+      message:
+        "Row-source alias 'a' is declared more than once in this query scope.",
+      range: { start: duplicate, end: duplicate + 1 },
+    },
+    {
+      code: "QP1002",
+      severity: "error",
+      message: "Row-source alias 'c' is not visible in this query scope.",
+      range: { start: invisible, end: invisible + 1 },
+    },
+  ]);
 });

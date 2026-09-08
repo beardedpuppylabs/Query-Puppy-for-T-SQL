@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.3 - 2026-09-08
+
+- Added `QP1003`, a conservative native Error diagnostic on every additional
+  explicit row-source alias declaration with the same case-insensitive name in one
+  canonical query scope.
+- Reused one prepared QueryScope model when alias-visibility and duplicate-alias
+  diagnostics both apply, while keeping nested scopes, statements, batches,
+  incomplete sources, implicit names, and unsupported comma-separated source lists
+  outside the rule.
+
 ## 0.18.2 - 2026-09-08
 
 - Assigned a unique package identity to the already-delivered document-diagnostics

@@ -492,7 +492,8 @@ editor-neutral collector tokenizes once and enumerates the existing canonical ba
 and statement boundaries across the whole document. It also computes parenthesis
 depth once, parses local variables once per prepared batch, and builds only the
 canonical QueryScope model for statements that contain the minimum token evidence
-needed by `QP1002`; the final visibility decision remains with the canonical resolver.
+needed by `QP1002` or `QP1003`. When both rules are candidates, they share that one
+statement scope model; final alias evidence remains in the canonical QueryScopes.
 `QP1001` is emitted only when a scalar or table-variable reference occurs in a
 supported query/DML statement, the same name has a canonical declaration in an
 earlier `GO` batch, and the current batch has no matching declaration at or before
@@ -504,9 +505,17 @@ RowSource binding, that binding is an explicit alias declaration, no matching
 binding is visible at the reference, and the token is not part of a source path or
 longer multipart name. Unknown qualifiers, unrelated statements and batches,
 ambiguous bindings, visible shadowing/correlation, and positional APPLY cases fail
-closed. Module-definition batches and optional broader diagnostic categories also
-remain excluded. Diagnostics update synchronously for eligible SQL documents on
-activation, open, and edit, and clear on correction or close. This path performs no
+closed. `QP1003` is emitted on every explicit alias declaration after the first
+case-insensitive declaration of the same name in one QueryScope. It uses the exact
+additional alias token and never treats implicit source names, references, projection
+aliases, variables, nested shadowing, sibling or set branches, statements, or batches
+as duplicate declarations. Source forms already represented by canonical
+FROM/JOIN/APPLY bindings are supported; comma-separated source lists remain outside
+this rule because they are not separate canonical bindings. Malformed/incomplete
+source declarations and module-definition batches fail closed. Optional broader
+diagnostic categories also remain excluded. Diagnostics update synchronously for
+eligible SQL documents on activation, open, and edit, and clear on correction or
+close. This path performs no
 catalog, backend, relationship, filesystem, or workspace work and is not a general
 SQL linter. Semantic Rename remains a future consumer.
 

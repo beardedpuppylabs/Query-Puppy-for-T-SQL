@@ -547,6 +547,7 @@ test("contract: high-confidence diagnostics use a native collection and editor-n
   assert.match(semanticSource, /resolveLocalVariablesInBatch/);
   assert.match(semanticSource, /QP1001/);
   assert.match(semanticSource, /QP1002/);
+  assert.match(semanticSource, /QP1003/);
   assert.match(semanticSource, /resolveUniqueInvisibleExplicitAlias/);
   assert.match(semanticSource, /analyzeStatementQueryScopes/);
   assert.doesNotMatch(semanticSource, /analyzeTokenizedDocumentSemantics/);
