@@ -352,12 +352,17 @@ Release notes are exactly the matching `CHANGELOG.md` section. Ordinary `0.x`
 versions are normal releases with `prerelease: false`.
 
 The workflow creates or resumes only an exact automation-authored matching draft.
-If a tagless draft was left on an older `main` commit by a stale run, a later run
-for the same still-unreleased version retargets and revalidates that draft before
-replacing its expected assets. Drafts with another author or an existing conflicting
-tag remain untouched and fail closed. The workflow uploads the verified VSIX and
-`<vsix-filename>.sha256`, verifies both assets are non-empty, and only then publishes
-the Release. The checksum contains conventional output:
+After creating a draft, recovery is anchored to the numeric Release ID returned by
+GitHub while the workflow continues to scan global Release and tag state for
+conflicts. A temporarily missing direct or broad-list read receives only a bounded
+read retry with backoff; draft creation is never retried. If a tagless draft was
+left on an older `main` commit by a stale run, a later run for the same
+still-unreleased version retargets and revalidates that draft before replacing its
+expected assets. Drafts with another author, conflicting identity, unexpected
+assets, or an existing conflicting tag remain untouched and fail closed. The
+workflow uploads the verified VSIX and `<vsix-filename>.sha256`, verifies both
+assets are non-empty, and only then publishes the Release. The checksum contains
+conventional output:
 
 ```text
 <sha256>  query-puppy-for-t-sql-<version>.vsix
@@ -372,12 +377,13 @@ publishing. Conflicting tags, Releases, or published partial states fail closed.
 Release-job concurrency serializes workflow release jobs. Repeated current-`main`
 and remote-state checks prevent publication across every stale window they observe,
 and a tagless automation-owned draft remains recoverable when a run becomes stale
-before publication. GitHub's Releases API does not make the final state read and the
-following `draft: false` mutation atomic, so a final check-to-publish interval remains.
-Post-publication verification can detect an inconsistent result but cannot undo or
-pretend the publication did not occur. The first live eligible version above the
-bootstrap floor therefore remains the first production exercise of this GitHub
-mutation path. Never reuse, move, or force-update a release tag.
+before publication. Release identity, target, ownership, asset policy, current
+`main`, and immutable-tag state are revalidated before asset mutation and again
+before publication. GitHub's Releases API does not make the final state read and
+the following `draft: false` mutation atomic, so a final check-to-publish interval
+remains. Post-publication verification can detect an inconsistent result but cannot
+undo or pretend the publication did not occur. Never reuse, move, or force-update a
+release tag.
 
 ### 11. Obtain the exact GitHub Release VSIX
 

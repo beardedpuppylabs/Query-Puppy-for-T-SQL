@@ -52,6 +52,12 @@ export function selectReleaseByTag(
   releases: ReleaseState[],
   tagName: string,
 ): ReleaseState | null;
+export function selectAnchoredRelease(
+  releases: ReleaseState[],
+  tagName: string,
+  releaseId: number | undefined,
+  releaseById: ReleaseState | null,
+): ReleaseState | null;
 export function evaluateRemoteReleaseState(input: RemoteReleaseStateInput): {
   action: "stale" | "publish" | "recover-draft" | "noop";
   reason: string;

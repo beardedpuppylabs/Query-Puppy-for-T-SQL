@@ -109,6 +109,32 @@ export function selectReleaseByTag(releases, tagName) {
   return matches[0] ?? null;
 }
 
+export function selectAnchoredRelease(
+  releases,
+  tagName,
+  releaseId,
+  releaseById,
+) {
+  const listedRelease = selectReleaseByTag(releases, tagName);
+  if (releaseId === undefined) {
+    return listedRelease;
+  }
+  if (!Number.isInteger(releaseId)) {
+    throw new Error("The requested GitHub Release ID is not an integer.");
+  }
+  if (releaseById && releaseById.id !== releaseId) {
+    throw new Error(
+      `GitHub returned Release ID ${String(releaseById.id)} while reading ID ${releaseId}.`,
+    );
+  }
+  if (listedRelease && listedRelease.id !== releaseId) {
+    throw new Error(
+      `GitHub Release ${tagName} is attached to conflicting ID ${String(listedRelease.id)} instead of ${releaseId}.`,
+    );
+  }
+  return releaseById ?? listedRelease;
+}
+
 function validateReleaseMetadata(release, expected) {
   if (
     release.tagName !== expected.tagName ||

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.4 - 2026-09-08
+
+- Fixed automatic GitHub Release creation so recovery is anchored to the numeric
+  draft ID returned by GitHub while retaining global tag and Release conflict
+  checks.
+- Added bounded read-convergence retries after draft creation and retargeting,
+  without retrying draft creation or permitting asset, tag, or publication
+  mutation before the exact automation-owned draft is revalidated.
+
 ## 0.18.3 - 2026-09-08
 
 - Added `QP1003`, a conservative native Error diagnostic on every additional

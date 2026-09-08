@@ -1,4 +1,11 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { evaluateRemoteReleaseState } from "./release-policy.mjs";
+
+const RELEASE_CONVERGENCE_DELAYS_MS = [250, 1_000, 2_000];
+
+async function defaultWaitForReleaseConvergence(attempt) {
+  await delay(RELEASE_CONVERGENCE_DELAYS_MS[attempt - 1]);
+}
 
 function requiredReleaseId(release) {
   if (!Number.isInteger(release?.id)) {
@@ -21,11 +28,51 @@ function requireCurrentDraft(state, decision, releaseId) {
     !state.release?.draft ||
     requiredReleaseId(state.release) !== releaseId
   ) {
+    const observedId = Number.isInteger(state.release?.id)
+      ? state.release.id
+      : "none";
     throw new Error(
-      "The release did not reach the exact current-commit recovery state.",
+      `GitHub Release recovery validation failed for ID ${releaseId}: action=${decision.action}, retarget=${String(decision.retargetDraft)}, draft=${String(state.release?.draft)}, observedId=${observedId}. Refusing release mutation.`,
     );
   }
   return state.release;
+}
+
+async function readConvergedDraft({
+  releaseId,
+  mutation,
+  allowPendingRetarget,
+  loadRemoteState,
+  waitForReleaseConvergence,
+}) {
+  const maximumReads = RELEASE_CONVERGENCE_DELAYS_MS.length + 1;
+  for (let read = 1; read <= maximumReads; read += 1) {
+    const state = await loadRemoteState(releaseId);
+    const decision = evaluateRemoteReleaseState(state);
+    if (decision.action === "noop" || decision.action === "stale") {
+      return { state, decision };
+    }
+    if (decision.action === "recover-draft" && !decision.retargetDraft) {
+      requireCurrentDraft(state, decision, releaseId);
+      return { state, decision };
+    }
+
+    const isTransientConvergenceState =
+      decision.action === "publish" ||
+      (allowPendingRetarget &&
+        decision.action === "recover-draft" &&
+        decision.retargetDraft);
+    if (!isTransientConvergenceState) {
+      requireCurrentDraft(state, decision, releaseId);
+    }
+    if (read === maximumReads) {
+      throw new Error(
+        `GitHub Release ID ${releaseId} did not converge to the exact current-commit draft after ${maximumReads} reads following ${mutation}. Refusing asset, tag, and publication mutation.`,
+      );
+    }
+    await waitForReleaseConvergence(read);
+  }
+  throw new Error("Unreachable release convergence state.");
 }
 
 export async function orchestrateGitHubRelease({
@@ -36,6 +83,7 @@ export async function orchestrateGitHubRelease({
   deleteAsset,
   uploadAsset,
   publishDraft,
+  waitForReleaseConvergence = defaultWaitForReleaseConvergence,
 }) {
   let state = await loadRemoteState();
   let decision = evaluateRemoteReleaseState(state);
@@ -44,7 +92,8 @@ export async function orchestrateGitHubRelease({
   }
 
   let releaseId;
-  let stateMustBeReread = false;
+  let convergenceMutation;
+  let allowPendingRetarget = false;
   if (decision.action === "publish") {
     const created = await createDraft({
       tag_name: state.tagName,
@@ -55,20 +104,26 @@ export async function orchestrateGitHubRelease({
       prerelease: false,
     });
     releaseId = requiredReleaseId(created);
-    stateMustBeReread = true;
+    convergenceMutation = "draft creation";
   } else {
     releaseId = requiredReleaseId(state.release);
     if (decision.retargetDraft) {
       await retargetDraft(releaseId, {
         target_commitish: expectedHeadSha,
       });
-      stateMustBeReread = true;
+      convergenceMutation = "draft retargeting";
+      allowPendingRetarget = true;
     }
   }
 
-  if (stateMustBeReread) {
-    state = await loadRemoteState();
-    decision = evaluateRemoteReleaseState(state);
+  if (convergenceMutation) {
+    ({ state, decision } = await readConvergedDraft({
+      releaseId,
+      mutation: convergenceMutation,
+      allowPendingRetarget,
+      loadRemoteState,
+      waitForReleaseConvergence,
+    }));
     if (decision.action === "noop" || decision.action === "stale") {
       return decision;
     }
@@ -85,7 +140,7 @@ export async function orchestrateGitHubRelease({
     await uploadAsset(releaseId, assetName);
   }
 
-  const readyState = await loadRemoteState();
+  const readyState = await loadRemoteState(releaseId);
   const readyDecision = evaluateRemoteReleaseState(readyState);
   if (readyDecision.action === "noop" || readyDecision.action === "stale") {
     return readyDecision;
@@ -99,7 +154,7 @@ export async function orchestrateGitHubRelease({
 
   await publishDraft(releaseId, { draft: false, prerelease: false });
 
-  const finalState = await loadRemoteState();
+  const finalState = await loadRemoteState(releaseId);
   const finalDecision = evaluateRemoteReleaseState(finalState);
   if (finalDecision.action !== "noop") {
     throw new Error(

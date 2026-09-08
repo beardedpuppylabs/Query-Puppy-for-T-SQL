@@ -12,6 +12,7 @@ import {
   evaluateRemoteReleaseState,
   expectedVsixFilename,
   extractChangelogReleaseNotes,
+  selectAnchoredRelease,
   selectReleaseByTag,
   type RemoteReleaseStateInput,
   type ReleaseState,
@@ -100,6 +101,7 @@ const stateAtB = (
 
 function orchestrationHarness(states: RemoteReleaseStateInput[]) {
   const events: string[] = [];
+  const readReleaseIds: Array<number | undefined> = [];
   const createPayloads: CreateDraftPayload[] = [];
   const retargetPayloads: RetargetDraftPayload[] = [];
   const publishPayloads: PublishDraftPayload[] = [];
@@ -107,14 +109,16 @@ function orchestrationHarness(states: RemoteReleaseStateInput[]) {
 
   return {
     events,
+    readReleaseIds,
     createPayloads,
     retargetPayloads,
     publishPayloads,
     run: () =>
       orchestrateGitHubRelease({
         expectedHeadSha: "commit-b",
-        loadRemoteState: async () => {
+        loadRemoteState: async (releaseId) => {
           events.push("read");
+          readReleaseIds.push(releaseId);
           const state = states[readIndex];
           readIndex += 1;
           if (!state) {
@@ -140,6 +144,9 @@ function orchestrationHarness(states: RemoteReleaseStateInput[]) {
         publishDraft: async (releaseId, payload) => {
           events.push(`publish:${releaseId}`);
           publishPayloads.push(payload);
+        },
+        waitForReleaseConvergence: async (attempt) => {
+          events.push(`wait:${attempt}`);
         },
       }),
   };
@@ -425,6 +432,47 @@ test("an exact draft is recoverable without selecting unrelated historical draft
   );
 });
 
+test("an ID-anchored release remains visible while the broad list is stale", () => {
+  const directRelease = draftRelease("commit-b", [], { id: 384_541_234 });
+
+  assert.equal(
+    selectAnchoredRelease([], "v0.19.0", 384_541_234, directRelease),
+    directRelease,
+  );
+  assert.equal(
+    selectAnchoredRelease([directRelease], "v0.19.0", 384_541_234, null),
+    directRelease,
+  );
+});
+
+test("ID-anchored release selection fails closed on conflicting identity", async (context) => {
+  await context.test("wrong direct ID", () => {
+    assert.throws(
+      () =>
+        selectAnchoredRelease(
+          [],
+          "v0.19.0",
+          384_541_234,
+          draftRelease("commit-b", [], { id: 384_523_493 }),
+        ),
+      /while reading ID 384541234/u,
+    );
+  });
+
+  await context.test("conflicting broad-list ID", () => {
+    assert.throws(
+      () =>
+        selectAnchoredRelease(
+          [draftRelease("commit-b", [], { id: 384_523_493 })],
+          "v0.19.0",
+          384_541_234,
+          draftRelease("commit-b", [], { id: 384_541_234 }),
+        ),
+      /conflicting ID 384523493 instead of 384541234/u,
+    );
+  });
+});
+
 test("release policy rejects ambiguous and internally inconsistent release state", async (context) => {
   await context.test("duplicate matching Releases", () => {
     assert.throws(
@@ -605,6 +653,151 @@ test("release orchestration creates and publishes only after fresh state validat
   ]);
   assert.deepEqual(harness.publishPayloads, [
     { draft: false, prerelease: false },
+  ]);
+  assert.deepEqual(harness.readReleaseIds, [undefined, 42, 42, 42]);
+});
+
+test("release orchestration recovers when a new draft is temporarily absent from rereads", async () => {
+  const harness = orchestrationHarness([
+    stateAtB(null),
+    stateAtB(null),
+    stateAtB(draftRelease("commit-b")),
+    stateAtB(draftRelease("commit-b", completeAssets)),
+    stateAtB(completeRelease({ targetCommitish: "commit-b" }), "commit-b"),
+  ]);
+
+  assert.equal((await harness.run()).action, "published");
+  assert.deepEqual(harness.events, [
+    "read",
+    "create",
+    "read",
+    "wait:1",
+    "read",
+    `upload:42:${vsixName}`,
+    `upload:42:${checksumName}`,
+    "read",
+    "publish:42",
+    "read",
+  ]);
+  assert.deepEqual(harness.readReleaseIds, [undefined, 42, 42, 42, 42]);
+  assert.equal(harness.events.filter((event) => event === "create").length, 1);
+});
+
+test("release orchestration exhausts draft convergence without a second POST or mutation", async () => {
+  const harness = orchestrationHarness([
+    stateAtB(null),
+    stateAtB(null),
+    stateAtB(null),
+    stateAtB(null),
+    stateAtB(null),
+  ]);
+
+  await assert.rejects(
+    harness.run,
+    /did not converge.*after 4 reads.*Refusing asset, tag, and publication mutation/u,
+  );
+  assert.deepEqual(harness.events, [
+    "read",
+    "create",
+    "read",
+    "wait:1",
+    "read",
+    "wait:2",
+    "read",
+    "wait:3",
+    "read",
+  ]);
+  assert.equal(harness.events.filter((event) => event === "create").length, 1);
+  assert.equal(
+    harness.events.some((event) =>
+      /^(?:delete|upload|retarget|publish):/u.test(event),
+    ),
+    false,
+  );
+});
+
+test("release orchestration stops when main advances during draft convergence", async () => {
+  const harness = orchestrationHarness([
+    stateAtB(null),
+    stateAtB(null),
+    stateAtB(null, null, "commit-c"),
+  ]);
+
+  assert.equal((await harness.run()).action, "stale");
+  assert.deepEqual(harness.events, [
+    "read",
+    "create",
+    "read",
+    "wait:1",
+    "read",
+  ]);
+});
+
+test("release orchestration revalidates created-draft identity before mutation", async (context) => {
+  const cases: Array<{
+    name: string;
+    state: RemoteReleaseStateInput;
+    error: RegExp;
+  }> = [
+    {
+      name: "wrong release ID",
+      state: stateAtB(draftRelease("commit-b", [], { id: 43 })),
+      error: /observedId=43/u,
+    },
+    {
+      name: "foreign author",
+      state: stateAtB(
+        draftRelease("commit-b", [], { authorLogin: "maintainer" }),
+      ),
+      error: /not created by the release automation/u,
+    },
+    {
+      name: "unexpected asset",
+      state: stateAtB(
+        draftRelease("commit-b", [
+          { id: 103, name: "unexpected.zip", size: 100 },
+        ]),
+      ),
+      error: /unexpected assets/u,
+    },
+    {
+      name: "conflicting immutable tag",
+      state: stateAtB(draftRelease("commit-b"), "commit-b"),
+      error: /immutable tag already exists/u,
+    },
+  ];
+
+  for (const releaseCase of cases) {
+    await context.test(releaseCase.name, async () => {
+      const harness = orchestrationHarness([stateAtB(null), releaseCase.state]);
+
+      await assert.rejects(harness.run, releaseCase.error);
+      assert.deepEqual(harness.events, ["read", "create", "read"]);
+    });
+  }
+});
+
+test("release orchestration tolerates bounded retarget read convergence", async () => {
+  const harness = orchestrationHarness([
+    stateAtB(draftRelease("commit-a")),
+    stateAtB(draftRelease("commit-a")),
+    stateAtB(draftRelease("commit-b")),
+    stateAtB(draftRelease("commit-b", completeAssets)),
+    stateAtB(completeRelease({ targetCommitish: "commit-b" }), "commit-b"),
+  ]);
+
+  assert.equal((await harness.run()).action, "published");
+  assert.deepEqual(harness.events, [
+    "read",
+    "retarget:42",
+    "read",
+    "wait:1",
+    "read",
+    `upload:42:${vsixName}`,
+    `upload:42:${checksumName}`,
+    "read",
+    "publish:42",
+    "read",
   ]);
 });
 

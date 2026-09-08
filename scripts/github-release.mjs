@@ -4,7 +4,7 @@ import path from "node:path";
 import { orchestrateGitHubRelease } from "./github-release-orchestration.mjs";
 import {
   evaluateRemoteReleaseState,
-  selectReleaseByTag,
+  selectAnchoredRelease,
 } from "./release-policy.mjs";
 
 function option(name) {
@@ -127,14 +127,23 @@ function policyRelease(release) {
   };
 }
 
-async function remoteState() {
-  const [mainReference, rawReleases, tagCommitSha] = await Promise.all([
-    githubRequest(`${apiBase}/git/ref/heads/main`),
-    listReleases(),
-    resolveTagCommitSha(metadata.tagName),
-  ]);
+async function remoteState(releaseId) {
+  const [mainReference, rawReleases, tagCommitSha, rawReleaseById] =
+    await Promise.all([
+      githubRequest(`${apiBase}/git/ref/heads/main`),
+      listReleases(),
+      resolveTagCommitSha(metadata.tagName),
+      releaseId === undefined
+        ? Promise.resolve(null)
+        : githubRequestOrNull(`${apiBase}/releases/${releaseId}`),
+    ]);
   const releases = rawReleases.map(policyRelease);
-  const release = selectReleaseByTag(releases, metadata.tagName);
+  const release = selectAnchoredRelease(
+    releases,
+    metadata.tagName,
+    releaseId,
+    policyRelease(rawReleaseById),
+  );
 
   return {
     expectedHeadSha,

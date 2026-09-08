@@ -24,7 +24,7 @@ export interface ReleaseMutationResult {
 
 export interface GitHubReleaseOrchestration {
   expectedHeadSha: string;
-  loadRemoteState(): Promise<RemoteReleaseStateInput>;
+  loadRemoteState(releaseId?: number): Promise<RemoteReleaseStateInput>;
   createDraft(payload: CreateDraftPayload): Promise<ReleaseMutationResult>;
   retargetDraft(
     releaseId: number,
@@ -36,6 +36,7 @@ export interface GitHubReleaseOrchestration {
     releaseId: number,
     payload: PublishDraftPayload,
   ): Promise<unknown>;
+  waitForReleaseConvergence?(attempt: number): Promise<void>;
 }
 
 export function orchestrateGitHubRelease(
